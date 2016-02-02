@@ -366,6 +366,11 @@ void PrintHelp()
   --         Stop processing Args and pass everything else to the Compiler.");
 }
 
+void PrintRules()
+{
+  io.writefln("%-(%s\n%)", GlobalBuildRules.map!(a => a.Name));
+}
+
 // Override this file logger and provide a more sane output format.
 class FileLoggerWrapper : FileLogger
 {
@@ -432,7 +437,7 @@ int main(string[] Args)
     }
     else if(CleanArg.equal("-rules"))
     {
-      io.writefln("%-(%s\n%)", GlobalBuildRules.map!(a => a.Name));
+      PrintRules();
       return 1;
     }
     else if(arg.matchFirst(`^-[vV]+$`))
@@ -486,6 +491,13 @@ int main(string[] Args)
     return 1;
   }
 
+  if(buildRuleNames.empty)
+  {
+    io.writefln("No build rule was given. Choose from these:");
+    PrintRules();
+    return 1;
+  }
+
   BaseBuildContext.BuildDir = BaseBuildContext.BuildDir.asAbsolutePath.array;
   mkdirRecurse(BaseBuildContext.BuildDir);
   chdir(BaseBuildContext.BuildDir);
@@ -509,64 +521,55 @@ int main(string[] Args)
     logf("BuildDir: %s", BaseBuildContext.BuildDir);
   }
 
-  if(buildRuleNames)
+  foreach(buildRuleName; buildRuleNames)
   {
+    // Find the matching build rule.
+    auto BuildRule = GlobalBuildRules.find!(a => a.Name == buildRuleName);
 
-    foreach(buildRuleName; buildRuleNames)
+    if(BuildRule.empty)
     {
+      // Tolerance for matching build rule names.
+      const matchingTolerance = 4;
 
-      // Find the matching build rule.
-      auto BuildRule = GlobalBuildRules.find!(a => a.Name == buildRuleName);
+      // Find candidates for the given buildRuleName.
+      auto candidates = GlobalBuildRules.map!(a => a.Name)
+                                        .filter!(a => levenshteinDistance(a, buildRuleName) < matchingTolerance);
 
-      if(BuildRule.empty)
+      errorf(`Unable to find a build rule with the given name "%s".`, buildRuleName);
+
+      if(!candidates.empty)
       {
-        // Tolerance for matching build rule names.
-        const matchingTolerance = 4;
-
-        // Find candidates for the given buildRuleName.
-        auto candidates = GlobalBuildRules.map!(a => a.Name)
-                                          .filter!(a => levenshteinDistance(a, buildRuleName) < matchingTolerance);
-
-        errorf(`Unable to find a build rule with the given name "%s".`, buildRuleName);
-
-        if(!candidates.empty)
-        {
-          errorf("Did you mean this?%-(\n    %s%)", candidates);
-        }
-
-        error("Use -Rules to see all possible rules");
-
-        break;
+        errorf("Did you mean this?%-(\n    %s%)", candidates);
       }
 
-      // Make a copy.
-      auto Context = BaseBuildContext;
+      error("Use -Rules to see all possible rules");
 
-      if(Context.Verbosity)
-      {
-        logf(`Building rule "%s"`, buildRuleName);
-      }
-
-      auto BuildStartTime = Clock.currTime();
-
-      final switch(Context.Platform)
-      {
-        case PlatformKind.Win32:
-        {
-          Win32Build(Context, BuildRule.front());
-        } break;
-      }
-
-      auto BuildTime = BuildStartTime - Clock.currTime();
-      if(Context.Verbosity)
-      {
-        logf("Build rule finished in %s", BuildTime);
-      }
+      break;
     }
-  }
-  else
-  {
-    warning("No build rules specified. Nothing will happen.");
+
+    // Make a copy.
+    auto Context = BaseBuildContext;
+
+    if(Context.Verbosity)
+    {
+      logf(`Building rule "%s"`, buildRuleName);
+    }
+
+    auto BuildStartTime = Clock.currTime();
+
+    final switch(Context.Platform)
+    {
+      case PlatformKind.Win32:
+      {
+        Win32Build(Context, BuildRule.front());
+      } break;
+    }
+
+    auto BuildTime = BuildStartTime - Clock.currTime();
+    if(Context.Verbosity)
+    {
+      logf("Build rule finished in %s", BuildTime);
+    }
   }
 
   auto Duration = Clock.currTime() - BeginTime;
