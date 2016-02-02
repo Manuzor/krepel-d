@@ -30,7 +30,7 @@ int WinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
     MessageBoxA(null, Error.toString().toStringz(),
                 "Error",
                 MB_OK | MB_ICONEXCLAMATION);
-    
+
     Result = 0;
   }
 

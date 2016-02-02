@@ -152,7 +152,9 @@ auto detectOutFileExtension(string[] Args, CompilerKind Compiler, PlatformKind P
   }
 
   assert(0, "Unreachable code.");
-} 
+}
+
+
 
 struct CompilationResult
 {
@@ -470,7 +472,7 @@ int main(string[] Args)
     {
       // Don't abort immediately to show all errors, not just the first.
       ++numberOfUnknownArguments;
-      
+
       errorf("Unknown Argument: %s", arg);
     }
     else // Assume it is a build rule.
@@ -509,7 +511,7 @@ int main(string[] Args)
 
   if(buildRuleNames)
   {
-    
+
     foreach(buildRuleName; buildRuleNames)
     {
 
@@ -524,7 +526,7 @@ int main(string[] Args)
         // Find candidates for the given buildRuleName.
         auto candidates = GlobalBuildRules.map!(a => a.Name)
                                           .filter!(a => levenshteinDistance(a, buildRuleName) < matchingTolerance);
-        
+
         errorf(`Unable to find a build rule with the given name "%s".`, buildRuleName);
 
         if(!candidates.empty)

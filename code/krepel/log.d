@@ -22,7 +22,7 @@ void Info(T, ArgTypes...)(Span!T Message, ArgTypes Args)
     Buffer[Amount] = '\0';
     // Copy over the data.
     Buffer[0..Amount].Assign = Message[0 .. Amount];
-    
+
     OutputDebugStringA(cast(const(char)*)Buffer.Data);
 
     Message = Message[Amount .. $];

@@ -155,7 +155,7 @@ template IsSomeChar(TypeToTest)
 
   alias AllowedTypes = AliasSequence!(char, dchar, wchar);
   debug(krepel_meta_IsSomeChar) pragma(msg, "[krepel_meta_IsSomeChar] AllowedTypes == " ~ AllowedTypes.stringof);
-  
+
   alias Comparer(OtherType) = Equal!(Unqualified!TypeToTest, OtherType);
   debug(krepel_meta_IsSomeChar) pragma(msg, "[krepel_meta_IsSomeChar] Comparer == " ~ Comparer.stringof);
 
