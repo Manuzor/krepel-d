@@ -128,7 +128,7 @@ void CopyFile(SourceType, DestinationType)(in ref BuildContext Context,
 }
 
 // NOTE(Manu): In case we need this some time, this detects a file extension from given build arguments.
-auto detectOutFileExtension(string[] Args, CompilerKind Compiler, PlatformKind Platform)
+auto DetectOutFileExtension(string[] Args, CompilerKind Compiler, PlatformKind Platform)
 {
   final switch(Compiler)
   {
