@@ -211,6 +211,23 @@ CompilationResult Compile(ref BuildContext Context)
   return Result;
 }
 
+auto Run(ref BuildContext Context)
+{
+  with(Context)
+  {
+    auto Command = buildNormalizedPath(BuildDir, OutFileName);
+    if(Verbosity) logf("Running %s", Command);
+
+    auto RunBeginTime = Clock.currTime();
+    scope(exit)
+    {
+      logf("Finished running %s: %s", OutFileName, Clock.currTime() - RunBeginTime);
+    }
+
+    return spawnProcess(Command).wait();
+  }
+}
+
 void ExecuteBuildRule(ref BuildContext Context, ref BuildRuleData BuildRule)
 {
   auto CurrentWorkingDirectory = getcwd();
