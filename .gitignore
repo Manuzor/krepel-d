@@ -1,0 +1,9 @@
+
+# Output of the build system
+/build/
+
+# A place to store or link external stuff to, e.g. the dmd2 install dir.
+/external/
+
+# A place to store everything you want to keep around but that is not shared with anyone.
+/workspace/

@@ -1,0 +1,19 @@
+@echo off
+@setlocal EnableDelayedExpansion
+
+@set ThisDir=%~dp0
+
+@REM :: Change to repo root directory
+pushd "%ThisDir%"
+
+  @set ExtraFiles=
+  @for /r %%f in (*.build.d) do set ExtraFiles=!ExtraFiles! --extra-file="%%f"
+
+  @set DMDArgs=-vcolumns -g -debug
+  @set RDMDArgs=%ExtraFiles%
+  @set BuildFile=%CD%\dev\build.d
+
+  external\dmd2\windows\bin\rdmd.exe %DMDArgs% %RDMDArgs% "%BuildFile%" -Win32 -Debug %*
+@popd
+
+@endlocal
