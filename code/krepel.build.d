@@ -25,6 +25,8 @@ void Tests(ref BuildContext Context)
     BuildArgs ~= "-main";
   }
 
-  Compile(Context);
-  Run(Context);
+  if(Compile(Context).CompilerStatus == 0)
+  {
+    Run(Context);
+  }
 }

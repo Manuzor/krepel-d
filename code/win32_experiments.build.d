@@ -19,8 +19,10 @@ void Win32ExperimentsTests(ref BuildContext Context)
   Context.OutFileName = "win32_experiments_tests.exe";
   AddSourceFiles(Context);
   Context.BuildArgs ~= "-unittest";
-  Compile(Context);
-  Run(Context);
+  if(Compile(Context).CompilerStatus == 0)
+  {
+    Run(Context);
+  }
 }
 
 // Utility function to get all relevant source files.
