@@ -1,6 +1,7 @@
 module krepel.log;
 
 import krepel;
+import krepel.algorithm : Min;
 import Meta = krepel.meta;
 
 // TODO(Manu): Remove this. Logging should be independent.
