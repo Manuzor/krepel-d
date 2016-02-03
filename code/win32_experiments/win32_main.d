@@ -3,7 +3,7 @@ module krepel.win32_main;
 import krepel;
 import Log = krepel.log;
 
-import core.sys.windows.windows;
+import krepel.win32;
 
 version(Windows):
 
@@ -37,9 +37,6 @@ int WinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
   return 0;
 }
 
-nothrow:
-@nogc:
-
 __gshared bool GlobalRunning;
 
 int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
@@ -50,7 +47,10 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
   Log.Info("=== Beginning of Log".MakeSpan);
   scope(exit) Log.Info("=== End of Log".MakeSpan);
 
-  Log.Info("Hello World!".MakeSpan);
+  if(!Win32LoadXInput())
+  {
+    Log.Info("Failed to load XInput.".MakeSpan);
+  }
 
   WNDCLASSA WindowClass;
   with(WindowClass)
@@ -81,9 +81,13 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
       while(GlobalRunning)
       {
         Win32ProcessPendingMessages();
-      }
 
-      MessageBoxA(null, "Quitting.".ptr, "Quit".ptr, MB_OK);
+        Wrapped.XINPUT_STATE ControllerState;
+        if(XInputGetState(0, &ControllerState) == ERROR_SUCCESS)
+        {
+          Log.Info("Marvin!! XINPUT FUNKTIONIERT!!".MakeSpan);
+        }
+      }
     }
   }
 
@@ -113,6 +117,10 @@ void Win32ProcessPendingMessages()
         {
           Log.Info("Space".MakeSpan);
         }
+        else if(VKCode == VK_ESCAPE)
+        {
+          GlobalRunning = false;
+        }
 
       } break;
 
@@ -127,7 +135,7 @@ void Win32ProcessPendingMessages()
 
 extern(Windows)
 LRESULT Win32MainWindowCallback(HWND Window, UINT Message,
-                                WPARAM WParam, LPARAM LParam)
+                                WPARAM WParam, LPARAM LParam) nothrow
 {
   LRESULT Result = 0;
 

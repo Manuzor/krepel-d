@@ -368,6 +368,9 @@ void Win32Build(ref BuildContext Context, ref BuildRuleData BuildRule)
   // PlatformKind specific libraries.
   Libs ~= "user32.lib";
 
+  // We want to compile for Windows 10 only.
+  Context.BuildArgs ~= "-version=Windows10";
+
   // TODO: Maybe do this in some init.d script? Could also make some mklinks in that init script.
   auto FindVisualStudioDir()
   {
