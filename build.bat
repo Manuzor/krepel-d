@@ -13,7 +13,7 @@ pushd "%ThisDir%"
   @set RDMDArgs=%ExtraFiles%
   @set BuildFile=%CD%\dev\build.d
 
-  external\dmd2\windows\bin\rdmd.exe %DMDArgs% %RDMDArgs% "%BuildFile%" -Win32 -Debug %*
+  external\dmd2\windows\bin\rdmd.exe %DMDArgs% %RDMDArgs% "%BuildFile%" -v -Win32 -Debug %*
 @popd
 
 @endlocal

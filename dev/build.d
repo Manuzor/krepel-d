@@ -119,7 +119,7 @@ mixin template AddBuildRule(alias BuildName, alias BuildFunc)
 void CopyFile(SourceType, DestinationType)(in ref BuildContext Context,
                                            SourceType Source, DestinationType Destination)
 {
-  if(Context.Verbosity > 1)
+  if(Context.Verbosity > 2)
   {
     logf("Copy: %s => %s", Source, Destination);
   }
@@ -154,15 +154,13 @@ auto DetectOutFileExtension(string[] Args, CompilerKind Compiler, PlatformKind P
   assert(0, "Unreachable code.");
 }
 
-
-
 struct CompilationResult
 {
   // Will hold the exit code of the Compiler, if no other error occurred before invoking it.
   int CompilerStatus;
 
   // Behave like a bool.
-  private bool Success;
+  bool Success;
   alias Success this;
 }
 
@@ -176,7 +174,7 @@ CompilationResult Compile(ref BuildContext Context)
     return Result; // NOTE(Manu): Result evaluates to false by default!
   }
 
-  if(Context.Verbosity > 1)
+  if(Context.Verbosity > 3)
   {
     logf("BuildContext:%s", Context.ToString);
   }
@@ -198,25 +196,105 @@ CompilationResult Compile(ref BuildContext Context)
                              Context.BuildArgs,  // e.g.: -vcolumns -w -version=UNICODE
                              Context.UserArgs,   // e.g.: -v -vtls
                              ));
-  if(Context.Verbosity)
-  {
-    logf("Command: %-(%s %)", Command);
-    log("+++ Compiling +++");
-  }
-  scope(exit) if(Context.Verbosity) log("--- Compiling ---");
 
-  // No error on our side so far, so set the Result to true;
-  Result = true;
-  Result.CompilerStatus = spawnProcess(Command).wait();
+  if(Context.Verbosity > 1) logf("Compiling \"%s\" (%s)", Context.OutFileName, UniquePlatformString(Context));
+  if(Context.Verbosity > 2) logf("Command: %-(%s %)", Command);
+
+  if(!CompilerPath.exists)
+  {
+    errorf("The compiler does not exist \"%s\"", CompilerPath);
+    return Result;
+  }
+
+  auto CompilationBeginTime = Clock.currTime();
+
+  scope(success) if(Context.Verbosity)
+  {
+    auto CompilationEndTime = Clock.currTime();
+
+    if(Result.CompilerStatus == 0)
+    {
+      logf("Finished compiling \"%s\": %s", Context.OutFileName, CompilationEndTime - CompilationBeginTime);
+    }
+    else
+    {
+      errorf("Failed compiling \"%s\": %s", Context.OutFileName, CompilationEndTime - CompilationBeginTime);
+    }
+  }
+
+  try
+  {
+    Result.CompilerStatus = spawnProcess(Command).wait();
+    Result = true;
+  }
+  catch(ProcessException) {}
+
   return Result;
+}
+
+struct RunResult
+{
+  // Will hold the exit code of the Compiler, if no other error occurred before invoking it.
+  int RunStatus;
+
+  // Behave like a bool.
+  bool Success;
+  alias Success this;
+}
+
+auto Run(ref BuildContext Context)
+{
+  with(Context)
+  {
+    RunResult Result;
+
+    auto ExecutableFile = buildNormalizedPath(BuildDir, OutFileName);
+    auto Command = [ExecutableFile];
+
+    if(Verbosity > 1) logf("Running \"%s\"", OutFileName);
+    if(Verbosity > 2) logf("Command: %-(%s %)", Command);
+
+    if(!ExecutableFile.exists)
+    {
+      if(Verbosity) errorf("The file does not exist \"%s\"", ExecutableFile);
+      return Result;
+    }
+
+    auto RunBeginTime = Clock.currTime();
+    scope(success)
+    {
+      auto RunEndTime = Clock.currTime();
+      if(Verbosity)
+      {
+        logf("Finished running \"%s\": %s", Context.OutFileName, RunEndTime - RunBeginTime);
+        if(Result.RunStatus != 0) warningf("Exit code: %d", Result.RunStatus);
+      }
+    }
+
+    try
+    {
+      Result.RunStatus = spawnProcess(Command).wait();
+      Result = true;
+    }
+    catch(ProcessException) {}
+
+    return Result;
+  }
 }
 
 void ExecuteBuildRule(ref BuildContext Context, ref BuildRuleData BuildRule)
 {
   auto CurrentWorkingDirectory = getcwd();
-  if(Context.Verbosity)
+  if(Context.Verbosity > 1)
   {
-    logf("Executing build rule: %s", BuildRule.Name);
+    logf("Executing build rule \"%s\"", BuildRule.Name);
+  }
+
+  auto BuildRuleBeginTime = Clock.currTime();
+
+  scope(success) if(Context.Verbosity > 1)
+  {
+    logf("Finished executing build rule \"%s\": %s", BuildRule.Name, Clock.currTime() - BuildRuleBeginTime);
   }
 
   // TODO(Manu): BuildRule.dependencies?
@@ -224,21 +302,16 @@ void ExecuteBuildRule(ref BuildContext Context, ref BuildRuleData BuildRule)
   chdir(CurrentWorkingDirectory);
 }
 
-string uniquePlatformKindString(in ref BuildContext Context)
+string UniquePlatformString(in ref BuildContext Context)
 {
-  auto Result = "%s_%s_%s".format(Context.Platform,
-                                  Context.Configuration,
-                                  Context.Compiler);
-  return Result.asLowerCase.to!string;
+  return "%s_%s_%s_%s".format(Context.Platform,
+                              Context.Configuration,
+                              Context.Architecture,
+                              Context.Compiler);
 }
 
 void Win32Build(ref BuildContext Context, ref BuildRuleData BuildRule)
 {
-  if(Context.Verbosity)
-  {
-    logf("Win32 %s", Context.Configuration);
-  }
-
   final switch(Context.Configuration)
   {
     case ConfigurationKind.Debug:
@@ -442,7 +515,7 @@ int main(string[] Args)
     }
     else if(arg.matchFirst(`^-[vV]+$`))
     {
-      BaseBuildContext.Verbosity += arg.length;
+      BaseBuildContext.Verbosity += arg.length - 1;
     }
     else if(CleanArg.equal("-win32"))
     {
@@ -510,13 +583,13 @@ int main(string[] Args)
     BuildLogger.insertLogger("BuildLogFile", BuildLogFile);
   }
 
-  if(BaseBuildContext.Verbosity > 1)
+  if(BaseBuildContext.Verbosity > 2)
   {
     logf("CallDir:  %s", BaseBuildContext.CallDir);
     logf("RootDir:  %s", BaseBuildContext.RootDir);
   }
 
-  if(BaseBuildContext.Verbosity)
+  if(BaseBuildContext.Verbosity > 1)
   {
     logf("BuildDir: %s", BaseBuildContext.BuildDir);
   }
@@ -535,7 +608,7 @@ int main(string[] Args)
       auto candidates = GlobalBuildRules.map!(a => a.Name)
                                         .filter!(a => levenshteinDistance(a, buildRuleName) < matchingTolerance);
 
-      errorf(`Unable to find a build rule with the given name "%s".`, buildRuleName);
+      errorf(`Unable to find build rule named "%s".`, buildRuleName);
 
       if(!candidates.empty)
       {
@@ -550,13 +623,6 @@ int main(string[] Args)
     // Make a copy.
     auto Context = BaseBuildContext;
 
-    if(Context.Verbosity)
-    {
-      logf(`Building rule "%s"`, buildRuleName);
-    }
-
-    auto BuildStartTime = Clock.currTime();
-
     final switch(Context.Platform)
     {
       case PlatformKind.Win32:
@@ -564,16 +630,10 @@ int main(string[] Args)
         Win32Build(Context, BuildRule.front());
       } break;
     }
-
-    auto BuildTime = BuildStartTime - Clock.currTime();
-    if(Context.Verbosity)
-    {
-      logf("Build rule finished in %s", BuildTime);
-    }
   }
 
   auto Duration = Clock.currTime() - BeginTime;
-  logf("Total build time: %s", Duration);
+  if(BaseBuildContext.Verbosity) logf("Total build time: %s", Duration);
 
   return 0;
 }
