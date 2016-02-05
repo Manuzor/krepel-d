@@ -84,7 +84,7 @@ struct Vector3
     }
   }
 
-  Vector3 opBinary(string op)(Vector3 rhs)
+  Vector3 opBinary(string op)(Vector3 rhs) inout
   {
     // Addition, subtraction, component wise multiplication
     static if(op == "+" || op == "-" || op == "*")
@@ -109,7 +109,7 @@ struct Vector3
     }
   }
 
-  Vector3 opBinary(string op)(float rhs)
+  Vector3 opBinary(string op)(float rhs) inout
   {
     // Vector scaling
     static if(op == "/" || op == "*")
@@ -125,7 +125,7 @@ struct Vector3
     }
   }
 
-  Vector3 opBinaryRight(string op)(float rhs)
+  Vector3 opBinaryRight(string op)(float rhs) inout
   {
     // Vector scaling
     static if(op == "*")
@@ -141,9 +141,11 @@ struct Vector3
     }
   }
 
-  static Vector3 Forward = Vector3(1,0,0);
-  static Vector3 Right = Vector3(0,1,0);
-  static Vector3 Up = Vector3(0,0,1);
+  __gshared immutable ForwardVector = Vector3(1,0,0);
+  __gshared immutable RightVector = Vector3(0,1,0);
+  __gshared immutable UpVector = Vector3(0,0,1);
+  __gshared immutable UnitScaleVector = Vector3(1,1,1);
+  __gshared immutable ZeroVector = Vector3(0,0,0);
 
   // Initialization test
   unittest
@@ -240,14 +242,14 @@ struct Vector3
   unittest
   {
     // Operator
-    auto vec = Vector3.Up ^ Vector3.Forward;
-    assert(vec == Vector3.Right);
+    auto vec = Vector3.UpVector ^ Vector3.ForwardVector;
+    assert(vec == Vector3.RightVector);
     // Function
-    assert(Cross(Vector3.Up, Vector3.Forward) == Vector3.Right);
-    Vector3 vec1 = Vector3.Up;
-    Vector3 vec2 = Vector3.Forward;
+    assert(Cross(Vector3.UpVector, Vector3.ForwardVector) == Vector3.RightVector);
+    Vector3 vec1 = Vector3.UpVector;
+    Vector3 vec2 = Vector3.ForwardVector;
     // UFCS
     Vector3 vec3 = vec1.Cross(vec2);
-    assert(vec3 == Vector3.Right);
+    assert(vec3 == Vector3.RightVector);
   }
 }
