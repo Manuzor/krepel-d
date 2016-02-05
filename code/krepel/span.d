@@ -13,7 +13,7 @@ auto MakeSpan(size_t N, T)(ref T[N] Array)
 
 unittest
 {
-  int[10] Integers;
+  immutable int[10] Integers = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
   auto IntSpan = MakeSpan(Integers);
   for(int Index = 0; Index < 10; ++Index)
   {
@@ -25,6 +25,33 @@ unittest
 auto MakeSpan(T)(size_t N, T* Data)
 {
   return Span!T(N, Data);
+}
+
+unittest
+{
+  immutable int[10] Integers = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+  auto IntSpan = MakeSpan(3, Integers.ptr + 3);
+  assert(IntSpan[0] == 3);
+  assert(IntSpan[1] == 4);
+  assert(IntSpan[2] == 5);
+}
+
+/// Create span from a single object.
+auto MakeSpan(T)(ref T Data)
+  if(!Meta.IsArray!T)
+{
+  return Span!T(1, &Data);
+}
+
+unittest
+{
+  struct S { int Value; }
+  immutable Something = S(1337);
+  // TODO(Manu): Causes infinite loop.
+  //foreach(ref Instance; MakeSpan(Something))
+  //{
+  //  assert(Instance.Value == 1337);
+  //}
 }
 
 struct Span(T)
