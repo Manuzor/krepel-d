@@ -1,6 +1,7 @@
 module krepel.math.vector3;
 
 import krepel.math.math;
+import std.conv;
 
 float Dot(Vector3 lhs, Vector3 rhs)
 {
@@ -28,6 +29,13 @@ float Length(Vector3 vec)
   return Sqrt(vec.LengthSquared());
 }
 
+Vector3 NormalizedCopy(Vector3 vec)
+{
+  Vector3 copy = vec;
+  copy.Normalize();
+  return copy;
+}
+
 
 struct Vector3
 {
@@ -52,6 +60,8 @@ struct Vector3
     this.Z = Z;
   }
 
+  // Don't return result to avoid confusion with NormalizedCopy
+  // and stress that this operation modifies the vector on which it is called
   void Normalize()
   {
     float length = this.Length();
@@ -83,6 +93,12 @@ struct Vector3
       assert(false, "Operator " ~ op ~ " not implemented.");
     }
   }
+
+  //const (char)[] ToString() const
+  //{
+  //  // TODO: More memory friendly (no GC) implementation?
+  //  return "{X:"~text(X)~", Y:"~text(Y)~", Z:"~text(Z)~"}";
+  //}
 
   Vector3 opBinary(string op)(Vector3 rhs) inout
   {
@@ -251,5 +267,21 @@ struct Vector3
     // UFCS
     Vector3 vec3 = vec1.Cross(vec2);
     assert(vec3 == Vector3.RightVector);
+  }
+
+  // Normalization
+  unittest
+  {
+    Vector3 vec = Vector3(1,1,1);
+    vec.Normalize();
+    float expected = 1.0f/Sqrt(3);
+    assert(vec == Vector3(expected, expected, expected));
+
+    vec = Vector3(1,1,1);
+    auto normalized = vec.NormalizedCopy();
+    auto normalizedUFCS = NormalizedCopy(vec);
+    assert(vec == Vector3(1,1,1));
+    assert(normalized == Vector3(expected, expected, expected));
+    assert(normalizedUFCS == Vector3(expected, expected, expected));
   }
 }
