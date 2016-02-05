@@ -362,8 +362,21 @@ void Win32Build(ref BuildContext Context, ref BuildRuleData BuildRule)
 
   // Phobos
   ImportPath ~= buildNormalizedPath(DmdDir, "src", "phobos");
-  LibPath ~= buildNormalizedPath(DmdDir, "windows", "lib64");
-  Libs ~= "phobos64.lib";
+
+  final switch(Context.Architecture)
+  {
+    case ArchitectureKind.x64:
+    {
+      LibPath ~= buildNormalizedPath(DmdDir, "windows", "lib64");
+      Libs ~= "phobos64.lib";
+    } break;
+
+    case ArchitectureKind.x86:
+    {
+      LibPath ~= buildNormalizedPath(DmdDir, "windows", "lib");
+      Libs ~= "phobos.lib";
+    } break;
+  }
 
   // PlatformKind specific libraries.
   Libs ~= "user32.lib";
@@ -389,23 +402,57 @@ void Win32Build(ref BuildContext Context, ref BuildRuleData BuildRule)
   auto VisualStudioDir = FindVisualStudioDir();
   assert(VisualStudioDir);
 
-  LibPath ~= buildNormalizedPath(VisualStudioDir, "VC", "lib", "amd64");
-
-  // TODO: Find the windows kit more dynamically.
-  auto Windows8SdkDir = buildNormalizedPath("C:", "Program Files (x86)", "Windows Kits",
-    "8.1", "Lib", "winv6.3", "um", "x64");
-  LibPath ~= Windows8SdkDir;
-
-  auto WindowsSdkDir = buildNormalizedPath("C:", "Program Files (x86)", "Windows Kits", "10");
-  auto UcrtVersions = ["10.0.10586.0", "10.0.10240.0", "10.0.10150.0"];
-  foreach(UcrtVersion; UcrtVersions)
+  string WindowsKitsLibSubfolder;
+  final switch(Context.Architecture)
   {
-    LibPath ~= buildNormalizedPath(WindowsSdkDir, "Lib", UcrtVersion, "um", "x64");
-    LibPath ~= buildNormalizedPath(WindowsSdkDir, "Lib", UcrtVersion, "ucrt", "x64");
+    case ArchitectureKind.x64:
+    {
+      LibPath ~= buildNormalizedPath(VisualStudioDir, "VC", "lib", "amd64");
+      WindowsKitsLibSubfolder = "x64";
+    } break;
+
+    case ArchitectureKind.x86:
+    {
+      LibPath ~= buildNormalizedPath(VisualStudioDir, "VC", "lib", "amd64");
+      WindowsKitsLibSubfolder = "x86";
+    } break;
   }
 
-  Context.BuildArgs ~= ImportPath.map!(a => `-I"` ~ a ~ `"`).array;
-  Context.BuildArgs ~= LibPath.map!(a => `-L/LIBPATH:"` ~ a ~ `"`).array;
+  auto WindowsKitsDir = [
+    buildNormalizedPath(environment.get("ProgramFiles(x86)", ""), "Windows Kits"),
+    buildNormalizedPath(environment.get("ProgramFiles", ""), "Windows Kits"),
+    buildNormalizedPath("C:", "Program Files (x86)", "Windows Kits"),
+    buildNormalizedPath("C:", "Program Files", "Windows Kits"),
+  ].find!(a => a.exists && a.isDir).front;
+
+  auto WindowsLibDirs = [
+    // Windows 10 first
+    buildNormalizedPath(WindowsKitsDir, "10", "Lib"),
+
+    // Then try Windows 8.1
+    buildNormalizedPath(WindowsKitsDir, "8.1", "Lib"),
+
+    // And finally Windows 8. We won't go below that.
+    buildNormalizedPath(WindowsKitsDir, "8.0", "Lib"),
+  ];
+
+  foreach(Path; WindowsLibDirs)
+  {
+    foreach(SubPath; Path.dirEntries(SpanMode.shallow).array.sort!"b.name < a.name")
+    {
+      LibPath ~= buildNormalizedPath(SubPath, "um", WindowsKitsLibSubfolder);
+      LibPath ~= buildNormalizedPath(SubPath, "ucrt", WindowsKitsLibSubfolder);
+    }
+  }
+
+  if (Context.Verbosity > 3)
+  {
+    logf("Import Paths:%-(\n  %s%)", ImportPath.map!(a => "%s %s".format(a.exists ? " " : "!", a)));
+    logf("Lib Paths:%-(\n  %s%)", LibPath.map!(a => "%s %s".format(a.exists ? " " : "!", a)));
+  }
+
+  Context.BuildArgs ~= ImportPath.filter!(a => a.exists).map!(a => `-I"` ~ a ~ `"`).array;
+  Context.BuildArgs ~= LibPath.filter!(a => a.exists).map!(a => `-L/LIBPATH:"` ~ a ~ `"`).array;
   Context.BuildArgs ~= Libs;
 
   string LinkerPath;
