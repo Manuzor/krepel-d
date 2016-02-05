@@ -28,6 +28,7 @@ float Length(Vector3 vec)
   return Sqrt(vec.LengthSquared());
 }
 
+
 struct Vector3
 {
   union
@@ -51,6 +52,12 @@ struct Vector3
     this.Z = Z;
   }
 
+  void Normalize()
+  {
+    float length = this.Length();
+    this /= length;
+  }
+
   // Dot product
   float opBinary(string op:"|")(Vector3 rhs)
   {
@@ -58,6 +65,23 @@ struct Vector3
       X * rhs.X +
       Y * rhs.Y +
       Z * rhs.Z;
+  }
+
+  Vector3 opOpAssign(string op)(float rhs)
+  {
+    static if(op == "*" || op == "/")
+    {
+      auto result = mixin("Vector3("~
+        "X" ~ op ~ "rhs,"
+        "Y" ~ op ~ "rhs,"
+        "Z" ~ op ~ "rhs)");
+      Data = result.Data;
+      return this;
+    }
+    else
+    {
+      assert(false, "Operator " ~ op ~ " not implemented.");
+    }
   }
 
   Vector3 opBinary(string op)(Vector3 rhs)
@@ -179,6 +203,13 @@ struct Vector3
   {
     Vector3 v1 = Vector3(5,10,15) / 5;
     Vector3 v2 = Vector3(5,10,15) / 5.0f;
+    assert(v1 == Vector3(1,2,3));
+    assert(v2 == Vector3(1,2,3));
+
+    v1 = Vector3(5,10,15);
+    v2 = Vector3(5,10,15);
+    v1 /= 5;
+    v2 /= 5.0f;
     assert(v1 == Vector3(1,2,3));
     assert(v2 == Vector3(1,2,3));
   }
