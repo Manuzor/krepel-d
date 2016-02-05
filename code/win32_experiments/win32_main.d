@@ -47,6 +47,11 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
   Log.Info("=== Beginning of Log".MakeSpan);
   scope(exit) Log.Info("=== End of Log".MakeSpan);
 
+  // Allocate the global memory block.
+  {
+    auto RawMemory = VirtualAlloc(null, )
+  }
+
   if(!Win32LoadXInput())
   {
     Log.Info("Failed to load XInput.".MakeSpan);
