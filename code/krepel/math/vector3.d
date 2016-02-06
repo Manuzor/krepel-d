@@ -157,11 +157,11 @@ struct Vector3
     }
   }
 
-  __gshared immutable ForwardVector = Vector3(1,0,0);
-  __gshared immutable RightVector = Vector3(0,1,0);
-  __gshared immutable UpVector = Vector3(0,0,1);
+  __gshared immutable ForwardVector   = Vector3(1,0,0);
+  __gshared immutable RightVector     = Vector3(0,1,0);
+  __gshared immutable UpVector        = Vector3(0,0,1);
   __gshared immutable UnitScaleVector = Vector3(1,1,1);
-  __gshared immutable ZeroVector = Vector3(0,0,0);
+  __gshared immutable ZeroVector      = Vector3(0,0,0);
 
   // Initialization test
   unittest
