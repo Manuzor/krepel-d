@@ -175,3 +175,4 @@ unittest
 }
 
 alias IsArray(T) = Phobos.isArray!T;
+alias IsIntegral(T) = Phobos.isIntegral!T;
