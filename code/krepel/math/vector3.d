@@ -46,6 +46,10 @@ Vector3 ProjectOntoPlane(Vector3 vec, Vector3 normal)
   return vec - vec.ProjectOntoNormal(normal);
 }
 
+Vector3 ReflectVector(Vector3 vec, Vector3 normal)
+{
+  return vec - (2 * (vec | normal) * normal);
+}
 
 struct Vector3
 {
@@ -315,5 +319,16 @@ struct Vector3
     Vector3 projected = toProject.ProjectOntoPlane(normal);
 
     assert(projected == Vector3(1,1,0));
+  }
+
+  /// Reflect Vector
+  unittest
+  {
+    Vector3 normal = Vector3(1,0,0);
+    Vector3 reflection = Vector3(-1,0,-1);
+
+    Vector3 reflected = reflection.ReflectVector(normal);
+
+    assert(reflected == Vector3(1,0,-1));
   }
 }
