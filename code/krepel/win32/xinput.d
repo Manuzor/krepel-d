@@ -44,6 +44,6 @@ auto Win32LoadXInput()
     }
   }
 
-  Log.Info("Failed to load XInput.".MakeSpan);
+  Log.Info("Failed to load XInput.");
   return false;
 }

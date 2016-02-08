@@ -44,8 +44,8 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
 {
   //MessageBoxA(null, "Hello World?", "Hello", MB_OK);
 
-  Log.Info("=== Beginning of Log".MakeSpan);
-  scope(exit) Log.Info("=== End of Log".MakeSpan);
+  Log.Info("=== Beginning of Log");
+  scope(exit) Log.Info("=== End of Log");
 
   // TODO(Manu): Allocate the global memory block.
   {
@@ -53,7 +53,7 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
 
   if(!Win32LoadXInput())
   {
-    Log.Info("Failed to load XInput.".MakeSpan);
+    Log.Info("Failed to load XInput.");
   }
 
   WNDCLASSA WindowClass;
@@ -89,7 +89,7 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
         Wrapped.XINPUT_STATE ControllerState;
         if(XInputGetState(0, &ControllerState) == ERROR_SUCCESS)
         {
-          Log.Info("Marvin!! XINPUT FUNKTIONIERT!!".MakeSpan);
+          Log.Info("Marvin!! XINPUT FUNKTIONIERT!!");
         }
       }
     }
@@ -119,7 +119,7 @@ void Win32ProcessPendingMessages()
 
         if(VKCode == VK_SPACE)
         {
-          Log.Info("Space".MakeSpan);
+          Log.Info("Space");
         }
         else if(VKCode == VK_ESCAPE)
         {
