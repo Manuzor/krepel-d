@@ -1,6 +1,7 @@
 module krepel.meta;
 
-private import Phobos = std.traits;
+private static import std.traits;
+private static import std.conv;
 
 // Creates a sequence of zero or more aliases (types, string literals, ...).
 template AliasSequence(Args...)
@@ -174,5 +175,27 @@ unittest
   static assert(!IsSomeChar!int);
 }
 
-alias IsArray(T) = Phobos.isArray!T;
-alias IsIntegral(T) = Phobos.isIntegral!T;
+T* Emplace(T, ArgTypes...)(void[] RawMemory, auto ref ArgTypes Args)
+{
+  assert(RawMemory.length >= T.sizeof);
+  auto Instance = cast(T*)RawMemory.ptr;
+  *Instance = T(Args);
+  return Instance;
+}
+
+void Destroy(T)(T* Instance)
+{
+  if(Instance)
+  {
+    static if(__traits(hasMember, T, "__dtor"))
+    {
+      Instance.__dtor();
+    }
+
+    // TODO(Manu) *Instance = T.init;?
+  }
+}
+
+alias IsArray    = std.traits.isArray;
+alias IsIntegral = std.traits.isIntegral;
+alias IsPointer  = std.traits.isPointer;
