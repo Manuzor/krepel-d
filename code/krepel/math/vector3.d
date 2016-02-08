@@ -36,6 +36,16 @@ Vector3 NormalizedCopy(Vector3 vec)
   return copy;
 }
 
+Vector3 ProjectOntoNormal(Vector3 vec, Vector3 normal)
+{
+  return normal * (vec | normal);
+}
+
+Vector3 ProjectOntoPlane(Vector3 vec, Vector3 normal)
+{
+  return vec - vec.ProjectOntoNormal(normal);
+}
+
 
 struct Vector3
 {
@@ -269,7 +279,7 @@ struct Vector3
     assert(vec3 == Vector3.RightVector);
   }
 
-  // Normalization
+  /// Normalization
   unittest
   {
     Vector3 vec = Vector3(1,1,1);
@@ -283,5 +293,27 @@ struct Vector3
     assert(vec == Vector3(1,1,1));
     assert(normalized == Vector3(expected, expected, expected));
     assert(normalizedUFCS == Vector3(expected, expected, expected));
+  }
+
+  /// Project Onto Normal
+  unittest
+  {
+    Vector3 normal = Vector3.UpVector;
+    Vector3 toProject = Vector3(1,1,0.5f);
+
+    Vector3 projected = toProject.ProjectOntoNormal(normal);
+
+    assert(projected == Vector3(0,0,0.5f));
+  }
+
+  /// Project Onto PLane
+  unittest
+  {
+    Vector3 normal = Vector3.UpVector;
+    Vector3 toProject = Vector3(1,1,0.5f);
+
+    Vector3 projected = toProject.ProjectOntoPlane(normal);
+
+    assert(projected == Vector3(1,1,0));
   }
 }
