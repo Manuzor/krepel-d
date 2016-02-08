@@ -51,11 +51,17 @@ Vector3 ReflectVector(Vector3 vec, Vector3 normal)
   return vec - (2 * (vec | normal) * normal);
 }
 
+bool ContainsNaN(Vector3 vec)
+{
+  return IsNaN(vec.X) || IsNaN(vec.Y) || IsNaN(vec.Z);
+}
+
 struct Vector3
 {
   union
   {
-    struct{
+    struct
+    {
       float X, Y, Z;
     }
     float[3] Data;
