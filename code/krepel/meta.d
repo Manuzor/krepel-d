@@ -72,15 +72,6 @@ template Map(alias Func, Args...)
   debug(krepel_meta_Map) pragma(msg, "[krepel_meta_Map] Result: " ~ Map.stringof);
 }
 
-unittest
-{
-  alias Types = Map!(Unqualified, int, const(int), shared(int));
-
-  static assert(is(Types[0] == int));
-  static assert(is(Types[1] == int));
-  static assert(is(Types[2] == int));
-}
-
 //debug = krepel_meta_AnySatisy;
 template AnySatisfy(alias Func, Args...)
 {
@@ -108,12 +99,6 @@ template AnySatisfy(alias Func, Args...)
   alias AnySatisfy = Impl!(Args);
 
   debug(krepel_meta_AnySatisy) pragma(msg, "[krepel_meta_AnySatisy] Result = ", AnySatisfy.stringof);
-}
-
-unittest
-{
-  static assert(!AnySatisfy!(Unqualified));
-  // TODO(Manu): More.
 }
 
 //debug = krepel_meta_AllSatisfy;
@@ -145,12 +130,6 @@ template AllSatisfy(alias Func, Args...)
   debug(krepel_meta_AllSatisfy) pragma(msg, "[krepel_meta_AllSatisfy] Result = ", AllSatisfy.stringof);
 }
 
-unittest
-{
-  static assert(AllSatisfy!(Unqualified));
-  // TODO(Manu): More.
-}
-
 //debug = krepel_meta_IsSomeChar;
 template IsSomeChar(TypeToTest)
 {
@@ -166,6 +145,46 @@ template IsSomeChar(TypeToTest)
   debug(krepel_meta_IsSomeChar) pragma(msg, "[krepel_meta_IsSomeChar] Result = " ~ IsSomeChar.stringof);
 }
 
+template HasMember(ArgTypes...)
+  if(ArgTypes.length == 2)
+{
+  static if(is(ArgTypes[0])) alias Type = ArgTypes[0];
+  else                       alias Type = typeof(ArgTypes[0]);
+
+  enum bool HasMember = __traits(hasMember, Type, ArgTypes[1]);
+}
+
+alias IsArray    = std.traits.isArray;
+alias IsIntegral = std.traits.isIntegral;
+alias IsPointer  = std.traits.isPointer;
+
+
+//
+// Unit Tests
+//
+
+
+unittest
+{
+  alias Types = Map!(Unqualified, int, const(int), shared(int));
+
+  static assert(is(Types[0] == int));
+  static assert(is(Types[1] == int));
+  static assert(is(Types[2] == int));
+}
+
+unittest
+{
+  static assert(!AnySatisfy!(Unqualified));
+  // TODO(Manu): More.
+}
+
+unittest
+{
+  static assert(AllSatisfy!(Unqualified));
+  // TODO(Manu): More.
+}
+
 unittest
 {
   static assert( IsSomeChar!char);
@@ -174,28 +193,3 @@ unittest
   static assert( IsSomeChar!(immutable char));
   static assert(!IsSomeChar!int);
 }
-
-T* Emplace(T, ArgTypes...)(void[] RawMemory, auto ref ArgTypes Args)
-{
-  assert(RawMemory.length >= T.sizeof);
-  auto Instance = cast(T*)RawMemory.ptr;
-  *Instance = T(Args);
-  return Instance;
-}
-
-void Destroy(T)(T* Instance)
-{
-  if(Instance)
-  {
-    static if(__traits(hasMember, T, "__dtor"))
-    {
-      Instance.__dtor();
-    }
-
-    // TODO(Manu) *Instance = T.init;?
-  }
-}
-
-alias IsArray    = std.traits.isArray;
-alias IsIntegral = std.traits.isIntegral;
-alias IsPointer  = std.traits.isPointer;

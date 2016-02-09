@@ -7,17 +7,69 @@ import Meta = krepel.meta;
 alias MemoryRegion = ubyte[];
 alias StaticMemoryRegion(size_t N) = ubyte[N];
 
-MemoryRegion GlobalMemory;
-Allocator!HeapMemory GlobalAllocator;
+__gshared ForwardAllocator!HeapMemory GlobalAllocator;
+
+struct ForwardAllocator(M)
+{
+  alias MemoryType = M;
+
+  enum bool CanDeallocate = Meta.HasMember!(MemoryType, "Deallocate");
+
+  MemoryType Memory;
+
+  // Create a new T and call it's constructor.
+  T* New(T, ArgTypes...)(auto ref ArgTypes Args)
+  {
+    auto Raw = Memory.Allocate(T.sizeof);
+    if(Raw is null) return null;
+    auto Instance = cast(T*)Raw.ptr;
+    Construct(*Instance, Args);
+    return Instance;
+  }
+
+  // Calls the destructor on the given Instance.
+  // Deallocates memory only if the current memory type supports deallocation.
+  void Delete(T)(T* Instance)
+  {
+    if(Instance)
+    {
+      Destruct(*Instance);
+      static if(CanDeallocate)
+      {
+        Memory.Deallocate(Instance[0 .. T.sizeof]);
+      }
+    }
+  }
+
+  // NOTE: The allocated array will not be initialized!
+  T[] NewArray(T)(size_t Count)
+  {
+    // TODO(Manu): Implement.
+    auto RawMemory = Memory.Allocate(Count * T.sizeof);
+
+    // Out of memory?
+    if(RawMemory is null) return null;
+
+    auto Array = cast(T[])RawMemory;
+    assert(Array.length == Count);
+    return Array;
+  }
+
+  // NOTE: Destructors won't be called!
+  void Delete(T)(T[] Array)
+  {
+    static if(CanDeallocate)
+    {
+      Memory.Deallocate(cast(ubyte[])Array);
+    }
+  }
+}
 
 struct HeapMemory
 {
   MemoryRegion Memory;
-}
 
-auto Allocate(ref HeapMemory Heap, size_t RequestedBytes)
-{
-  with(Heap)
+  auto Allocate(size_t RequestedBytes)
   {
     // TODO(Manu): Alignment.
 
@@ -27,111 +79,49 @@ auto Allocate(ref HeapMemory Heap, size_t RequestedBytes)
     Memory = Memory[RequestedBytes .. $];
     return RequestedMemory;
   }
+
+  void Deallocate(MemoryRegion MemoryToDeallocate)
+  {
+    // TODO(Manu): Implement.
+  }
 }
 
-void Deallocate(ref HeapMemory Heap, MemoryRegion MemoryToDeallocate)
+struct StackMemory
 {
-  // TODO(Manu): Implement deallocation.
-}
-
-struct StackMemory(size_t N)
-{
-  enum bool HasStaticMemory = N > 0;
-
-  static if(HasStaticMemory) { bool UseStaticMemory = true; }
-  else                       { enum bool UseStaticMemory = false; }
-
-  // If UseStaticMemory, this is an index into `StaticMemory`, otherwise it is
-  // an index into `Memory`.
+  MemoryRegion Memory;
   size_t AllocationMark;
 
-  MemoryRegion Memory;
-  StaticMemoryRegion!N StaticMemory = void;
-
-  this(MemoryRegion Memory)
-  {
-    this.Memory = Memory;
-  }
+  mixin StackMemoryAllocationMixin;
 }
 
-MemoryRegion Allocate(size_t N)(ref StackMemory!N Stack, size_t RequestedBytes)
+struct StaticStackMemory(size_t N)
 {
-  // TODO(Manu): Alignment.
+  static assert(N > 0, "Need at least one byte of static memory.");
 
-  if(RequestedBytes == 0) return null;
+  enum StaticCount = N;
 
-  with(Stack)
+  StaticMemoryRegion!N Memory;
+  size_t AllocationMark;
+
+  mixin StackMemoryAllocationMixin;
+}
+
+mixin template StackMemoryAllocationMixin()
+{
+  MemoryRegion Allocate(size_t RequestedBytes)
   {
+    // TODO(Manu): Alignment.
+
+    if(RequestedBytes == 0) return null;
+
     auto NewMark = AllocationMark + RequestedBytes;
-    typeof(return) AllocationRegion;
 
-    static if(HasStaticMemory) if(UseStaticMemory)
-    {
-      if(NewMark > StaticMemory.length)
-      {
-        // Check whether we can allocate at all.
-        if(NewMark > Memory.length) return null;
-        UseStaticMemory = false;
-        AllocationMark = 0;
-        NewMark = RequestedBytes;
-      }
-      else
-      {
-        AllocationRegion = StaticMemory;
-      }
-    }
+    // Out of memory?
+    if(NewMark > Memory.length) return null;
 
-    if(!UseStaticMemory)
-    {
-      if(NewMark > Memory.length) return null;
-
-      AllocationRegion = Memory;
-    }
-
-    auto RequestedMemory = AllocationRegion[AllocationMark .. NewMark];
+    auto RequestedMemory = Memory[AllocationMark .. NewMark];
     AllocationMark = NewMark;
-
     return RequestedMemory;
-  }
-}
-
-struct Allocator(M)
-{
-  alias MemoryType = M;
-
-  MemoryType Memory;
-
-  // Create a new T and call it's constructor.
-  T* New(T, ArgTypes...)(auto ref ArgTypes Args)
-  {
-    auto Bytes = T.sizeof;
-    auto Raw = Memory.Allocate(Bytes);
-    assert(Raw, "Out of memory.");
-    return Meta.Emplace!T(cast(void[])Raw, Args);
-  }
-
-  version(none)
-  T[] NewArray(size_t N, T, ArgTypes...)(auto ref ArgTypes Args)
-  {
-    // TODO(Manu): Implement.
-    return null;
-  }
-
-  // Calls the destructor on the given Instance.
-  // Deallocates memory if, and only if the current memory type supports deallocation.
-  void Delete(T)(T* Instance)
-  {
-    Meta.Destroy(Instance);
-    static if(__traits(hasMember, MemoryType, "Deallocate"))
-    {
-      Memory.Deallocate(Instance[0 .. T.sizeof]);
-    }
-  }
-
-  version(none)
-  void Delete(T)(T[] Array)
-  {
-    // TODO(Manu): Implement.
   }
 }
 
@@ -139,12 +129,12 @@ struct Allocator(M)
 // Unit Tests
 //
 
-// Dynamic-only stack allocation
+// Dynamic stack allocation
 unittest
 {
   ubyte[1024] Buffer = void;
 
-  StackMemory!0 Stack;
+  StackMemory Stack;
   // Only assign 128 bytes as memory.
   Stack.Memory = Buffer[0 .. 128];
   assert(Stack.AllocationMark == 0);
@@ -172,10 +162,10 @@ unittest
   assert(Stack.AllocationMark == 32 + 64, "Allocation mark should be unchanged.");
 }
 
-// Static-only stack allocation
+// Static allocation
 unittest
 {
-  StackMemory!128 Stack;
+  StaticStackMemory!128 Stack;
 
   auto Block1 = Stack.Allocate(32);
   assert(Block1);
@@ -188,30 +178,6 @@ unittest
   auto Block3 = Stack.Allocate(128);
   assert(Block3 is null);
   assert(Stack.AllocationMark == 32 + 64);
-}
-
-// Hybrid stack allocation
-unittest
-{
-  ubyte[1024] Buffer;
-  auto Stack = StackMemory!40(Buffer[0..128]); // Hybrid stack with 40 Bytes static memory and 128 Bytes
-
-  static assert(Stack.HasStaticMemory);
-
-  auto Block1 = Stack.Allocate(32);
-  assert(Block1);
-  assert(Stack.AllocationMark == 32);
-  assert(Block1.ptr == Stack.StaticMemory.ptr);
-
-  auto Block2 = Stack.Allocate(32);
-  assert(Block2);
-  assert(Stack.AllocationMark == 32);
-  assert(Block2.ptr == Stack.Memory.ptr);
-
-  auto Block3 = Stack.Allocate(512);
-  assert(Block3 is null);
-  assert(Stack.AllocationMark == 32);
-  assert(!Stack.UseStaticMemory);
 }
 
 unittest
@@ -227,7 +193,7 @@ unittest
     }
   }
 
-  Allocator!(StackMemory!128) StackAllocator;
+  ForwardAllocator!(StaticStackMemory!128) StackAllocator;
 
   auto Data = StackAllocator.New!TestData(false, 1337);
   static assert(Meta.IsPointer!(typeof(Data)), "New!() should always return a pointer!");

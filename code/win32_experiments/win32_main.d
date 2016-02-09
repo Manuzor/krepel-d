@@ -49,6 +49,7 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
 
   // TODO(Manu): Allocate the global memory block.
   {
+    //GlobalAllocator.Memory = ...
   }
 
   if(!Win32LoadXInput())
