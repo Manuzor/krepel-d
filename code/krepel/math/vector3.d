@@ -218,10 +218,21 @@ struct Vector3
 
   Vector3 opDispatch(string s)() inout
   {
-    return mixin(
-      "Vector3(" ~ (s[0] == 'O' ? '0' : s[0] ) ~","~
-      (s[1] == 'O' ? '0' : s[1] ) ~","~
-      (s[2] == 'O' ? '0' : s[2] ) ~")");
+    // Special case for setting X to 0 (_0YZ)
+    static if(s.length == 4 && s[0] == '_')
+    {
+      return mixin(
+        "Vector3(" ~ s[1] ~","~
+        s[2] ~","~
+        s[3] ~")");
+    }
+    else if(s.length == 3)
+    {
+      return mixin(
+        "Vector3(" ~ s[0] ~","~
+        s[1] ~","~
+        s[2] ~")");
+    }
   }
 
   __gshared immutable ForwardVector   = Vector3(1,0,0);
@@ -425,7 +436,7 @@ struct Vector3
   {
     Vector3 vec = Vector3(1,2,3);
 
-    Vector3 swizzled = vec.ZOY;
+    Vector3 swizzled = vec.Z0Y;
 
     assert(swizzled == Vector3(3,0,2));
   }
