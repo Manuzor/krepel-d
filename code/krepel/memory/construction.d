@@ -24,6 +24,7 @@ void Construct(T, ArgTypes...)(ref T Instance, ArgTypes Args)
 
 void Destruct(T)(T[] Array)
 {
+  // TODO(Manu): See what Phobos' destroy() does that we don't.
   static if(Meta.HasMember!(T, "__dtor")) foreach(ref Element; Array) Element.__dtor();
   else                                    foreach(ref Element; Array) Element = T.init;
 }
@@ -39,4 +40,21 @@ void Destruct(T)(ref T Instance)
 // Unit Tests
 //
 
-// TODO(Manu): Write some tests.
+// Construct single object
+unittest
+{
+  nothrow @nogc static struct TestData
+  {
+    int Value;
+    float Precision;
+  }
+
+  ubyte[TestData.sizeof] Buffer = 0;
+  auto DataPtr = cast(TestData*)Buffer.ptr;
+  Construct(*DataPtr, 42, 3.1415f);
+  assert(DataPtr.Value == 42);
+  assert(DataPtr.Precision == 3.1415f);
+  Destruct(*DataPtr);
+  assert(DataPtr.Value != 42);
+  assert(DataPtr.Precision != 3.1415f);
+}
