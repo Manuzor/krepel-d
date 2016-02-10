@@ -56,6 +56,13 @@ bool ContainsNaN(Vector3 vec)
   return IsNaN(vec.X) || IsNaN(vec.Y) || IsNaN(vec.Z);
 }
 
+bool NearlyEquals(Vector3 a, Vector3 b, float epsilon = 1e-4f)
+{
+  return krepel.math.NearlyEquals(a.X, b.X, epsilon) &&
+         krepel.math.NearlyEquals(a.Y, b.Y, epsilon) &&
+         krepel.math.NearlyEquals(a.Z, b.Z, epsilon);
+}
+
 struct Vector3
 {
   union
@@ -336,5 +343,15 @@ struct Vector3
     Vector3 reflected = reflection.ReflectVector(normal);
 
     assert(reflected == Vector3(1,0,-1));
+  }
+
+  /// NearlyEquals
+  unittest
+  {
+    Vector3 a = Vector3(1,1,0);
+    Vector3 b = Vector3(1+1e-5f,1,-1e-6f);
+    Vector3 c = Vector3(1,1,10);
+    assert(NearlyEquals(a,b));
+    assert(!NearlyEquals(a,c));
   }
 }
