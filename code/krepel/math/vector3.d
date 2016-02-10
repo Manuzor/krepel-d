@@ -216,6 +216,14 @@ struct Vector3
     }
   }
 
+  Vector3 opDispatch(string s)() inout
+  {
+    return mixin(
+      "Vector3(" ~ (s[0] == 'O' ? '0' : s[0] ) ~","~
+      (s[1] == 'O' ? '0' : s[1] ) ~","~
+      (s[2] == 'O' ? '0' : s[2] ) ~")");
+  }
+
   __gshared immutable ForwardVector   = Vector3(1,0,0);
   __gshared immutable RightVector     = Vector3(0,1,0);
   __gshared immutable UpVector        = Vector3(0,0,1);
@@ -411,5 +419,14 @@ struct Vector3
     Vector3 vec = Vector3(0,1,1032094);
     assert(vec.Length2D() == 1);
     assert(vec.LengthSquared2D() == 1);
+  }
+
+  unittest
+  {
+    Vector3 vec = Vector3(1,2,3);
+
+    Vector3 swizzled = vec.ZOY;
+
+    assert(swizzled == Vector3(3,0,2));
   }
 }
