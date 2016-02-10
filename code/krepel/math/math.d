@@ -3,6 +3,9 @@ module krepel.math.math;
 import std.math;
 import krepel.algorithm.comparison;
 
+@safe:
+@nogc:
+
 float Sqrt(float value)
 {
   // TODO replace with own (opcode?)
@@ -18,7 +21,7 @@ float Abs(float value)
 bool IsNaN(float value)
 {
   bool result;
-  asm
+  asm @nogc @safe
   {
     fld value; // Load value to float stack ST(0)
     ftst; // Compare ST(0) with 0.0

@@ -1,7 +1,11 @@
 module krepel.math.vector3;
 
 import krepel.math.math;
+import krepel.algorithm.comparison;
 import std.conv;
+
+@nogc:
+@safe:
 
 float Dot(Vector3 lhs, Vector3 rhs)
 {
@@ -22,6 +26,16 @@ Vector3 Cross(Vector3 lhs, Vector3 rhs)
 float LengthSquared(Vector3 vec)
 {
   return vec | vec;
+}
+
+float LengthSquared2D(Vector3 vec)
+{
+  return vec.X * vec.X + vec.Y * vec.Y;
+}
+
+float Length2D(Vector3 vec)
+{
+  return Sqrt(vec.LengthSquared2D());
 }
 
 float Length(Vector3 vec)
@@ -63,8 +77,26 @@ bool NearlyEquals(Vector3 a, Vector3 b, float epsilon = 1e-4f)
          krepel.math.NearlyEquals(a.Z, b.Z, epsilon);
 }
 
+Vector3 ClampSize(Vector3 vec, float MaxSize)
+{
+  Vector3 normal = vec.NormalizedCopy();
+  return normal * Min(vec.Length(), MaxSize);
+}
+
+Vector3 ClampSize2D(Vector3 vec, float MaxSize)
+{
+  Vector3 clamped = vec;
+  clamped.Z = 0;
+  clamped.Normalize();
+  clamped *= Min(vec.Length2D(), MaxSize);
+  clamped.Z = vec.Z;
+  return clamped;
+}
+
 struct Vector3
 {
+  @safe:
+  @nogc:
   union
   {
     struct
@@ -353,5 +385,31 @@ struct Vector3
     Vector3 c = Vector3(1,1,10);
     assert(NearlyEquals(a,b));
     assert(!NearlyEquals(a,c));
+  }
+
+  /// Clamp Vector3
+  unittest
+  {
+    Vector3 vec = Vector3(100,0,0);
+    Vector3 clamped = vec.ClampSize(1);
+    assert(vec == Vector3(100,0,0));
+    assert(clamped == Vector3(1,0,0));
+  }
+
+  /// Clamp2D Vector3
+  unittest
+  {
+    Vector3 vec = Vector3(100,0,1000);
+    Vector3 clamped = vec.ClampSize2D(1);
+    assert(vec == Vector3(100,0,1000));
+    assert(clamped == Vector3(1,0,1000));
+  }
+
+  /// 2D Length
+  unittest
+  {
+    Vector3 vec = Vector3(0,1,1032094);
+    assert(vec.Length2D() == 1);
+    assert(vec.LengthSquared2D() == 1);
   }
 }
