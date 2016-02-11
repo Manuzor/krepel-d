@@ -6,18 +6,21 @@ import krepel.algorithm.comparison;
 @safe:
 @nogc:
 
+/// Returns the square root of the given value
 float Sqrt(float value)
 {
   // TODO replace with own (opcode?)
   return std.math.sqrt(value);
 }
 
+/// Returns the absolute value (the positive value)
 float Abs(float value)
 {
   // TODO replace with own (opcode?)
   return std.math.abs(value);
 }
 
+/// Checks if the given float value is QNaN
 bool IsNaN(float value)
 {
   bool result;

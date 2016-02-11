@@ -7,42 +7,58 @@ import std.conv;
 @nogc:
 @safe:
 
+/// Calculates the Dot Product of the two vectors
+/// Input vectors will not be modified
 float Dot(Vector3 lhs, Vector3 rhs)
 {
   float result = lhs | rhs;
   return result;
 }
 
+/// Multiplies two vectors per component returning a new vector containing
+/// (lhs.X * rhs.X, lhs.Y * rhs.Y, lhs.Z * rhs.Z)
+/// Input vectors will not be modified
 Vector3 Mul(Vector3 lhs, Vector3 rhs)
 {
   return lhs * rhs;
 }
 
+/// Calculates the cross Product (lhs x rhs) and returns the result
+/// Input vectors will not be modified
 Vector3 Cross(Vector3 lhs, Vector3 rhs)
 {
   return lhs ^ rhs;
 }
 
+/// Calculates the squared length  of the given vector, which is the same as the dot product with the same vector
+/// Input vector will not be modified
 float LengthSquared(Vector3 vec)
 {
   return vec | vec;
 }
 
+/// Calculates the squared length of the X and Y components, ignoring the Z component
+/// Input vector will not be modified
 float LengthSquared2D(Vector3 vec)
 {
   return vec.X * vec.X + vec.Y * vec.Y;
 }
 
+/// Calculates the 2D length of the Vector using the square root of the LengthSquared2D
+/// Input vector will not be modified
 float Length2D(Vector3 vec)
 {
   return Sqrt(vec.LengthSquared2D());
 }
 
+/// Calculates the 2D length of the Vector using the square root of the LengthSquared
+/// Input vector will not be modified
 float Length(Vector3 vec)
 {
   return Sqrt(vec.LengthSquared());
 }
 
+/// Creates a copy of the vector, which is normalized in its length (has a length of 1.0)
 Vector3 NormalizedCopy(Vector3 vec)
 {
   Vector3 copy = vec;
@@ -50,26 +66,39 @@ Vector3 NormalizedCopy(Vector3 vec)
   return copy;
 }
 
+/// Projects a given vector onto a normal (normal needs to be normalized)
+/// Returns the projected vector, which will be a scaled version of the vector
+/// Input vectors will not be modified
 Vector3 ProjectOntoNormal(Vector3 vec, Vector3 normal)
 {
   return normal * (vec | normal);
 }
 
+/// Projects a given vector on a plane, which has the given normal (normal needs to be normalized)
+/// Returns vector which resides on the plane spanned by the normal
+/// Input vector will not be modified
 Vector3 ProjectOntoPlane(Vector3 vec, Vector3 normal)
 {
   return vec - vec.ProjectOntoNormal(normal);
 }
 
+/// Reflects a vector around a normal (normal needs to be normalized)
+/// Returns the reflected vector
+/// Input vectors will not be modified
 Vector3 ReflectVector(Vector3 vec, Vector3 normal)
 {
   return vec - (2 * (vec | normal) * normal);
 }
 
+/// Checks if any component inside the vector is NaN.
+/// Input vector will not be modified
 bool ContainsNaN(Vector3 vec)
 {
   return IsNaN(vec.X) || IsNaN(vec.Y) || IsNaN(vec.Z);
 }
 
+/// Checks if two vectors are nearly equal (are equal with respect to a scaled epsilon)
+/// Input vectors will not be modified
 bool NearlyEquals(Vector3 a, Vector3 b, float epsilon = 1e-4f)
 {
   return krepel.math.NearlyEquals(a.X, b.X, epsilon) &&
@@ -77,12 +106,18 @@ bool NearlyEquals(Vector3 a, Vector3 b, float epsilon = 1e-4f)
          krepel.math.NearlyEquals(a.Z, b.Z, epsilon);
 }
 
+/// Returns a clamped copy of the given vector
+/// The retuned vector will be of size <= MaxSize
+/// Input vector will not be modified
 Vector3 ClampSize(Vector3 vec, float MaxSize)
 {
   Vector3 normal = vec.NormalizedCopy();
   return normal * Min(vec.Length(), MaxSize);
 }
 
+/// Returns a clamped copy of the X and Y component of the Vector, the Z compnent will be untouched
+/// The length of the X and Y component will be <= MaxSize
+/// Input vector will not be modified
 Vector3 ClampSize2D(Vector3 vec, float MaxSize)
 {
   Vector3 clamped = vec;
@@ -119,10 +154,11 @@ struct Vector3
     this.Z = Z;
   }
 
-  // Don't return result to avoid confusion with NormalizedCopy
-  // and stress that this operation modifies the vector on which it is called
+  /// Normalizes the vector (vector will have a length of 1.0)
   void Normalize()
   {
+    // Don't return result to avoid confusion with NormalizedCopy
+    // and stress that this operation modifies the vector on which it is called
     float length = this.Length();
     this /= length;
   }
