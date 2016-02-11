@@ -2,18 +2,37 @@ module krepel.memory.allocation;
 
 import krepel;
 import krepel.memory;
+import krepel.algorithm;
 import Meta = krepel.meta;
 
-alias MemoryRegion = ubyte[];
-alias StaticMemoryRegion(size_t N) = ubyte[N];
-
 __gshared ForwardAllocator!HeapMemory GlobalAllocator;
+
+/// Memory Features
+enum : ubyte
+{
+  SupportsAllocationOnly  = 0,
+  SupportsReallocation    = 1 << 0,
+  SupportsDeallocation    = 1 << 1,
+
+  SupportsAllFeatures     = 0xFF,
+}
+
+mixin template MemoryMixinTemplate(size_t InFeatures)
+{
+  alias ThisIsAMemoryType = typeof(this);
+  enum size_t Features = InFeatures;
+}
+
+template IsSomeMemory(M)
+{
+  static if(is(M.ThisIsAMemoryType)) enum bool IsSomeMemory = true;
+  else                               enum bool IsSomeMemory = false;
+}
 
 struct ForwardAllocator(M)
 {
   alias MemoryType = M;
-
-  enum bool CanDeallocate = Meta.HasMember!(MemoryType, "Deallocate");
+  static assert(IsSomeMemory!MemoryType);
 
   MemoryType Memory;
 
@@ -34,7 +53,7 @@ struct ForwardAllocator(M)
     if(Instance)
     {
       Destruct(*Instance);
-      static if(CanDeallocate)
+      static if(MemoryType.Features & SupportsDeallocation)
       {
         Memory.Deallocate(Instance[0 .. T.sizeof]);
       }
@@ -58,31 +77,84 @@ struct ForwardAllocator(M)
   // NOTE: Destructors won't be called!
   void Delete(T)(T[] Array)
   {
-    static if(CanDeallocate)
-    {
-      Memory.Deallocate(cast(ubyte[])Array);
-    }
+    Memory.Deallocate(cast(ubyte[])Array);
   }
 }
 
-struct HeapMemory
+/// Forwards all calls to the appropriate krepel.system.* functions.
+struct SystemMemory
 {
-  MemoryRegion Memory;
+  mixin MemoryMixinTemplate!(SupportsAllFeatures);
+
+  private import krepel.system;
 
   auto Allocate(size_t RequestedBytes)
   {
+    return SystemMemoryAllocation(RequestedBytes);
+  }
+
+  auto Reallocate(MemoryRegion Memory, size_t RequestedBytes)
+  {
+    return SystemMemoryReallocation(Memory, RequestedBytes);
+  }
+
+  bool Deallocate(MemoryRegion MemoryToDeallocate)
+  {
+    return SystemMemoryDeallocation(MemoryToDeallocate);
+  }
+}
+
+debug = DebugHeapMemory;
+
+/// Can allocate arbitrary sizes of memory blocks and deallocate them in any order.
+struct HeapMemory
+{
+  mixin MemoryMixinTemplate!(SupportsDeallocation);
+
+  MemoryRegion Memory;
+
+  debug(DebugHeapMemory) bool IsInitialized;
+
+  private static struct Chunk
+  {
+    MemoryRegion NextChunk;
+  }
+
+  this(MemoryRegion AvailableMemory)
+  {
+    Initialize(AvailableMemory);
+  }
+
+  void Initialize(MemoryRegion AvailableMemory)
+  {
+    debug(DebugHeapMemory) assert(!IsInitialized, "Heap memory must not be initialized.");
+    Memory = AvailableMemory;
+    debug(DebugHeapMemory) IsInitialized = true;
+  }
+
+  auto Allocate(size_t RequestedBytes)
+  {
+    debug(DebugHeapMemory) assert(IsInitialized, "Heap memory is not initialized.");
+
     // TODO(Manu): Alignment.
 
-    if(RequestedBytes == 0 || RequestedBytes > Memory.length) return null;
+    if(RequestedBytes == 0) return null;
+
+    // Make sure we only allocate enough to fit at least a Chunk in it.
+    RequestedBytes = Max(RequestedBytes, Chunk.sizeof);
+
+    if(RequestedBytes > Memory.length) return null;
 
     auto RequestedMemory = Memory[0 .. RequestedBytes];
     Memory = Memory[RequestedBytes .. $];
     return RequestedMemory;
   }
 
-  void Deallocate(MemoryRegion MemoryToDeallocate)
+  bool Deallocate(MemoryRegion MemoryToDeallocate)
   {
-    // TODO(Manu): Implement.
+    // TODO(Manu): Check whether MemoryToDeallocate actually belongs to this heap.
+    // TODO(Manu): Implement deallocation.
+    return true;
   }
 }
 
@@ -108,6 +180,8 @@ struct StaticStackMemory(size_t N)
 
 mixin template StackMemoryAllocationMixin()
 {
+  mixin MemoryMixinTemplate!(SupportsAllocationOnly);
+
   MemoryRegion Allocate(size_t RequestedBytes)
   {
     // TODO(Manu): Alignment.
@@ -123,11 +197,95 @@ mixin template StackMemoryAllocationMixin()
     AllocationMark = NewMark;
     return RequestedMemory;
   }
+
+  bool Deallocate(ArgTypes...)(auto ref ArgTypes Args) { return false; }
+}
+
+struct FallbackMemory(P, S)
+{
+  alias PrimaryMemoryType = P;
+  alias SecondaryMemoryType = S;
+
+  static assert(IsSomeMemory!PrimaryMemoryType && IsSomeMemory!SecondaryMemoryType);
+
+  mixin MemoryMixinTemplate!(PrimaryMemoryType.Features | SecondaryMemoryType.Features);
+
+  PrimaryMemoryType    PrimaryMemory;
+  SecondaryMemoryType  SecondaryMemory;
+
+  auto Allocate(size_t RequestedBytes)
+  {
+    auto RequestedMemory = PrimaryMemory.Allocate(RequestedBytes);
+    if(RequestedMemory) return RequestedMemory;
+    return SecondaryMemory.Allocate(RequestedBytes);
+  }
+
+  bool Deallocate(MemoryRegion MemoryToDeallocate)
+  {
+    if(PrimaryMemory.Deallocate(MemoryToDeallocate))
+    {
+      return true;
+    }
+    return SecondaryMemory.Deallocate(MemoryToDeallocate);
+  }
 }
 
 //
 // Unit Tests
 //
+
+// System Memory Allocation
+unittest
+{
+  SystemMemory SystemHeap;
+
+  auto Block1 = SystemHeap.Allocate(32);
+  assert(Block1);
+  Block1[$-1] = cast(ubyte)123;
+
+  auto Block2 = SystemHeap.Allocate(8);
+  assert(Block2);
+  Block2[] = 0xFU;
+  foreach(ref Byte; Block2)
+  {
+    assert(Byte == 0xFU);
+  }
+
+  assert(SystemHeap.Deallocate(Block1));
+  foreach(ref Byte; Block2)
+  {
+    assert(Byte == 0xFU);
+  }
+
+  assert(SystemHeap.Deallocate(Block2));
+  debug {} else assert(!SystemHeap.Deallocate(Block2));
+}
+
+// Heap Memory Allocation
+unittest
+{
+  ubyte[128] Buffer = void;
+  for(int Index; Index < Buffer.length; Index++) Buffer[Index] = cast(ubyte)Index;
+
+  auto Heap = HeapMemory(Buffer[0 .. 32]);
+
+  auto Block1 = Heap.Allocate(16);
+  assert(Block1.ptr == &Buffer[0]);
+  assert(Block1.length == 16);
+  auto Block2 = Heap.Allocate(16);
+  assert(Block2.ptr == &Buffer[16]);
+  assert(Block2.length == 16);
+
+  assert(Heap.Allocate(1) is null);
+
+  assert(Heap.Deallocate(Block1));
+  Block1 = null; // Optional.
+
+  auto Block3 = Heap.Allocate(16);
+  // TODO(Manu): Can only test when deallocation is implemented.
+  //assert(Block3.ptr == &Buffer[0]);
+  //assert(Block3.length == 16);
+}
 
 // Dynamic stack allocation
 unittest

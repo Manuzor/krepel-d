@@ -1,8 +1,5 @@
-module krepel.win32.xinput_wrapper;
-
 // Wraps XInput.
-// We never link statically to xinput, so the functions in here are only signatures.
-
+module krepel.win32.xinput_wrapper;
 version(Windows):
 
 import core.sys.windows.w32api;

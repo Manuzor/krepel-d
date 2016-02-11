@@ -13,6 +13,9 @@ alias GB = a => a * 1000.MiB;
 alias TB = a => a * 1000.GiB;
 alias PB = a => a * 1000.TiB;
 
+alias MemoryRegion = ubyte[];
+alias StaticMemoryRegion(size_t N) = ubyte[N];
+
 enum GlobalDefaultAlignment = size_t.sizeof;
 
 auto AlignedSize(size_t Size, size_t Alignment)

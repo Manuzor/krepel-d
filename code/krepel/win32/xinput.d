@@ -1,10 +1,12 @@
 module krepel.win32.xinput;
+version(Windows):
 
 import krepel;
 public import krepel.win32.xinput_wrapper;
 import Wrapped = krepel.win32.xinput_wrapper;
 
 import core.sys.windows.windows;
+
 
 typeof(Wrapped.XInputGetState)*              XInputGetState              = (a, b)          => ERROR_DEVICE_NOT_CONNECTED;
 typeof(Wrapped.XInputSetState)*              XInputSetState              = (a, b)          => ERROR_DEVICE_NOT_CONNECTED;
