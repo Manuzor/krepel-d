@@ -112,6 +112,7 @@ struct HeapMemory
   mixin MemoryMixinTemplate!(SupportsDeallocation);
 
   MemoryRegion Memory;
+  MemoryRegion AllocatedMemory;
 
   debug(DebugHeapMemory) bool IsInitialized;
 
@@ -129,6 +130,7 @@ struct HeapMemory
   {
     debug(DebugHeapMemory) assert(!IsInitialized, "Heap memory must not be initialized.");
     Memory = AvailableMemory;
+    AllocatedMemory = AvailableMemory;
     debug(DebugHeapMemory) IsInitialized = true;
   }
 
@@ -143,10 +145,10 @@ struct HeapMemory
     // Make sure we only allocate enough to fit at least a Chunk in it.
     RequestedBytes = Max(RequestedBytes, Chunk.sizeof);
 
-    if(RequestedBytes > Memory.length) return null;
+    if(RequestedBytes > AllocatedMemory.length) return null;
 
-    auto RequestedMemory = Memory[0 .. RequestedBytes];
-    Memory = Memory[RequestedBytes .. $];
+    auto RequestedMemory = AllocatedMemory[0 .. RequestedBytes];
+    AllocatedMemory = AllocatedMemory[RequestedBytes .. $];
     return RequestedMemory;
   }
 
@@ -201,7 +203,7 @@ mixin template StackMemoryAllocationMixin()
   bool Deallocate(ArgTypes...)(auto ref ArgTypes Args) { return false; }
 }
 
-struct FallbackMemory(P, S)
+struct HybridMemory(P, S)
 {
   alias PrimaryMemoryType = P;
   alias SecondaryMemoryType = S;
@@ -265,7 +267,10 @@ unittest
 unittest
 {
   ubyte[128] Buffer = void;
-  for(int Index; Index < Buffer.length; Index++) Buffer[Index] = cast(ubyte)Index;
+  for(int Index; Index < Buffer.length; Index++)
+  {
+    Buffer[Index] = cast(ubyte)Index;
+  }
 
   auto Heap = HeapMemory(Buffer[0 .. 32]);
 
@@ -320,7 +325,7 @@ unittest
   assert(Stack.AllocationMark == 32 + 64, "Allocation mark should be unchanged.");
 }
 
-// Static allocation
+// Static stack allocation
 unittest
 {
   StaticStackMemory!128 Stack;
@@ -338,6 +343,32 @@ unittest
   assert(Stack.AllocationMark == 32 + 64);
 }
 
+// HybridMemory tests
+unittest
+{
+  ubyte[64] Buffer;
+  auto Heap1  = HeapMemory(Buffer[ 0 .. 32]);
+  auto Heap2  = HeapMemory(Buffer[32 .. 64]);
+  auto Hybrid = HybridMemory!(HeapMemory*, HeapMemory*)(&Heap1, &Heap2);
+
+  auto Block1 = Hybrid.Allocate(16);
+  assert(Block1);
+  assert(Block1.ptr == Heap1.Memory.ptr);
+  auto Block2 = Hybrid.Allocate(16);
+  assert(Block2);
+  assert(Block2.ptr == Heap1.Memory.ptr + 16);
+  auto Block3 = Hybrid.Allocate(16);
+  assert(Block3);
+  assert(Block3.ptr == Heap2.Memory.ptr);
+  auto Block4 = Hybrid.Allocate(16);
+  assert(Block4);
+  assert(Block4.ptr == Heap2.Memory.ptr + 16);
+
+  // We are out of memory now.
+  assert(Hybrid.Allocate(1) is null);
+}
+
+// ForwardAllocator tests
 unittest
 {
   static struct TestData
