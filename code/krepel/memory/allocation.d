@@ -224,11 +224,8 @@ struct HybridMemory(P, S)
 
   bool Deallocate(MemoryRegion MemoryToDeallocate)
   {
-    if(PrimaryMemory.Deallocate(MemoryToDeallocate))
-    {
-      return true;
-    }
-    return SecondaryMemory.Deallocate(MemoryToDeallocate);
+    return PrimaryMemory.Deallocate(MemoryToDeallocate) ||
+           SecondaryMemory.Deallocate(MemoryToDeallocate);
   }
 }
 
