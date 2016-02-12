@@ -28,6 +28,14 @@ auto AlignedSize(size_t Size, size_t Alignment)
   return ((Size + Alignment - 1) / Alignment) * Alignment;
 }
 
+auto AlignedPointer(T)(T* Pointer, size_t Alignment)
+{
+  return cast(T*)AlignedSize(cast(size_t)Pointer, Alignment);
+}
+
+alias SetBit    = (Bits, Position) => Bits |  (1 << Position);
+alias RemoveBit = (Bits, Position) => Bits & ~(1 << Position);
+
 //
 // Unit Tests
 //
@@ -41,4 +49,29 @@ unittest
   assert(AlignedSize(99,  8) == 104);
   assert(AlignedSize(99, 16) == 112);
   assert(AlignedSize(99, 32) == 128);
+}
+
+unittest
+{
+  ubyte[8] Bytes;
+  for(ubyte i; i < Bytes.length; i++) Bytes[i] = i;
+
+  assert(AlignedPointer(Bytes.ptr + 1, 4) == Bytes.ptr + 4);
+}
+
+unittest
+{
+  assert(SetBit(0b0000, 0) == 0b0001);
+  assert(SetBit(0b0000, 1) == 0b0010);
+  assert(SetBit(0b0000, 2) == 0b0100);
+  assert(SetBit(0b0000, 3) == 0b1000);
+}
+
+unittest
+{
+  assert(RemoveBit(0b1111, 0) == 0b1110);
+  assert(RemoveBit(0b1111, 1) == 0b1101);
+  assert(RemoveBit(0b1111, 2) == 0b1011);
+  assert(RemoveBit(0b1111, 3) == 0b0111);
+  assert(RemoveBit(0b1111, 4) == 0b1111);
 }

@@ -122,7 +122,7 @@ unittest
 {
   ubyte[100 * int.sizeof] Buffer;
   GlobalAllocator.Memory.Initialize(Buffer[]);
-  scope(exit) GlobalAllocator.Memory.Memory =  null;
+  scope(exit) GlobalAllocator.Memory.Memory = null;
 
   DynamicArray!int Arr;
   assert(Arr.Count == 0);

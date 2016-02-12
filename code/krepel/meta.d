@@ -2,6 +2,7 @@ module krepel.meta;
 
 private static import std.traits;
 private static import std.conv;
+private static import std.bitmanip;
 
 // Creates a sequence of zero or more aliases (types, string literals, ...).
 template AliasSequence(Args...)
@@ -157,6 +158,18 @@ template HasMember(ArgTypes...)
 alias IsArray    = std.traits.isArray;
 alias IsIntegral = std.traits.isIntegral;
 alias IsPointer  = std.traits.isPointer;
+
+/// Example:
+/// struct A
+/// {
+///   mixin(Bitfields!(
+///                    bool, "a", 1,
+///                    uint, "b", 2,
+///                    int,  "a", 3,
+///                    uint, "",  2, // Padding so this entire thing is 8 bits.
+///                    ));
+/// }
+alias Bitfields  = std.bitmanip.bitfields;
 
 
 //

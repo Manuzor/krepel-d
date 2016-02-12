@@ -3,9 +3,10 @@ module krepel.memory.allocation;
 import krepel;
 import krepel.memory;
 import krepel.algorithm;
+import krepel.math : IsPowerOfTwo, IsEven, IsOdd;
 import Meta = krepel.meta;
 
-__gshared ForwardAllocator!HeapMemory GlobalAllocator;
+__gshared ForwardAllocator!StackMemory GlobalAllocator;
 
 /// Memory Features
 enum : ubyte
@@ -17,10 +18,26 @@ enum : ubyte
   SupportsAllFeatures     = 0xFF,
 }
 
+/// Common functionality for all memory types.
 mixin template MemoryMixinTemplate(size_t InFeatures)
 {
   alias ThisIsAMemoryType = typeof(this);
   enum size_t Features = InFeatures;
+}
+
+mixin template MemoryContainsCheckMixin(alias MemoryMember)
+{
+  bool Contains(MemoryRegion SomeRegion) const
+  {
+    return SomeRegion.ptr >= MemoryMember.ptr &&
+           SomeRegion.ptr - MemoryMember.ptr + SomeRegion.length < MemoryMember.length;
+  }
+
+  bool Contains(ubyte* SomePointer)
+  {
+    return SomePointer >= MemoryMember.ptr &&
+           SomePointer < MemoryMember.ptr + MemoryMember.length;
+  }
 }
 
 template IsSomeMemory(M)
@@ -39,8 +56,9 @@ struct ForwardAllocator(M)
   // Create a new T and call it's constructor.
   T* New(T, ArgTypes...)(auto ref ArgTypes Args)
   {
-    auto Raw = Memory.Allocate(T.sizeof);
+    auto Raw = Memory.Allocate(T.sizeof, T.alignof);
     if(Raw is null) return null;
+    assert(Raw.length >= T.sizeof);
     auto Instance = cast(T*)Raw.ptr;
     Construct(*Instance, Args);
     return Instance;
@@ -64,13 +82,12 @@ struct ForwardAllocator(M)
   T[] NewArray(T)(size_t Count)
   {
     // TODO(Manu): Implement.
-    auto RawMemory = Memory.Allocate(Count * T.sizeof);
+    auto RawMemory = Memory.Allocate(Count * T.sizeof, T.alignof);
 
     // Out of memory?
     if(RawMemory is null) return null;
 
-    auto Array = cast(T[])RawMemory;
-    assert(Array.length == Count);
+    auto Array = cast(T[])RawMemory[0 .. Count * T.sizeof];
     return Array;
   }
 
@@ -105,21 +122,48 @@ struct SystemMemory
 }
 
 debug = DebugHeapMemory;
+debug = DebugHeapMemoryTag;
 
-/// Can allocate arbitrary sizes of memory blocks and deallocate them in any order.
+/// Can allocate arbitrary sizes of memory blocks and deallocate them in any
+/// order.
+///
+/// Layout of a memory block:
+/// [********][??????????*][.??????????????]
+///  \ Tag  /  \ Padding /  \ User Memory /
+///
+/// * => Reserved memory, implementation overhead.
+/// ? => Unknown number of bytes
+/// . => Byte used by the user
+///
+/// The `Tag` size is exactly size_t.sizeof bytes.
+///
+/// Padding is >= 1 byte. The byte to the far right encodes a ubyte value that
+/// states the actual padding size. This value is used to free memory in an
+/// efficient way while guaranteeing alignment requirements.
+///
 struct HeapMemory
 {
   mixin MemoryMixinTemplate!(SupportsDeallocation);
+  mixin MemoryContainsCheckMixin!(Memory);
 
   MemoryRegion Memory;
-  MemoryRegion AllocatedMemory;
+  size_t DefaultAlignment = GlobalDefaultAlignment;
 
   debug(DebugHeapMemory) bool IsInitialized;
 
-  private static struct Chunk
-  {
-    MemoryRegion NextChunk;
-  }
+  // We need at least 1 byte for padding, so we can store the actual padding
+  // value in that byte.
+  enum MinimumPadding = 1;
+
+  // A block consists of at least the Tag header and some padding. The
+  // actual size of the padding is not known at compile-time, as it depends
+  // on the given memory block and alignment.
+  enum MinimumBlockOverhead = Tag.sizeof + MinimumPadding;
+
+  // The size a valid block must have at least, which is the
+  // MinimumBlockOverhead plus at least 1 byte for the user.
+  enum MinimumBlockSize = MinimumBlockOverhead + 1;
+
 
   this(MemoryRegion AvailableMemory)
   {
@@ -128,35 +172,150 @@ struct HeapMemory
 
   void Initialize(MemoryRegion AvailableMemory)
   {
-    debug(DebugHeapMemory) assert(!IsInitialized, "Heap memory must not be initialized.");
+    debug(DebugHeapMemory)
+    {
+      assert(!IsInitialized, "Heap memory must not be initialized.");
+      assert(DefaultAlignment.IsPowerOfTwo, "DefaultAlignment is expected to be a power of two.");
+    }
+
     Memory = AvailableMemory;
-    AllocatedMemory = AvailableMemory;
+    auto BlockSize = AvailableMemory.length;
+    if(BlockSize.IsOdd) BlockSize--;
+    TagPointerOf(Memory).BlockSize = BlockSize;
+    TagPointerOf(Memory).BlockIsAllocated = false;
     debug(DebugHeapMemory) IsInitialized = true;
   }
 
-  auto Allocate(size_t RequestedBytes)
+  auto Allocate(size_t RequestedBytes, size_t Alignment = 0)
   {
     debug(DebugHeapMemory) assert(IsInitialized, "Heap memory is not initialized.");
 
-    // TODO(Manu): Alignment.
-
     if(RequestedBytes == 0) return null;
 
-    // Make sure we only allocate enough to fit at least a Chunk in it.
-    RequestedBytes = Max(RequestedBytes, Chunk.sizeof);
+    if(Alignment == 0) Alignment = DefaultAlignment;
 
-    if(RequestedBytes > AllocatedMemory.length) return null;
+    const RequestedBytesAligned = AlignedSize(RequestedBytes, 2);
+    const MinimumRequiredBlockSize = MinimumBlockOverhead + RequestedBytesAligned;
 
-    auto RequestedMemory = AllocatedMemory[0 .. RequestedBytes];
-    AllocatedMemory = AllocatedMemory[RequestedBytes .. $];
-    return RequestedMemory;
+    auto BlockPointer = Memory.ptr;
+    while(true)
+    {
+      // We cannot know the actual padding size, so FindFreeBlockPointer might
+      // return unusable results. This is why we use a while-loop here, so we
+      // can try again with a different block that fits potentially.
+
+      BlockPointer = FindFreeBlockPointer(BlockPointer, MinimumRequiredBlockSize);
+      if(!BlockPointer) break;
+
+      auto TagPointer = TagPointerOf(BlockPointer);
+      auto CandidatePointer = AlignedPointer(BlockPointer + MinimumBlockOverhead, Alignment);
+      const PaddingSize = cast(ubyte)(CandidatePointer - BlockPointer - Tag.sizeof);
+      const AvailableSize = TagPointer.BlockSize - Tag.sizeof - PaddingSize;
+      assert(AvailableSize.IsEven);
+
+      if(AvailableSize < RequestedBytes) continue;
+
+      TagPointer.BlockIsAllocated = true;
+      *(CandidatePointer - 1) = PaddingSize;
+      auto UserMemory = CandidatePointer[0 .. RequestedBytes];
+
+      // See if we can create a new block from the remaining block memory;
+
+      const RemainingBlockSize = AvailableSize - RequestedBytesAligned;
+
+      if(RemainingBlockSize >= MinimumBlockSize)
+      {
+        TagPointer.BlockSize = Tag.sizeof + PaddingSize + RequestedBytesAligned;
+        auto NewFreeBlock = BlockPointer + TagPointer.BlockSize;
+        TagPointerOf(NewFreeBlock).BlockIsAllocated = false;
+        TagPointerOf(NewFreeBlock).BlockSize = RemainingBlockSize;
+      }
+
+      return UserMemory;
+    }
+
+    // At this point, we are out of memory.
+    return null;
   }
 
   bool Deallocate(MemoryRegion MemoryToDeallocate)
   {
     // TODO(Manu): Check whether MemoryToDeallocate actually belongs to this heap.
-    // TODO(Manu): Implement deallocation.
+
+    if(!MemoryToDeallocate) return false;
+
+    ubyte PaddingSize = *(MemoryToDeallocate.ptr - 1);
+    auto MemoryBlockPointer = MemoryToDeallocate.ptr - PaddingSize - Tag.sizeof;
+    auto TagPointer = TagPointerOf(MemoryBlockPointer);
+
+    TagPointer.BlockIsAllocated = false;
+
+    MergeAdjacentFreeBlocks(MemoryBlockPointer);
+
     return true;
+  }
+
+private:
+  static struct Tag
+  {
+
+    debug(DebugHeapMemoryTag)
+    {
+      size_t _BlockSize;
+      bool   _BlockIsAllocated;
+
+      @property auto BlockSize() { return _BlockSize; }
+      @property void BlockSize(size_t NewBlockSize)
+      {
+        assert(NewBlockSize.IsEven);
+        _BlockSize = NewBlockSize;
+      }
+
+      @property auto BlockIsAllocated() { return _BlockIsAllocated; }
+      @property void BlockIsAllocated(bool Value) { _BlockIsAllocated = Value; }
+    }
+    else
+    {
+      mixin(Meta.Bitfields!(
+        size_t, "BlockSize",        8 * size_t.sizeof - 1,
+        bool,   "BlockIsAllocated", 1));
+    }
+  }
+
+  debug(DebugHeapMemoryTag) {} else static assert(Tag.sizeof == size_t.sizeof);
+
+  Tag* TagPointerOf(T)(T[] Data)   inout { return cast(Tag*)Data.ptr; }
+  Tag* TagPointerOf(T)(T* Pointer) inout { return cast(Tag*)Pointer; }
+
+  ubyte* FindFreeBlockPointer(ubyte* StartBlockPointer, size_t RequiredBlockSize)
+  {
+    if(IsBlockOutOfBounds(StartBlockPointer)) return null;
+
+    auto FreeBlockPointer = StartBlockPointer;
+    auto TagPointer = TagPointerOf(FreeBlockPointer);
+    while(TagPointer && (TagPointer.BlockIsAllocated || TagPointer.BlockSize < RequiredBlockSize))
+    {
+      FreeBlockPointer = cast(ubyte*)TagPointer + TagPointer.BlockSize;
+
+      if(IsBlockOutOfBounds(FreeBlockPointer))
+      {
+        return null;
+      }
+
+      TagPointer = TagPointerOf(FreeBlockPointer);
+    }
+    return FreeBlockPointer;
+  }
+
+  bool IsBlockOutOfBounds(ubyte* Pointer)
+  {
+    return Pointer - Memory.ptr > Memory.length - MinimumBlockSize;
+  }
+
+  void MergeAdjacentFreeBlocks(ubyte* BlockPointer)
+  {
+    // TODO(Manu): Implement merging of adjacent free blocks into one large
+    // block to reduce fragmentation issues.
   }
 }
 
@@ -165,30 +324,54 @@ struct StackMemory
   MemoryRegion Memory;
   size_t AllocationMark;
 
-  mixin StackMemoryAllocationMixin;
+  size_t DefaultAlignment = GlobalDefaultAlignment;
+
+  bool IsInitialized;
+
+  this(MemoryRegion AvailableMemory)
+  {
+    Initialize(AvailableMemory);
+  }
+
+  void Initialize(MemoryRegion AvailableMemory)
+  {
+    debug assert(!IsInitialized);
+
+    Memory = AvailableMemory;
+    IsInitialized = true;
+  }
+
+  mixin StackMemoryTemplate;
+  mixin MemoryContainsCheckMixin!(Memory);
 }
 
 struct StaticStackMemory(size_t N)
 {
   static assert(N > 0, "Need at least one byte of static memory.");
 
-  enum StaticCount = N;
-
   StaticMemoryRegion!N Memory;
   size_t AllocationMark;
 
-  mixin StackMemoryAllocationMixin;
+  size_t DefaultAlignment = GlobalDefaultAlignment;
+
+  enum bool IsInitialized = true;
+
+  mixin StackMemoryTemplate;
+  mixin MemoryContainsCheckMixin!(Memory);
 }
 
-mixin template StackMemoryAllocationMixin()
+mixin template StackMemoryTemplate()
 {
   mixin MemoryMixinTemplate!(SupportsAllocationOnly);
 
-  MemoryRegion Allocate(size_t RequestedBytes)
+  MemoryRegion Allocate(size_t RequestedBytes, size_t Alignment = 0)
   {
-    // TODO(Manu): Alignment.
+    debug assert(IsInitialized, "This stack memory is not initialized.");
 
     if(RequestedBytes == 0) return null;
+
+    if(Alignment == 0) Alignment = DefaultAlignment;
+    auto NeededBytes = AlignedSize(RequestedBytes, Alignment);
 
     auto NewMark = AllocationMark + RequestedBytes;
 
@@ -215,17 +398,22 @@ struct HybridMemory(P, S)
   PrimaryMemoryType    PrimaryMemory;
   SecondaryMemoryType  SecondaryMemory;
 
-  auto Allocate(size_t RequestedBytes)
+  auto Allocate(size_t RequestedBytes, size_t Alignment = 0)
   {
-    auto RequestedMemory = PrimaryMemory.Allocate(RequestedBytes);
+    auto RequestedMemory = PrimaryMemory.Allocate(RequestedBytes, Alignment);
     if(RequestedMemory) return RequestedMemory;
-    return SecondaryMemory.Allocate(RequestedBytes);
+    return SecondaryMemory.Allocate(RequestedBytes, Alignment);
   }
 
   bool Deallocate(MemoryRegion MemoryToDeallocate)
   {
     return PrimaryMemory.Deallocate(MemoryToDeallocate) ||
            SecondaryMemory.Deallocate(MemoryToDeallocate);
+  }
+
+  bool Contains(SomeType)(auto ref SomeType Something)
+  {
+    return PrimaryMemory.Contains(Something) || SecondaryMemory.Contains(Something);
   }
 }
 
@@ -263,30 +451,28 @@ unittest
 // Heap Memory Allocation
 unittest
 {
-  ubyte[128] Buffer = void;
+  ubyte[256] Buffer = void;
   for(int Index; Index < Buffer.length; Index++)
   {
     Buffer[Index] = cast(ubyte)Index;
   }
 
-  auto Heap = HeapMemory(Buffer[0 .. 32]);
+  auto Heap = HeapMemory(Buffer[]);
 
   auto Block1 = Heap.Allocate(16);
-  assert(Block1.ptr == &Buffer[0]);
   assert(Block1.length == 16);
   auto Block2 = Heap.Allocate(16);
-  assert(Block2.ptr == &Buffer[16]);
+  assert(Block2.ptr != Block1.ptr);
   assert(Block2.length == 16);
 
-  assert(Heap.Allocate(1) is null);
+  // TODO(Manu): Test reliably for the out-of-memory case somehow.
+  //assert(Heap.Allocate(1) is null);
 
   assert(Heap.Deallocate(Block1));
-  Block1 = null; // Optional.
 
   auto Block3 = Heap.Allocate(16);
-  // TODO(Manu): Can only test when deallocation is implemented.
-  //assert(Block3.ptr == &Buffer[0]);
-  //assert(Block3.length == 16);
+  assert(Block3.ptr == Block1.ptr);
+  assert(Block3.length == 16);
 }
 
 // Dynamic stack allocation
@@ -296,7 +482,7 @@ unittest
 
   StackMemory Stack;
   // Only assign 128 bytes as memory.
-  Stack.Memory = Buffer[0 .. 128];
+  Stack.Initialize(Buffer[0 .. 128]);
   assert(Stack.AllocationMark == 0);
 
   auto Block1 = Stack.Allocate(32);
@@ -343,26 +529,26 @@ unittest
 // HybridMemory tests
 unittest
 {
-  ubyte[64] Buffer;
-  auto Heap1  = HeapMemory(Buffer[ 0 .. 32]);
-  auto Heap2  = HeapMemory(Buffer[32 .. 64]);
+  ubyte[256] Buffer;
+  auto Heap1  = HeapMemory(Buffer[  0 .. 128]);
+  auto Heap2  = HeapMemory(Buffer[128 .. 256]);
   auto Hybrid = HybridMemory!(HeapMemory*, HeapMemory*)(&Heap1, &Heap2);
 
   auto Block1 = Hybrid.Allocate(16);
   assert(Block1);
-  assert(Block1.ptr == Heap1.Memory.ptr);
+  assert(Block1.length == 16);
+  assert(Heap1.Contains(Block1));
   auto Block2 = Hybrid.Allocate(16);
-  assert(Block2);
-  assert(Block2.ptr == Heap1.Memory.ptr + 16);
+  assert(Block2.length == 16);
+  assert(Heap1.Contains(Block1));
   auto Block3 = Hybrid.Allocate(16);
-  assert(Block3);
-  assert(Block3.ptr == Heap2.Memory.ptr);
+  assert(Block3.length == 16);
+  assert(Heap1.Contains(Block1));
   auto Block4 = Hybrid.Allocate(16);
   assert(Block4);
-  assert(Block4.ptr == Heap2.Memory.ptr + 16);
 
-  // We are out of memory now.
-  assert(Hybrid.Allocate(1) is null);
+  // TODO(Manu): Test reliably for the out-of-memory case somehow.
+  //assert(Heap.Allocate(1) is null);
 }
 
 // ForwardAllocator tests
