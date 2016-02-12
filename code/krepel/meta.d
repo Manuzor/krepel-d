@@ -1,5 +1,7 @@
 module krepel.meta;
 
+private import Phobos = std.traits;
+
 // Creates a sequence of zero or more aliases (types, string literals, ...).
 template AliasSequence(Args...)
 {
@@ -171,3 +173,5 @@ unittest
   static assert( IsSomeChar!(immutable char));
   static assert(!IsSomeChar!int);
 }
+
+alias IsArray(T) = Phobos.isArray!T;

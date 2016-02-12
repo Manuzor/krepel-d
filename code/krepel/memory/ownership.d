@@ -7,7 +7,9 @@ struct Owned(T)
 {
   alias ElementType = T;
 
-  ElementType* Data;
+  ElementType* DataPtr;
+
+  @property ref ElementType Data() { return *DataPtr; }
 
   alias Data this;
 }
@@ -18,22 +20,38 @@ auto Own(ArgType)(auto ref ArgType Arg)
   else                          { return Owned!ArgType(&Arg); } // Arg is not a pointer, so take its address.
 }
 
-version(unittest) int NumberOfCopies;
-unittest
+version(unittest)
 {
   static struct S
   {
+    __gshared int NumberOfCopies;
+
+    int Value = 42;
     this(this) nothrow @nogc { ++NumberOfCopies; }
   }
 
+  auto SomeFunction(ref S Instance) { assert(Instance.Value == 42); }
+}
+
+unittest
+{
   S Instance;
+  assert(S.NumberOfCopies == 0);
+
   auto Copy = Instance;
+  assert(S.NumberOfCopies == 1);
 
   auto First = Own(Instance);
-  assert(NumberOfCopies == 1);
+  assert(S.NumberOfCopies == 1);
+
   auto Second = Own(&Instance);
   static assert(is(typeof(First) == typeof(Second)));
-  assert(NumberOfCopies == 1);
-  assert(*Second == *First, "Content equality test failed.");
-  assert(Second == First, "Pointer equality failed.");
+  assert(S.NumberOfCopies == 1);
+
+  assert(Second.Value == 42);
+  assert(Second == First, "Content equality test failed.");
+
+  // Try UFCS.
+  // NOTE(Manu): UFCS only works for stuff at module scope.
+  Second.SomeFunction();
 }
