@@ -304,7 +304,7 @@ struct Vector3
   }
 
   Vector3 opDispatch(string SwizzleString)() inout
-    if(SwizzleString.length == 3 || (SwizzleString.length == 4 && SwizzleString[0] == '_'))
+    if((SwizzleString.length == 3 && SwizzleString[0] != '_') || (SwizzleString.length == 4 && SwizzleString[0] == '_'))
   {
     // Special case for setting X to 0 (_0YZ)
     static if(SwizzleString.length == 4 && SwizzleString[0] == '_' && IsValidSwizzleString(SwizzleString[1..4]))
@@ -324,7 +324,7 @@ struct Vector3
   }
 
   Vector4 opDispatch(string SwizzleString)() inout
-    if(SwizzleString.length == 4 || (SwizzleString.length == 5 && SwizzleString[0] == '_'))
+    if((SwizzleString.length == 4 && SwizzleString[0] != '_') || (SwizzleString.length == 5 && SwizzleString[0] == '_'))
   {
     // Special case for setting X to 0 (_0YZ)
     static if(SwizzleString.length == 5 && SwizzleString[0] == '_' && IsValidSwizzleString(SwizzleString[1..5]))
@@ -560,6 +560,8 @@ struct Vector3
     assert(Vector3(1, 2, 3).ZX   == Vector2(3, 1));
     assert(Vector3(1, 2, 3).XZX  == Vector3(1, 3, 1));
     assert(Vector3(1, 2, 3).XYXY == Vector4(1, 2, 1, 2));
+    assert(Vector3(1, 2, 3)._ZYX == Vector3(3, 2, 1));
+    assert(Vector3(1, 2, 3)._0YX == Vector3(0, 2, 1));
 
     static assert(!__traits(compiles, Vector3(1, 2, 3).Foo), "Swizzling is only supposed to work with value members of " ~ Vector3.stringof ~ ".");
     static assert(!__traits(compiles, Vector3(1, 2, 3).XXXXX), "Swizzling output dimension is limited to 4.");

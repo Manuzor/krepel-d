@@ -326,7 +326,7 @@ struct Vector4
   }
 
   Vector3 opDispatch(string SwizzleString)() inout
-    if(SwizzleString.length == 3 || (SwizzleString.length == 4 && SwizzleString[0] == '_'))
+    if((SwizzleString.length == 3 && SwizzleString[0] != '_') || (SwizzleString.length == 4 && SwizzleString[0] == '_'))
   {
     // Special case for setting X to 0 (_0YZ)
     static if(SwizzleString.length == 4 && SwizzleString[0] == '_' && IsValidSwizzleString(SwizzleString[1..4]))
@@ -346,7 +346,7 @@ struct Vector4
   }
 
   Vector4 opDispatch(string SwizzleString)() inout
-    if(SwizzleString.length == 4 || (SwizzleString.length == 5 && SwizzleString[0] == '_'))
+    if((SwizzleString.length == 4 && SwizzleString[0] != '_') || (SwizzleString.length == 5 && SwizzleString[0] == '_'))
   {
     // Special case for setting X to 0 (_0YZ)
     static if(SwizzleString.length == 5 && SwizzleString[0] == '_' && IsValidSwizzleString(SwizzleString[1..5]))
