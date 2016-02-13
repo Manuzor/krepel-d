@@ -151,7 +151,7 @@ struct Vector2
     }
     else
     {
-      assert(false, "Operator " ~ op ~ " not implemented.");
+      static assert(false, "Operator " ~ op ~ " not implemented.");
     }
   }
 
@@ -172,7 +172,7 @@ struct Vector2
     }
     else
     {
-      assert(false, "Operator " ~ op ~ " not implemented.");
+      static assert(false, "Operator " ~ op ~ " not implemented.");
     }
   }
 
@@ -187,7 +187,7 @@ struct Vector2
     }
     else
     {
-      assert(false, "Operator " ~ op ~ " not implemented.");
+      static assert(false, "Operator " ~ op ~ " not implemented.");
     }
   }
 
@@ -202,7 +202,7 @@ struct Vector2
     }
     else
     {
-      assert(false, "Operator " ~ op ~ " not implemented.");
+      static assert(false, "Operator " ~ op ~ " not implemented.");
     }
   }
 
