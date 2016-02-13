@@ -5,6 +5,7 @@ import krepel.algorithm.comparison;
 
 @safe:
 @nogc:
+nothrow:
 
 /// Returns the square root of the given value
 float Sqrt(float value)
@@ -24,7 +25,7 @@ float Abs(float value)
 bool IsNaN(float value)
 {
   bool result;
-  asm @nogc @safe
+  asm @nogc @safe nothrow
   {
     fld value; // Load value to float stack ST(0)
     ftst; // Compare ST(0) with 0.0

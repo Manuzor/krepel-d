@@ -2,10 +2,13 @@ module krepel.math.vector3;
 
 import krepel.math.math;
 import krepel.algorithm.comparison;
+import krepel.math.vector2;
+import krepel.math.vector4;
 import std.conv;
 
 @nogc:
 @safe:
+nothrow:
 
 /// Calculates the Dot Product of the two vectors
 /// Input vectors will not be modified
@@ -132,6 +135,7 @@ struct Vector3
 {
   @safe:
   @nogc:
+  nothrow:
   union
   {
     struct
@@ -152,6 +156,18 @@ struct Vector3
     this.X = X;
     this.Y = Y;
     this.Z = Z;
+  }
+
+  this(Vector2 vec, float Z)
+  {
+    this.Data[0..2] = vec.Data[];
+    this.Z = Z;
+  }
+
+  this(float X, Vector2 vec)
+  {
+    this.X = X;
+    this.Data[1..3] = vec.Data[];
   }
 
   /// Normalizes the vector (vector will have a length of 1.0)
@@ -252,22 +268,80 @@ struct Vector3
     }
   }
 
-  Vector3 opDispatch(string s)() inout
+  private static bool IsValidSwizzleChar(const char Char)
+  {
+    return Char == 'X' || Char == 'Y' || Char == 'Z' || Char == '0';
+  }
+
+  private static bool IsValidSwizzleString(string String)
+  {
+    foreach(const char Char; String)
+    {
+      if(!IsValidSwizzleChar(Char))
+      {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  Vector2 opDispatch(string SwizzleString)() inout
+    if(SwizzleString.length == 2 || (SwizzleString.length == 3 && SwizzleString[0] == '_'))
   {
     // Special case for setting X to 0 (_0YZ)
-    static if(s.length == 4 && s[0] == '_')
+    static if(SwizzleString.length == 3 && SwizzleString[0] == '_' && IsValidSwizzleString(SwizzleString[1..3]))
     {
       return mixin(
-        "Vector3(" ~ s[1] ~","~
-        s[2] ~","~
-        s[3] ~")");
+        "typeof(return)(" ~ SwizzleString[1] ~","~
+        SwizzleString[2] ~")");
     }
-    else if(s.length == 3)
+    else static if(SwizzleString.length == 2 && IsValidSwizzleString(SwizzleString))
     {
       return mixin(
-        "Vector3(" ~ s[0] ~","~
-        s[1] ~","~
-        s[2] ~")");
+        "typeof(return)(" ~ SwizzleString[0] ~","~
+        SwizzleString[1] ~")");
+    }
+  }
+
+  Vector3 opDispatch(string SwizzleString)() inout
+    if(SwizzleString.length == 3 || (SwizzleString.length == 4 && SwizzleString[0] == '_'))
+  {
+    // Special case for setting X to 0 (_0YZ)
+    static if(SwizzleString.length == 4 && SwizzleString[0] == '_' && IsValidSwizzleString(SwizzleString[1..4]))
+    {
+      return mixin(
+        "typeof(return)(" ~ SwizzleString[1] ~","~
+        SwizzleString[2] ~","~
+        SwizzleString[3] ~")");
+    }
+    else static if(SwizzleString.length == 3 && IsValidSwizzleString(SwizzleString))
+    {
+      return mixin(
+        "typeof(return)(" ~ SwizzleString[0] ~","~
+        SwizzleString[1] ~","~
+        SwizzleString[2] ~")");
+    }
+  }
+
+  Vector4 opDispatch(string SwizzleString)() inout
+    if(SwizzleString.length == 4 || (SwizzleString.length == 5 && SwizzleString[0] == '_'))
+  {
+    // Special case for setting X to 0 (_0YZ)
+    static if(SwizzleString.length == 5 && SwizzleString[0] == '_' && IsValidSwizzleString(SwizzleString[1..5]))
+    {
+      return mixin(
+        "typeof(return)(" ~ SwizzleString[1] ~","~
+        SwizzleString[2] ~","~
+        SwizzleString[3] ~","~
+        SwizzleString[4] ~")");
+    }
+    else static if(SwizzleString.length == 4 && IsValidSwizzleString(SwizzleString))
+    {
+      return mixin(
+        "typeof(return)(" ~ SwizzleString[0] ~","~
+        SwizzleString[1] ~","~
+        SwizzleString[2] ~","~
+        SwizzleString[3] ~")");
     }
   }
 
@@ -468,12 +542,26 @@ struct Vector3
     assert(vec.LengthSquared2D() == 1);
   }
 
+  // Vector3
   unittest
   {
-    Vector3 vec = Vector3(1,2,3);
+    assert(Vector3(Vector2(1, 2), 3).X == 1);
+    assert(Vector3(Vector2(1, 2), 3).Y == 2);
+    assert(Vector3(Vector2(1, 2), 3).Z == 3);
 
-    Vector3 swizzled = vec.Z0Y;
+    assert(Vector3(1, Vector2(2, 3)).X == 1);
+    assert(Vector3(1, Vector2(2, 3)).Y == 2);
+    assert(Vector3(1, Vector2(2, 3)).Z == 3);
+  }
 
-    assert(swizzled == Vector3(3,0,2));
+  // Vector3 Swizzle
+  unittest
+  {
+    assert(Vector3(1, 2, 3).ZX   == Vector2(3, 1));
+    assert(Vector3(1, 2, 3).XZX  == Vector3(1, 3, 1));
+    assert(Vector3(1, 2, 3).XYXY == Vector4(1, 2, 1, 2));
+
+    static assert(!__traits(compiles, Vector3(1, 2, 3).Foo), "Swizzling is only supposed to work with value members of " ~ Vector3.stringof ~ ".");
+    static assert(!__traits(compiles, Vector3(1, 2, 3).XXXXX), "Swizzling output dimension is limited to 4.");
   }
 }

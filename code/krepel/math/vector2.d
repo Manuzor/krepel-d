@@ -2,10 +2,13 @@ module krepel.math.vector2;
 
 import krepel.math.math;
 import krepel.algorithm.comparison;
+import krepel.math.vector3;
+import krepel.math.vector4;
 import std.conv;
 
 @nogc:
 @safe:
+nothrow:
 
 /// Calculates the Dot Product of the two vectors
 /// Input vectors will not be modified
@@ -97,6 +100,8 @@ struct Vector2
 {
   @safe:
   @nogc:
+  nothrow:
+
   union
   {
     struct
@@ -201,20 +206,80 @@ struct Vector2
     }
   }
 
-  Vector2 opDispatch(string s)() inout
+  private static bool IsValidSwizzleChar(const char Char)
+  {
+    return Char == 'X' || Char == 'Y' || Char == '0';
+  }
+
+  private static bool IsValidSwizzleString(string String)
+  {
+    foreach(const char Char; String)
+    {
+      if(!IsValidSwizzleChar(Char))
+      {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  Vector2 opDispatch(string SwizzleString)() inout
+    if(SwizzleString.length == 2 || (SwizzleString.length == 3 && SwizzleString[0] == '_'))
   {
     // Special case for setting X to 0 (_0YZ)
-    static if(s.length == 3 && s[0] == '_')
+    static if(SwizzleString.length == 3 && SwizzleString[0] == '_' && IsValidSwizzleString(SwizzleString[1..3]))
     {
       return mixin(
-        "Vector2(" ~ s[1] ~","~
-        s[2] ~")");
+        "typeof(return)(" ~ SwizzleString[1] ~","~
+        SwizzleString[2] ~")");
     }
-    else if(s.length == 2)
+    else static if(SwizzleString.length == 2 && IsValidSwizzleString(SwizzleString))
     {
       return mixin(
-        "Vector2(" ~ s[0] ~","~
-        s[1] ~")");
+        "typeof(return)(" ~ SwizzleString[0] ~","~
+        SwizzleString[1] ~")");
+    }
+  }
+
+  Vector3 opDispatch(string SwizzleString)() inout
+    if(SwizzleString.length == 3 || (SwizzleString.length == 4 && SwizzleString[0] == '_'))
+  {
+    // Special case for setting X to 0 (_0YZ)
+    static if(SwizzleString.length == 4 && SwizzleString[0] == '_' && IsValidSwizzleString(SwizzleString[1..4]))
+    {
+      return mixin(
+        "typeof(return)(" ~ SwizzleString[1] ~","~
+        SwizzleString[2] ~","~
+        SwizzleString[3] ~")");
+    }
+    else static if(SwizzleString.length == 3 && IsValidSwizzleString(SwizzleString))
+    {
+      return mixin(
+        "typeof(return)(" ~ SwizzleString[0] ~","~
+        SwizzleString[1] ~","~
+        SwizzleString[2] ~")");
+    }
+  }
+
+  Vector4 opDispatch(string SwizzleString)() inout
+    if(SwizzleString.length == 4 || (SwizzleString.length == 5 && SwizzleString[0] == '_'))
+  {
+    // Special case for setting X to 0 (_0YZ)
+    static if(SwizzleString.length == 5 && SwizzleString[0] == '_' && IsValidSwizzleString(SwizzleString[1..5]))
+    {
+      return mixin(
+        "typeof(return)(" ~ SwizzleString[1] ~","~
+        SwizzleString[2] ~","~
+        SwizzleString[3] ~","~
+        SwizzleString[4] ~")");
+    }
+    else static if(SwizzleString.length == 4 && IsValidSwizzleString(SwizzleString))
+    {
+      return mixin(
+        "typeof(return)(" ~ SwizzleString[0] ~","~
+        SwizzleString[1] ~","~
+        SwizzleString[2] ~","~
+        SwizzleString[3] ~")");
     }
   }
 
@@ -384,5 +449,19 @@ struct Vector2
     Vector2 swizzled = vec.Y0;
 
     assert(swizzled == Vector2(2,0));
+  }
+
+  // Vector2
+  unittest
+  {
+    assert(Vector2(1, 2).X == 1);
+    assert(Vector2(1, 2).Y == 2);
+
+    assert(Vector2(1, 2).YX   == Vector2(2, 1));
+    assert(Vector2(1, 2).XYX  == Vector3(1, 2, 1));
+    assert(Vector2(1, 2).XYXY == Vector4(1, 2, 1, 2));
+
+    static assert(!__traits(compiles, Vector2(1, 2).Foo), "Swizzling is only supposed to work with value members of " ~ Vector2.stringof ~ ".");
+    static assert(!__traits(compiles, Vector2(1, 2).XXXXX), "Swizzling output dimension is limited to 4.");
   }
 }
