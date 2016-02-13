@@ -10,125 +10,125 @@ import std.conv;
 @safe:
 nothrow:
 
-/// Calculates the Dot Product of the two vectors
-/// Input vectors will not be modified
-float Dot(Vector3 lhs, Vector3 rhs)
+/// Calculates the Dot Product of the two Vectors
+/// Input Vectors will not be modified
+float Dot(Vector3 Lhs, Vector3 Rhs)
 {
-  float result = lhs | rhs;
-  return result;
+  float Result = Lhs | Rhs;
+  return Result;
 }
 
-/// Multiplies two vectors per component returning a new vector containing
-/// (lhs.X * rhs.X, lhs.Y * rhs.Y, lhs.Z * rhs.Z)
-/// Input vectors will not be modified
-Vector3 Mul(Vector3 lhs, Vector3 rhs)
+/// Multiplies two Vectors per component returning a new Vector containing
+/// (Lhs.X * Rhs.X, Lhs.Y * Rhs.Y, Lhs.Z * Rhs.Z)
+/// Input Vectors will not be modified
+Vector3 Mul(Vector3 Lhs, Vector3 Rhs)
 {
-  return lhs * rhs;
+  return Lhs * Rhs;
 }
 
-/// Calculates the cross Product (lhs x rhs) and returns the result
-/// Input vectors will not be modified
-Vector3 Cross(Vector3 lhs, Vector3 rhs)
+/// Calculates the cross Product (Lhs x Rhs) and returns the result
+/// Input Vectors will not be modified
+Vector3 Cross(Vector3 Lhs, Vector3 Rhs)
 {
-  return lhs ^ rhs;
+  return Lhs ^ Rhs;
 }
 
-/// Calculates the squared length  of the given vector, which is the same as the dot product with the same vector
-/// Input vector will not be modified
-float LengthSquared(Vector3 vec)
+/// Calculates the squared length  of the given Vector, which is the same as the dot product with the same Vector
+/// Input Vector will not be modified
+float LengthSquared(Vector3 Vec)
 {
-  return vec | vec;
+  return Vec | Vec;
 }
 
 /// Calculates the squared length of the X and Y components, ignoring the Z component
-/// Input vector will not be modified
-float LengthSquared2D(Vector3 vec)
+/// Input Vector will not be modified
+float LengthSquared2D(Vector3 Vec)
 {
-  return vec.X * vec.X + vec.Y * vec.Y;
+  return Vec.X * Vec.X + Vec.Y * Vec.Y;
 }
 
 /// Calculates the 2D length of the Vector using the square root of the LengthSquared2D
-/// Input vector will not be modified
-float Length2D(Vector3 vec)
+/// Input Vector will not be modified
+float Length2D(Vector3 Vec)
 {
-  return Sqrt(vec.LengthSquared2D());
+  return Sqrt(Vec.LengthSquared2D());
 }
 
 /// Calculates the 2D length of the Vector using the square root of the LengthSquared
-/// Input vector will not be modified
-float Length(Vector3 vec)
+/// Input Vector will not be modified
+float Length(Vector3 Vec)
 {
-  return Sqrt(vec.LengthSquared());
+  return Sqrt(Vec.LengthSquared());
 }
 
-/// Creates a copy of the vector, which is normalized in its length (has a length of 1.0)
-Vector3 NormalizedCopy(Vector3 vec)
+/// Creates a copy of the Vector, which is Normalized in its length (has a length of 1.0)
+Vector3 NormalizedCopy(Vector3 Vec)
 {
-  Vector3 copy = vec;
-  copy.Normalize();
-  return copy;
+  Vector3 Copy = Vec;
+  Copy.Normalize();
+  return Copy;
 }
 
-/// Projects a given vector onto a normal (normal needs to be normalized)
-/// Returns the projected vector, which will be a scaled version of the vector
-/// Input vectors will not be modified
-Vector3 ProjectOntoNormal(Vector3 vec, Vector3 normal)
+/// Projects a given Vector onto a Normal (Normal needs to be Normalized)
+/// Returns the projected Vector, which will be a scaled version of the Vector
+/// Input Vectors will not be modified
+Vector3 ProjectOntoNormal(Vector3 Vec, Vector3 Normal)
 {
-  return normal * (vec | normal);
+  return Normal * (Vec | Normal);
 }
 
-/// Projects a given vector on a plane, which has the given normal (normal needs to be normalized)
-/// Returns vector which resides on the plane spanned by the normal
-/// Input vector will not be modified
-Vector3 ProjectOntoPlane(Vector3 vec, Vector3 normal)
+/// Projects a given Vector on a plane, which has the given Normal (Normal needs to be Normalized)
+/// Returns Vector which resides on the plane spanned by the Normal
+/// Input Vector will not be modified
+Vector3 ProjectOntoPlane(Vector3 Vec, Vector3 Normal)
 {
-  return vec - vec.ProjectOntoNormal(normal);
+  return Vec - Vec.ProjectOntoNormal(Normal);
 }
 
-/// Reflects a vector around a normal (normal needs to be normalized)
-/// Returns the reflected vector
-/// Input vectors will not be modified
-Vector3 ReflectVector(Vector3 vec, Vector3 normal)
+/// Reflects a Vector around a Normal (Normal needs to be Normalized)
+/// Returns the reflected Vector
+/// Input Vectors will not be modified
+Vector3 ReflectVector(Vector3 Vec, Vector3 Normal)
 {
-  return vec - (2 * (vec | normal) * normal);
+  return Vec - (2 * (Vec | Normal) * Normal);
 }
 
-/// Checks if any component inside the vector is NaN.
-/// Input vector will not be modified
-bool ContainsNaN(Vector3 vec)
+/// Checks if any component inside the Vector is NaN.
+/// Input Vector will not be modified
+bool ContainsNaN(Vector3 Vec)
 {
-  return IsNaN(vec.X) || IsNaN(vec.Y) || IsNaN(vec.Z);
+  return IsNaN(Vec.X) || IsNaN(Vec.Y) || IsNaN(Vec.Z);
 }
 
-/// Checks if two vectors are nearly equal (are equal with respect to a scaled epsilon)
-/// Input vectors will not be modified
-bool NearlyEquals(Vector3 a, Vector3 b, float epsilon = 1e-4f)
+/// Checks if two Vectors are nearly equal (are equal with respect to a scaled epsilon)
+/// Input Vectors will not be modified
+bool NearlyEquals(Vector3 A, Vector3 B, float Epsilon = 1e-4f)
 {
-  return krepel.math.NearlyEquals(a.X, b.X, epsilon) &&
-         krepel.math.NearlyEquals(a.Y, b.Y, epsilon) &&
-         krepel.math.NearlyEquals(a.Z, b.Z, epsilon);
+  return krepel.math.NearlyEquals(A.X, B.X, Epsilon) &&
+         krepel.math.NearlyEquals(A.Y, B.Y, Epsilon) &&
+         krepel.math.NearlyEquals(A.Z, B.Z, Epsilon);
 }
 
-/// Returns a clamped copy of the given vector
-/// The retuned vector will be of size <= MaxSize
-/// Input vector will not be modified
-Vector3 ClampSize(Vector3 vec, float MaxSize)
+/// Returns a clamped copy of the given Vector
+/// The retuned Vector will be of size <= MaxSize
+/// Input Vector will not be modified
+Vector3 ClampSize(Vector3 Vec, float MaxSize)
 {
-  Vector3 normal = vec.NormalizedCopy();
-  return normal * Min(vec.Length(), MaxSize);
+  Vector3 Normal = Vec.NormalizedCopy();
+  return Normal * Min(Vec.Length(), MaxSize);
 }
 
 /// Returns a clamped copy of the X and Y component of the Vector, the Z compnent will be untouched
 /// The length of the X and Y component will be <= MaxSize
-/// Input vector will not be modified
-Vector3 ClampSize2D(Vector3 vec, float MaxSize)
+/// Input Vector will not be modified
+Vector3 ClampSize2D(Vector3 Vec, float MaxSize)
 {
-  Vector3 clamped = vec;
-  clamped.Z = 0;
-  clamped.Normalize();
-  clamped *= Min(vec.Length2D(), MaxSize);
-  clamped.Z = vec.Z;
-  return clamped;
+  Vector3 Clamped = Vec;
+  Clamped.Z = 0;
+  Clamped.Normalize();
+  Clamped *= Min(Vec.Length2D(), MaxSize);
+  Clamped.Z = Vec.Z;
+  return Clamped;
 }
 
 struct Vector3
@@ -158,50 +158,50 @@ struct Vector3
     this.Z = Z;
   }
 
-  this(Vector2 vec, float Z)
+  this(Vector2 Vec, float Z)
   {
-    this.Data[0..2] = vec.Data[];
+    this.Data[0..2] = Vec.Data[];
     this.Z = Z;
   }
 
-  this(float X, Vector2 vec)
+  this(float X, Vector2 Vec)
   {
     this.X = X;
-    this.Data[1..3] = vec.Data[];
+    this.Data[1..3] = Vec.Data[];
   }
 
-  /// Normalizes the vector (vector will have a length of 1.0)
+  /// Normalizes the Vector (Vector will have a length of 1.0)
   void Normalize()
   {
     // Don't return result to avoid confusion with NormalizedCopy
-    // and stress that this operation modifies the vector on which it is called
-    float length = this.Length();
-    this /= length;
+    // and stress that this operation modifies the Vector on which it is called
+    float Length = this.Length();
+    this /= Length;
   }
 
   // Dot product
-  float opBinary(string op:"|")(Vector3 rhs)
+  float opBinary(string Op:"|")(Vector3 Rhs)
   {
     return
-      X * rhs.X +
-      Y * rhs.Y +
-      Z * rhs.Z;
+      X * Rhs.X +
+      Y * Rhs.Y +
+      Z * Rhs.Z;
   }
 
-  Vector3 opOpAssign(string op)(float rhs)
+  Vector3 opOpAssign(string Operator)(float Rhs)
   {
-    static if(op == "*" || op == "/")
+    static if(Operator == "*" || Operator == "/")
     {
-      auto result = mixin("Vector3("~
-        "X" ~ op ~ "rhs,"
-        "Y" ~ op ~ "rhs,"
-        "Z" ~ op ~ "rhs)");
-      Data = result.Data;
+      auto Result = mixin("Vector3("~
+        "X" ~ Operator ~ "Rhs,"
+        "Y" ~ Operator ~ "Rhs,"
+        "Z" ~ Operator ~ "Rhs)");
+      Data = Result.Data;
       return this;
     }
     else
     {
-      static assert(false, "Operator " ~ op ~ " not implemented.");
+      static assert(false, "Operator " ~ Operator ~ " not implemented.");
     }
   }
 
@@ -211,60 +211,60 @@ struct Vector3
   //  return "{X:"~text(X)~", Y:"~text(Y)~", Z:"~text(Z)~"}";
   //}
 
-  Vector3 opBinary(string op)(Vector3 rhs) inout
+  Vector3 opBinary(string Operator)(Vector3 Rhs) const
   {
     // Addition, subtraction, component wise multiplication
-    static if(op == "+" || op == "-" || op == "*")
+    static if(Operator == "+" || Operator == "-" || Operator == "*")
     {
       return mixin("Vector3("~
-        "X" ~ op ~ "rhs.X,"
-        "Y" ~ op ~ "rhs.Y,"
-        "Z" ~ op ~ "rhs.Z)");
+        "X" ~ Operator ~ "Rhs.X,"
+        "Y" ~ Operator ~ "Rhs.Y,"
+        "Z" ~ Operator ~ "Rhs.Z)");
     }
     // Cross Product
-    else if(op == "^")
+    else static if(Operator == "^")
     {
       return Vector3(
-        (Y * rhs.Z) - (Z * rhs.Y),
-        (Z * rhs.X) - (X * rhs.Z),
-        (X * rhs.Y) - (Y * rhs.X)
+        (Y * Rhs.Z) - (Z * Rhs.Y),
+        (Z * Rhs.X) - (X * Rhs.Z),
+        (X * Rhs.Y) - (Y * Rhs.X)
       );
     }
     else
     {
-      static assert(false, "Operator " ~ op ~ " not implemented.");
+      static assert(false, "Operator " ~ Operator ~ " not implemented.");
     }
   }
 
-  Vector3 opBinary(string op)(float rhs) inout
+  Vector3 opBinary(string Operator)(float Rhs) const
   {
     // Vector scaling
-    static if(op == "/" || op == "*")
+    static if(Operator == "/" || Operator == "*")
     {
       return mixin("Vector3("~
-        "X" ~ op ~ "rhs,"
-        "Y" ~ op ~ "rhs,"
-        "Z" ~ op ~ "rhs)");
+        "X" ~ Operator ~ "Rhs,"
+        "Y" ~ Operator ~ "Rhs,"
+        "Z" ~ Operator ~ "Rhs)");
     }
     else
     {
-      static assert(false, "Operator " ~ op ~ " not implemented.");
+      static assert(false, "Operator " ~ Operator ~ " not implemented.");
     }
   }
 
-  Vector3 opBinaryRight(string op)(float rhs) inout
+  Vector3 opBinaryRight(string Operator)(float Rhs) inout
   {
     // Vector scaling
-    static if(op == "*")
+    static if(Operator == "*")
     {
       return mixin("Vector3("~
-        "X" ~ op ~ "rhs,"
-        "Y" ~ op ~ "rhs,"
-        "Z" ~ op ~ "rhs)");
+        "X" ~ Operator ~ "Rhs,"
+        "Y" ~ Operator ~ "Rhs,"
+        "Z" ~ Operator ~ "Rhs)");
     }
     else
     {
-      static assert(false, "Operator " ~ op ~ " not implemented.");
+      static assert(false, "Operator " ~ Operator ~ " not implemented.");
     }
   }
 
@@ -354,192 +354,192 @@ struct Vector3
   // Initialization test
   unittest
   {
-    Vector3 v3 = Vector3(1,2,3);
-    assert(v3.X == 1);
-    assert(v3.Y == 2);
-    assert(v3.Z == 3);
-    assert(v3.Data[0] == 1);
-    assert(v3.Data[1] == 2);
-    assert(v3.Data[2] == 3);
+    Vector3 V3 = Vector3(1,2,3);
+    assert(V3.X == 1);
+    assert(V3.Y == 2);
+    assert(V3.Z == 3);
+    assert(V3.Data[0] == 1);
+    assert(V3.Data[1] == 2);
+    assert(V3.Data[2] == 3);
 
-    v3 = Vector3(5);
-    assert(v3.X == 5);
-    assert(v3.Y == 5);
-    assert(v3.Z == 5);
+    V3 = Vector3(5);
+    assert(V3.X == 5);
+    assert(V3.Y == 5);
+    assert(V3.Z == 5);
   }
 
   // Addition test
   unittest
   {
-    Vector3 v1 = Vector3(1,2,3);
-    Vector3 v2 = Vector3(10,11,12);
-    auto v3 = v1 + v2;
-    assert(v3.X == 11);
-    assert(v3.Y == 13);
-    assert(v3.Z == 15);
+    Vector3 V1 = Vector3(1,2,3);
+    Vector3 V2 = Vector3(10,11,12);
+    auto V3 = V1 + V2;
+    assert(V3.X == 11);
+    assert(V3.Y == 13);
+    assert(V3.Z == 15);
   }
 
   // Subtraction test
   unittest
   {
-    Vector3 v1 = Vector3(1,2,3);
-    Vector3 v2 = Vector3(10,11,12);
-    auto v3 = v1 - v2;
-    assert(v3.X == -9);
-    assert(v3.Y == -9);
-    assert(v3.Z == -9);
+    Vector3 V1 = Vector3(1,2,3);
+    Vector3 V2 = Vector3(10,11,12);
+    auto V3 = V1 - V2;
+    assert(V3.X == -9);
+    assert(V3.Y == -9);
+    assert(V3.Z == -9);
   }
 
   // Float multiplication test
   unittest
   {
-    Vector3 v1 = Vector3(1,2,3) * 5;
-    Vector3 v2 = Vector3(1,2,3) * 5.0f;
-    assert(v1 == Vector3(5,10,15));
-    assert(v2 == Vector3(5,10,15));
+    Vector3 V1 = Vector3(1,2,3) * 5;
+    Vector3 V2 = Vector3(1,2,3) * 5.0f;
+    assert(V1 == Vector3(5,10,15));
+    assert(V2 == Vector3(5,10,15));
 
-    v1 = 5 * Vector3(1,2,3);
-    v2 = 5.0f * Vector3(1,2,3);
-    assert(v1 == Vector3(5,10,15));
-    assert(v2 == Vector3(5,10,15));
+    V1 = 5 * Vector3(1,2,3);
+    V2 = 5.0f * Vector3(1,2,3);
+    assert(V1 == Vector3(5,10,15));
+    assert(V2 == Vector3(5,10,15));
   }
 
   // Float division test
   unittest
   {
-    Vector3 v1 = Vector3(5,10,15) / 5;
-    Vector3 v2 = Vector3(5,10,15) / 5.0f;
-    assert(v1 == Vector3(1,2,3));
-    assert(v2 == Vector3(1,2,3));
+    Vector3 V1 = Vector3(5,10,15) / 5;
+    Vector3 V2 = Vector3(5,10,15) / 5.0f;
+    assert(V1 == Vector3(1,2,3));
+    assert(V2 == Vector3(1,2,3));
 
-    v1 = Vector3(5,10,15);
-    v2 = Vector3(5,10,15);
-    v1 /= 5;
-    v2 /= 5.0f;
-    assert(v1 == Vector3(1,2,3));
-    assert(v2 == Vector3(1,2,3));
+    V1 = Vector3(5,10,15);
+    V2 = Vector3(5,10,15);
+    V1 /= 5;
+    V2 /= 5.0f;
+    assert(V1 == Vector3(1,2,3));
+    assert(V2 == Vector3(1,2,3));
   }
 
   /// Dot product test
   unittest
   {
-    Vector3 v1 = Vector3(1,2,3);
-    Vector3 v2 = Vector3(10,11,12);
-    auto v3 = v1 | v2;
-    assert(v3 == 10 + 22 + 36);
-    assert(v3 == v1.Dot(v2));
+    Vector3 V1 = Vector3(1,2,3);
+    Vector3 V2 = Vector3(10,11,12);
+    auto V3 = V1 | V2;
+    assert(V3 == 10 + 22 + 36);
+    assert(V3 == V1.Dot(V2));
   }
 
   /// Component wise multiplication test
   unittest
   {
-    Vector3 v1 = Vector3(1,2,3);
-    Vector3 v2 = Vector3(10,11,12);
-    auto v3 = v1 * v2;
-    assert(v3.X == 10);
-    assert(v3.Y == 22);
-    assert(v3.Z == 36);
-    assert(v3 == v1.Mul(v2));
+    Vector3 V1 = Vector3(1,2,3);
+    Vector3 V2 = Vector3(10,11,12);
+    auto V3 = V1 * V2;
+    assert(V3.X == 10);
+    assert(V3.Y == 22);
+    assert(V3.Z == 36);
+    assert(V3 == V1.Mul(V2));
   }
 
   /// Cross Product
   unittest
   {
     // Operator
-    auto vec = Vector3.UpVector ^ Vector3.ForwardVector;
-    assert(vec == Vector3.RightVector);
+    auto Vec = Vector3.UpVector ^ Vector3.ForwardVector;
+    assert(Vec == Vector3.RightVector);
     // Function
     assert(Cross(Vector3.UpVector, Vector3.ForwardVector) == Vector3.RightVector);
-    Vector3 vec1 = Vector3.UpVector;
-    Vector3 vec2 = Vector3.ForwardVector;
+    Vector3 Vec1 = Vector3.UpVector;
+    Vector3 Vec2 = Vector3.ForwardVector;
     // UFCS
-    Vector3 vec3 = vec1.Cross(vec2);
-    assert(vec3 == Vector3.RightVector);
+    Vector3 Vec3 = Vec1.Cross(Vec2);
+    assert(Vec3 == Vector3.RightVector);
   }
 
   /// Normalization
   unittest
   {
-    Vector3 vec = Vector3(1,1,1);
-    vec.Normalize();
-    float expected = 1.0f/Sqrt(3);
-    assert(vec == Vector3(expected, expected, expected));
+    Vector3 Vec = Vector3(1,1,1);
+    Vec.Normalize();
+    float Expected = 1.0f/Sqrt(3);
+    assert(Vec == Vector3(Expected, Expected, Expected));
 
-    vec = Vector3(1,1,1);
-    auto normalized = vec.NormalizedCopy();
-    auto normalizedUFCS = NormalizedCopy(vec);
-    assert(vec == Vector3(1,1,1));
-    assert(normalized == Vector3(expected, expected, expected));
-    assert(normalizedUFCS == Vector3(expected, expected, expected));
+    Vec = Vector3(1,1,1);
+    auto Normalized = Vec.NormalizedCopy();
+    auto NormalizedUFCS = NormalizedCopy(Vec);
+    assert(Vec == Vector3(1,1,1));
+    assert(Normalized == Vector3(Expected, Expected, Expected));
+    assert(NormalizedUFCS == Vector3(Expected, Expected, Expected));
   }
 
   /// Project Onto Normal
   unittest
   {
-    Vector3 normal = Vector3.UpVector;
-    Vector3 toProject = Vector3(1,1,0.5f);
+    Vector3 Normal = Vector3.UpVector;
+    Vector3 ToProject = Vector3(1,1,0.5f);
 
-    Vector3 projected = toProject.ProjectOntoNormal(normal);
+    Vector3 Projected = ToProject.ProjectOntoNormal(Normal);
 
-    assert(projected == Vector3(0,0,0.5f));
+    assert(Projected == Vector3(0,0,0.5f));
   }
 
   /// Project Onto PLane
   unittest
   {
-    Vector3 normal = Vector3.UpVector;
-    Vector3 toProject = Vector3(1,1,0.5f);
+    Vector3 Normal = Vector3.UpVector;
+    Vector3 ToProject = Vector3(1,1,0.5f);
 
-    Vector3 projected = toProject.ProjectOntoPlane(normal);
+    Vector3 Projected = ToProject.ProjectOntoPlane(Normal);
 
-    assert(projected == Vector3(1,1,0));
+    assert(Projected == Vector3(1,1,0));
   }
 
   /// Reflect Vector
   unittest
   {
-    Vector3 normal = Vector3(1,0,0);
-    Vector3 reflection = Vector3(-1,0,-1);
+    Vector3 Normal = Vector3(1,0,0);
+    Vector3 Reflection = Vector3(-1,0,-1);
 
-    Vector3 reflected = reflection.ReflectVector(normal);
+    Vector3 Reflected = Reflection.ReflectVector(Normal);
 
-    assert(reflected == Vector3(1,0,-1));
+    assert(Reflected == Vector3(1,0,-1));
   }
 
   /// NearlyEquals
   unittest
   {
-    Vector3 a = Vector3(1,1,0);
-    Vector3 b = Vector3(1+1e-5f,1,-1e-6f);
-    Vector3 c = Vector3(1,1,10);
-    assert(NearlyEquals(a,b));
-    assert(!NearlyEquals(a,c));
+    Vector3 A = Vector3(1,1,0);
+    Vector3 B = Vector3(1+1e-5f,1,-1e-6f);
+    Vector3 C = Vector3(1,1,10);
+    assert(NearlyEquals(A,B));
+    assert(!NearlyEquals(A,C));
   }
 
   /// Clamp Vector3
   unittest
   {
-    Vector3 vec = Vector3(100,0,0);
-    Vector3 clamped = vec.ClampSize(1);
-    assert(vec == Vector3(100,0,0));
-    assert(clamped == Vector3(1,0,0));
+    Vector3 Vec = Vector3(100,0,0);
+    Vector3 Clamped = Vec.ClampSize(1);
+    assert(Vec == Vector3(100,0,0));
+    assert(Clamped == Vector3(1,0,0));
   }
 
   /// Clamp2D Vector3
   unittest
   {
-    Vector3 vec = Vector3(100,0,1000);
-    Vector3 clamped = vec.ClampSize2D(1);
-    assert(vec == Vector3(100,0,1000));
-    assert(clamped == Vector3(1,0,1000));
+    Vector3 Vec = Vector3(100,0,1000);
+    Vector3 Clamped = Vec.ClampSize2D(1);
+    assert(Vec == Vector3(100,0,1000));
+    assert(Clamped == Vector3(1,0,1000));
   }
 
   /// 2D Length
   unittest
   {
-    Vector3 vec = Vector3(0,1,1032094);
-    assert(vec.Length2D() == 1);
-    assert(vec.LengthSquared2D() == 1);
+    Vector3 Vec = Vector3(0,1,1032094);
+    assert(Vec.Length2D() == 1);
+    assert(Vec.LengthSquared2D() == 1);
   }
 
   // Vector3
