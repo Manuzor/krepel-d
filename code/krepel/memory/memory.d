@@ -34,6 +34,7 @@ auto AlignedPointer(T)(const T* Pointer, const size_t Alignment)
 
 alias SetBit    = (const Bits, const Position) => Bits |  (1 << Position);
 alias RemoveBit = (const Bits, const Position) => Bits & ~(1 << Position);
+alias HasBit    = (const Bits, const Position) => cast(bool)(Bits &  (1 << Position));
 
 //
 // Unit Tests
@@ -73,4 +74,12 @@ unittest
   assert(RemoveBit(0b1111, 2) == 0b1011);
   assert(RemoveBit(0b1111, 3) == 0b0111);
   assert(RemoveBit(0b1111, 4) == 0b1111);
+}
+
+unittest
+{
+  assert(!HasBit(0b1010, 0));
+  assert( HasBit(0b1010, 1));
+  assert(!HasBit(0b1010, 2));
+  assert( HasBit(0b1010, 3));
 }

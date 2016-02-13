@@ -152,7 +152,7 @@ struct HeapMemory
   MemoryRegion Memory;
   size_t DefaultAlignment = GlobalDefaultAlignment;
 
-  debug(DebugHeapMemory) bool IsInitialized;
+  debug(DebugHeapMemory) @property bool IsInitialized() const { return cast(bool)FirstBlock; }
 
   // We need at least 1 byte for padding, so we can store the actual padding
   // value in that byte.
@@ -185,11 +185,9 @@ struct HeapMemory
 
     auto BlockSize = Memory.length;
     if(BlockSize.IsOdd) BlockSize--;
-    auto FirstBlock = cast(BlockData*)Memory.ptr;
+    FirstBlock = cast(BlockData*)Memory.ptr;
     FirstBlock.Size = BlockSize;
     FirstBlock.IsAllocated = false;
-
-    debug(DebugHeapMemory) IsInitialized = true;
   }
 
   auto Allocate(size_t RequestedBytes, size_t Alignment = 0)
@@ -269,34 +267,31 @@ private:
   ///       is used as a flag.
   static struct BlockData
   {
-    debug(DebugHeapMemoryBlock)
+    size_t HeaderData;
+
+    @property size_t Size() { return HeaderData.RemoveBit(0); }
+    @property void Size(size_t NewBlockSize)
     {
-      size_t _Size;
-      bool   _IsAllocated;
-
-      @property auto Size() { return _Size; }
-      @property void Size(size_t NewBlockSize)
-      {
-        assert(NewBlockSize.IsEven);
-        _Size = NewBlockSize;
-      }
-
-      @property auto IsAllocated() { return _IsAllocated; }
-      @property void IsAllocated(bool Value) { _IsAllocated = Value; }
+      assert(NewBlockSize.IsEven);
+      // Preserve the allocation bit (first bit).
+      HeaderData = NewBlockSize | (HeaderData & 1);
     }
-    else
+
+    @property bool IsAllocated() { return HeaderData & 1; }
+    @property void IsAllocated(bool Value)
     {
-      mixin(Meta.Bitfields!(
-        size_t, "Size",        8 * size_t.sizeof - 1,
-        bool,   "IsAllocated", 1));
+      HeaderData = HeaderData.RemoveBit(0) | (Value ? 1 : 0);
     }
   }
 
-  debug(DebugHeapMemoryBlock) {} else static assert(BlockData.sizeof == size_t.sizeof);
+  static assert(BlockData.sizeof == size_t.sizeof);
 
-  /// Gets the next block pointer to the "right" of the given block. Does not perform any checks.
+  BlockData* FirstBlock;
+
+  /// Gets the next block pointer to the "right" of the given block.
   BlockData* NextBlock(BlockData* Block)
   {
+    assert(Block);
     return cast(BlockData*)(cast(ubyte*)Block + Block.Size);
   }
 
@@ -320,8 +315,15 @@ private:
 
   void MergeAdjacentFreeBlocks(BlockData* Block)
   {
-    // TODO(Manu): Implement merging of adjacent free blocks into one large
-    // block to reduce fragmentation issues.
+    auto NewBlockSize = Block.Size;
+    auto NeighborBlock = NextBlock(Block);
+    while(IsValidBlockPointer(NeighborBlock) && !NeighborBlock.IsAllocated)
+    {
+      NewBlockSize += NeighborBlock.Size;
+      NeighborBlock = NextBlock(NeighborBlock);
+    }
+
+    Block.Size = NewBlockSize;
   }
 }
 
