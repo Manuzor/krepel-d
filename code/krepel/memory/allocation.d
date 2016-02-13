@@ -6,7 +6,8 @@ import krepel.algorithm;
 import krepel.math : IsPowerOfTwo, IsEven, IsOdd;
 import Meta = krepel.meta;
 
-__gshared ForwardAllocator!StackMemory GlobalAllocator;
+/// The global default allocator.
+__gshared ForwardAllocator!HeapMemory GlobalAllocator;
 
 /// Memory Features
 enum : ubyte
@@ -14,8 +15,6 @@ enum : ubyte
   SupportsAllocationOnly  = 0,
   SupportsReallocation    = 1 << 0,
   SupportsDeallocation    = 1 << 1,
-
-  SupportsAllFeatures     = 0xFF,
 }
 
 /// Common functionality for all memory types.
@@ -25,27 +24,32 @@ mixin template MemoryMixinTemplate(size_t InFeatures)
   enum size_t Features = InFeatures;
 }
 
-mixin template MemoryContainsCheckMixin(alias MemoryMember)
+/// Adds the Contains function to a memory type so it can be asked whether a
+/// given memory region or pointer belongs to this memory.
+mixin template MemoryContainsCheckMixin(alias Member)
 {
-  bool Contains(MemoryRegion SomeRegion) const
+  bool Contains(const MemoryRegion SomeRegion) const
   {
-    return SomeRegion.ptr >= MemoryMember.ptr &&
-           SomeRegion.ptr - MemoryMember.ptr + SomeRegion.length < MemoryMember.length;
+    return SomeRegion.ptr >= Member.ptr &&
+           SomeRegion.ptr - Member.ptr + SomeRegion.length < Member.length;
   }
 
-  bool Contains(ubyte* SomePointer)
+  bool Contains(const ubyte* SomePointer) const
   {
-    return SomePointer >= MemoryMember.ptr &&
-           SomePointer < MemoryMember.ptr + MemoryMember.length;
+    return SomePointer >= Member.ptr &&
+           SomePointer < Member.ptr + Member.length;
   }
 }
 
+/// A template to determine whether the given type is a memory type.
 template IsSomeMemory(M)
 {
   static if(is(M.ThisIsAMemoryType)) enum bool IsSomeMemory = true;
   else                               enum bool IsSomeMemory = false;
 }
 
+/// An allocator that wraps a given memory type used to allocate single
+/// objects or entire arrays.
 struct ForwardAllocator(M)
 {
   alias MemoryType = M;
@@ -53,33 +57,53 @@ struct ForwardAllocator(M)
 
   MemoryType Memory;
 
-  // Create a new T and call it's constructor.
-  T* New(T, ArgTypes...)(auto ref ArgTypes Args)
+  /// Creates a new instance of T without constructing it.
+  T* NewUnconstructed(T)()
   {
     auto Raw = Memory.Allocate(T.sizeof, T.alignof);
     if(Raw is null) return null;
     assert(Raw.length >= T.sizeof);
     auto Instance = cast(T*)Raw.ptr;
-    Construct(*Instance, Args);
     return Instance;
   }
 
-  // Calls the destructor on the given Instance.
-  // Deallocates memory only if the current memory type supports deallocation.
-  void Delete(T)(T* Instance)
+  /// Free the memory occupied by Instance without destructing it.
+  /// Note: If the memory type used does not support deallocation
+  ///       (e.g. StackMemory), this function does nothing.
+  void DeleteUndestructed(T)(T* Instance)
   {
-    if(Instance)
+    static if(MemoryType.Features & SupportsDeallocation)
     {
-      Destruct(*Instance);
-      static if(MemoryType.Features & SupportsDeallocation)
+      if(Instance)
       {
         Memory.Deallocate(Instance[0 .. T.sizeof]);
       }
     }
   }
 
-  // NOTE: The allocated array will not be initialized!
-  T[] NewArray(T)(size_t Count)
+  /// Allocate a new instance of type T and construct it using the given Args.
+  T* New(T, ArgTypes...)(auto ref ArgTypes Args)
+  {
+    auto Instance = NewUnconstructed!T();
+    Construct(*Instance, Args);
+    return Instance;
+  }
+
+  /// Destruct the given Instance and free the memory occupied by it.
+  /// Note: If the memory type used does not support deallocation
+  ///       (e.g. StackMemory), this function only destructs Instance,
+  ///       but does not free memory.
+  void Delete(T)(T* Instance)
+  {
+    if(Instance)
+    {
+      Destruct(*Instance);
+      DeleteUndestructed(Instance);
+    }
+  }
+
+  /// Creates a new array of T's without constructing them.
+  T[] NewUnconstructedArray(T)(size_t Count)
   {
     // TODO(Manu): Implement.
     auto RawMemory = Memory.Allocate(Count * T.sizeof, T.alignof);
@@ -91,30 +115,61 @@ struct ForwardAllocator(M)
     return Array;
   }
 
-  // NOTE: Destructors won't be called!
+  /// Free the memory occupied by the given Array without destructing its
+  /// elements.
+  /// Note: If the memory type used does not support deallocation
+  ///       (e.g. StackMemory), this function does nothing.
+  void DeleteUndestructed(T)(T[] Array)
+  {
+    static if(MemoryType.Features & SupportsDeallocation)
+    {
+      Memory.Deallocate(cast(ubyte[])Array);
+    }
+  }
+
+  /// Creates a new array of T's and construct each element of it with the
+  /// given Args.
+  T[] NewArray(T, ArgTypes...)(size_t Count, auto ref ArgTypes Args)
+  {
+    auto Array = NewUnconstructedArray!T(Count);
+    Construct(Array, Args);
+    return Array;
+  }
+
+  /// Destructs all elements of Array and frees the memory occupied by it.
+  /// Note: If the memory type used does not support deallocation
+  ///       (e.g. StackMemory), this function only destructs Instance,
+  ///       but does not free memory.
   void Delete(T)(T[] Array)
   {
-    Memory.Deallocate(cast(ubyte[])Array);
+    Destruct(Array);
+    DeleteUndestructed(Array);
   }
 }
 
 /// Forwards all calls to the appropriate krepel.system.* functions.
 struct SystemMemory
 {
-  mixin MemoryMixinTemplate!(SupportsAllFeatures);
+  mixin MemoryMixinTemplate!(SupportsReallocation | SupportsDeallocation);
 
   private import krepel.system;
 
-  auto Allocate(size_t RequestedBytes)
+  /// See_Also: krepel.system.SystemMemoryAllocation
+  auto Allocate(size_t RequestedBytes, size_t Alignment = 0)
   {
-    return SystemMemoryAllocation(RequestedBytes);
+    return SystemMemoryAllocation(RequestedBytes,
+                                  Alignment ? Alignment : GlobalDefaultAlignment);
   }
 
-  auto Reallocate(MemoryRegion Memory, size_t RequestedBytes)
+  /// See_Also: krepel.system.SystemMemoryReallocation
+  auto Reallocate(MemoryRegion Memory, size_t RequestedBytes, size_t Alignment = 0)
   {
-    return SystemMemoryReallocation(Memory, RequestedBytes);
+    return SystemMemoryReallocation(Memory,
+                                    RequestedBytes,
+                                    Alignment ? Alignment : GlobalDefaultAlignment);
   }
 
+  /// See_Also: krepel.system.Deallocate
   bool Deallocate(MemoryRegion MemoryToDeallocate)
   {
     return SystemMemoryDeallocation(MemoryToDeallocate);
@@ -122,7 +177,6 @@ struct SystemMemory
 }
 
 debug = DebugHeapMemory;
-debug = DebugHeapMemoryBlock;
 
 /// Can allocate arbitrary sizes of memory blocks and deallocate them in any
 /// order.
@@ -137,9 +191,8 @@ debug = DebugHeapMemoryBlock;
 /// ? => Unknown number of bytes
 /// . => Byte used by the user
 ///
-/// The `Tag` size is exactly size_t.sizeof bytes (when the debug level
-/// DebugHeapMemoryBlock is not specified). It contains the size of the block
-/// and a flag whether this block is allocated or not.
+/// The `Tag` size is exactly size_t.sizeof bytes. It contains the size of the
+/// block and a flag whether this block is allocated or not.
 ///
 /// Padding is >= 1 byte. The byte to the far right encodes a ubyte value that
 /// states the actual padding size. This value is used to free memory in an
@@ -368,6 +421,7 @@ struct StaticStackMemory(size_t N)
   mixin MemoryContainsCheckMixin!(Memory);
 }
 
+/// Common functionality for stack memory.
 mixin template StackMemoryTemplate()
 {
   mixin MemoryMixinTemplate!(SupportsAllocationOnly);
@@ -379,21 +433,24 @@ mixin template StackMemoryTemplate()
     if(RequestedBytes == 0) return null;
 
     if(Alignment == 0) Alignment = DefaultAlignment;
-    auto NeededBytes = AlignedSize(RequestedBytes, Alignment);
 
-    auto NewMark = AllocationMark + RequestedBytes;
+    const MemoryPointer = &Memory[AllocationMark];
+    auto AlignedMemoryPointer = AlignedPointer(MemoryPointer, Alignment);
+    const Padding = AlignedMemoryPointer - &Memory[AllocationMark];
+    const NewMark = AllocationMark + Padding + RequestedBytes;
 
     // Out of memory?
     if(NewMark > Memory.length) return null;
 
-    auto RequestedMemory = Memory[AllocationMark .. NewMark];
+    auto RequestedMemory = AlignedMemoryPointer[0 .. RequestedBytes];
     AllocationMark = NewMark;
     return RequestedMemory;
   }
-
-  bool Deallocate(ArgTypes...)(auto ref ArgTypes Args) { return false; }
 }
 
+/// Wraps two other memory types.
+///
+/// When allocating from the first memory fails, it tries the second one.
 struct HybridMemory(P, S)
 {
   alias PrimaryMemoryType = P;
@@ -406,6 +463,7 @@ struct HybridMemory(P, S)
   PrimaryMemoryType    PrimaryMemory;
   SecondaryMemoryType  SecondaryMemory;
 
+
   auto Allocate(size_t RequestedBytes, size_t Alignment = 0)
   {
     auto RequestedMemory = PrimaryMemory.Allocate(RequestedBytes, Alignment);
@@ -415,8 +473,18 @@ struct HybridMemory(P, S)
 
   bool Deallocate(MemoryRegion MemoryToDeallocate)
   {
-    return PrimaryMemory.Deallocate(MemoryToDeallocate) ||
-           SecondaryMemory.Deallocate(MemoryToDeallocate);
+    static if(PrimaryMemoryType.Features & SupportsDeallocation)
+    {
+      if(PrimaryMemory.Contains(MemoryToDeallocate))
+      {
+        return PrimaryMemory.Deallocate(MemoryToDeallocate);
+      }
+    }
+
+    static if(SecondaryMemoryType.Features & SupportsDeallocation)
+    {
+      return SecondaryMemory.Deallocate(MemoryToDeallocate);
+    }
   }
 
   bool Contains(SomeType)(auto ref SomeType Something)
@@ -453,7 +521,7 @@ unittest
   }
 
   assert(SystemHeap.Deallocate(Block2));
-  debug {} else assert(!SystemHeap.Deallocate(Block2));
+  //debug {} else assert(!SystemHeap.Deallocate(Block2));
 }
 
 // Heap Memory Allocation
@@ -569,7 +637,7 @@ unittest
 
     ~this()
     {
-      Integer = 0xdeadbeef;
+      Integer = 0xDeadBeef;
     }
   }
 
@@ -577,9 +645,16 @@ unittest
 
   auto Data = StackAllocator.New!TestData(false, 1337);
   static assert(Meta.IsPointer!(typeof(Data)), "New!() should always return a pointer!");
+  assert(AlignedPointer(Data, TestData.alignof) == Data);
   assert(Data.Boolean == false);
   assert(Data.Integer == 1337);
 
   StackAllocator.Delete(Data);
-  assert(Data.Integer == 0xdeadbeef);
+  assert(Data.Integer == 0xDeadBeef);
+
+  Data = StackAllocator.NewUnconstructed!TestData();
+  assert(Data.Integer == 0);
+  Construct(*Data);
+  assert(Data.Boolean == true);
+  assert(Data.Integer == 42);
 }

@@ -59,14 +59,14 @@ struct DynamicArray(T, A = typeof(null))
     if(Capacity.length >= NewCount) return;
 
     NewCount = Max(NewCount, MinimumElementAllocationCount);
-    auto NewMemory = Allocator.NewArray!(ElementType)(NewCount);
+    auto NewMemory = Allocator.NewUnconstructedArray!(ElementType)(NewCount);
     if(NewMemory.length == NewCount)
     {
       const Count = this.Count;
       // TODO(Manu): Move data instead of copying?
       NewMemory[0 .. Count] = Data[];
       Destruct(Data);
-      Allocator.Delete(Capacity);
+      Allocator.DeleteUndestructed(Capacity);
       Capacity = NewMemory;
       Data = Capacity[0 .. Count];
     }

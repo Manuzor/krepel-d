@@ -16,7 +16,9 @@ alias PB  = (const Bytes) => Bytes * (cast(typeof(Bytes))1000).TiB;
 alias MemoryRegion = ubyte[];
 alias StaticMemoryRegion(size_t N) = ubyte[N];
 
-enum GlobalDefaultAlignment = size_t.sizeof;
+/// Note: Apparently it's a good idea to have an alignment of 16. See
+///       https://en.wikipedia.org/wiki/Data_structure_alignment#x86
+enum GlobalDefaultAlignment = 16;
 
 auto AlignedSize(const size_t Size, const size_t Alignment)
 {
