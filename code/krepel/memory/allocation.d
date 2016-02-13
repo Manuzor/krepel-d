@@ -122,10 +122,12 @@ struct SystemMemory
 }
 
 debug = DebugHeapMemory;
-debug = DebugHeapMemoryTag;
+debug = DebugHeapMemoryBlock;
 
 /// Can allocate arbitrary sizes of memory blocks and deallocate them in any
 /// order.
+///
+/// Uses and implicit free list and a first-fit for allocations.
 ///
 /// Layout of a memory block:
 /// [********][??????????*][.??????????????]
@@ -135,12 +137,13 @@ debug = DebugHeapMemoryTag;
 /// ? => Unknown number of bytes
 /// . => Byte used by the user
 ///
-/// The `Tag` size is exactly size_t.sizeof bytes.
+/// The `Tag` size is exactly size_t.sizeof bytes (when the debug level
+/// DebugHeapMemoryBlock is not specified). It contains the size of the block
+/// and a flag whether this block is allocated or not.
 ///
 /// Padding is >= 1 byte. The byte to the far right encodes a ubyte value that
 /// states the actual padding size. This value is used to free memory in an
 /// efficient way while guaranteeing alignment requirements.
-///
 struct HeapMemory
 {
   mixin MemoryMixinTemplate!(SupportsDeallocation);
@@ -158,7 +161,7 @@ struct HeapMemory
   // A block consists of at least the Tag header and some padding. The
   // actual size of the padding is not known at compile-time, as it depends
   // on the given memory block and alignment.
-  enum MinimumBlockOverhead = Tag.sizeof + MinimumPadding;
+  enum MinimumBlockOverhead = BlockData.sizeof + MinimumPadding;
 
   // The size a valid block must have at least, which is the
   // MinimumBlockOverhead plus at least 1 byte for the user.
@@ -179,10 +182,13 @@ struct HeapMemory
     }
 
     Memory = AvailableMemory;
-    auto BlockSize = AvailableMemory.length;
+
+    auto BlockSize = Memory.length;
     if(BlockSize.IsOdd) BlockSize--;
-    TagPointerOf(Memory).BlockSize = BlockSize;
-    TagPointerOf(Memory).BlockIsAllocated = false;
+    auto FirstBlock = cast(BlockData*)Memory.ptr;
+    FirstBlock.Size = BlockSize;
+    FirstBlock.IsAllocated = false;
+
     debug(DebugHeapMemory) IsInitialized = true;
   }
 
@@ -197,41 +203,42 @@ struct HeapMemory
     const RequestedBytesAligned = AlignedSize(RequestedBytes, 2);
     const MinimumRequiredBlockSize = MinimumBlockOverhead + RequestedBytesAligned;
 
-    auto BlockPointer = Memory.ptr;
+    auto Block = cast(BlockData*)Memory.ptr;
     while(true)
     {
-      // We cannot know the actual padding size, so FindFreeBlockPointer might
+      // We cannot know the actual padding size, so FindFreeBlock might
       // return unusable results. This is why we use a while-loop here, so we
       // can try again with a different block that fits potentially.
 
-      BlockPointer = FindFreeBlockPointer(BlockPointer, MinimumRequiredBlockSize);
-      if(!BlockPointer) break;
+      Block = FindFreeBlock(Block, MinimumRequiredBlockSize);
+      if(!Block) break;
 
-      auto TagPointer = TagPointerOf(BlockPointer);
-      auto CandidatePointer = AlignedPointer(BlockPointer + MinimumBlockOverhead, Alignment);
-      const PaddingSize = cast(ubyte)(CandidatePointer - BlockPointer - Tag.sizeof);
-      const AvailableSize = TagPointer.BlockSize - Tag.sizeof - PaddingSize;
+      auto UserMemoryPointer = AlignedPointer(cast(ubyte*)Block + MinimumBlockOverhead, Alignment);
+      const PaddingSize = cast(ubyte)(UserMemoryPointer - cast(ubyte*)Block - BlockData.sizeof);
+      const AvailableSize = Block.Size - BlockData.sizeof - PaddingSize;
       assert(AvailableSize.IsEven);
 
       if(AvailableSize < RequestedBytes) continue;
 
-      TagPointer.BlockIsAllocated = true;
-      *(CandidatePointer - 1) = PaddingSize;
-      auto UserMemory = CandidatePointer[0 .. RequestedBytes];
-
-      // See if we can create a new block from the remaining block memory;
-
-      const RemainingBlockSize = AvailableSize - RequestedBytesAligned;
-
-      if(RemainingBlockSize >= MinimumBlockSize)
+      // Actually allocate the current block.
       {
-        TagPointer.BlockSize = Tag.sizeof + PaddingSize + RequestedBytesAligned;
-        auto NewFreeBlock = BlockPointer + TagPointer.BlockSize;
-        TagPointerOf(NewFreeBlock).BlockIsAllocated = false;
-        TagPointerOf(NewFreeBlock).BlockSize = RemainingBlockSize;
+        *(UserMemoryPointer - 1) = PaddingSize;
+        Block.IsAllocated = true;
       }
 
-      return UserMemory;
+      // See if we can create a new block from the remaining block memory;
+      {
+        const RemainingBlockSize = AvailableSize - RequestedBytesAligned;
+        if(RemainingBlockSize >= MinimumBlockSize)
+        {
+          Block.Size = BlockData.sizeof + PaddingSize + RequestedBytesAligned;
+          auto NewFreeBlock = NextBlock(Block);
+          NewFreeBlock.IsAllocated = false;
+          NewFreeBlock.Size = RemainingBlockSize;
+        }
+      }
+
+      return UserMemoryPointer[0 .. RequestedBytes];
     }
 
     // At this point, we are out of memory.
@@ -240,79 +247,78 @@ struct HeapMemory
 
   bool Deallocate(MemoryRegion MemoryToDeallocate)
   {
-    // TODO(Manu): Check whether MemoryToDeallocate actually belongs to this heap.
-
     if(!MemoryToDeallocate) return false;
 
     ubyte PaddingSize = *(MemoryToDeallocate.ptr - 1);
-    auto MemoryBlockPointer = MemoryToDeallocate.ptr - PaddingSize - Tag.sizeof;
-    auto TagPointer = TagPointerOf(MemoryBlockPointer);
+    auto Block = cast(BlockData*)(MemoryToDeallocate.ptr - PaddingSize - BlockData.sizeof);
 
-    TagPointer.BlockIsAllocated = false;
+    if(!IsValidBlockPointer(Block)) return false;
 
-    MergeAdjacentFreeBlocks(MemoryBlockPointer);
+    Block.IsAllocated = false;
+    MergeAdjacentFreeBlocks(Block);
 
     return true;
   }
 
 private:
-  static struct Tag
+
+  /// Represents the static data of a block. The actual memory block itself
+  /// will be much larger than this.
+  ///
+  /// Note: The size of a block must be an even number. The lowest-order bit
+  ///       is used as a flag.
+  static struct BlockData
   {
-
-    debug(DebugHeapMemoryTag)
+    debug(DebugHeapMemoryBlock)
     {
-      size_t _BlockSize;
-      bool   _BlockIsAllocated;
+      size_t _Size;
+      bool   _IsAllocated;
 
-      @property auto BlockSize() { return _BlockSize; }
-      @property void BlockSize(size_t NewBlockSize)
+      @property auto Size() { return _Size; }
+      @property void Size(size_t NewBlockSize)
       {
         assert(NewBlockSize.IsEven);
-        _BlockSize = NewBlockSize;
+        _Size = NewBlockSize;
       }
 
-      @property auto BlockIsAllocated() { return _BlockIsAllocated; }
-      @property void BlockIsAllocated(bool Value) { _BlockIsAllocated = Value; }
+      @property auto IsAllocated() { return _IsAllocated; }
+      @property void IsAllocated(bool Value) { _IsAllocated = Value; }
     }
     else
     {
       mixin(Meta.Bitfields!(
-        size_t, "BlockSize",        8 * size_t.sizeof - 1,
-        bool,   "BlockIsAllocated", 1));
+        size_t, "Size",        8 * size_t.sizeof - 1,
+        bool,   "IsAllocated", 1));
     }
   }
 
-  debug(DebugHeapMemoryTag) {} else static assert(Tag.sizeof == size_t.sizeof);
+  debug(DebugHeapMemoryBlock) {} else static assert(BlockData.sizeof == size_t.sizeof);
 
-  Tag* TagPointerOf(T)(T[] Data)   inout { return cast(Tag*)Data.ptr; }
-  Tag* TagPointerOf(T)(T* Pointer) inout { return cast(Tag*)Pointer; }
-
-  ubyte* FindFreeBlockPointer(ubyte* StartBlockPointer, size_t RequiredBlockSize)
+  /// Gets the next block pointer to the "right" of the given block. Does not perform any checks.
+  BlockData* NextBlock(BlockData* Block)
   {
-    if(IsBlockOutOfBounds(StartBlockPointer)) return null;
+    return cast(BlockData*)(cast(ubyte*)Block + Block.Size);
+  }
 
-    auto FreeBlockPointer = StartBlockPointer;
-    auto TagPointer = TagPointerOf(FreeBlockPointer);
-    while(TagPointer && (TagPointer.BlockIsAllocated || TagPointer.BlockSize < RequiredBlockSize))
+  BlockData* FindFreeBlock(BlockData* Block, size_t RequiredBlockSize)
+  {
+    while(IsValidBlockPointer(Block) &&
+          (Block.IsAllocated || Block.Size < RequiredBlockSize))
     {
-      FreeBlockPointer = cast(ubyte*)TagPointer + TagPointer.BlockSize;
-
-      if(IsBlockOutOfBounds(FreeBlockPointer))
-      {
-        return null;
-      }
-
-      TagPointer = TagPointerOf(FreeBlockPointer);
+      Block = NextBlock(Block);
     }
-    return FreeBlockPointer;
+
+    return Block;
   }
 
-  bool IsBlockOutOfBounds(ubyte* Pointer)
+  /// A valid block pointer is a block that is not null and belongs to this heap's memory.
+  bool IsValidBlockPointer(BlockData* Block)
   {
-    return Pointer - Memory.ptr > Memory.length - MinimumBlockSize;
+    return Block &&
+           cast(ubyte*)Block - Memory.ptr <= Memory.length - MinimumBlockSize;
   }
 
-  void MergeAdjacentFreeBlocks(ubyte* BlockPointer)
+  void MergeAdjacentFreeBlocks(BlockData* Block)
   {
     // TODO(Manu): Implement merging of adjacent free blocks into one large
     // block to reduce fragmentation issues.
