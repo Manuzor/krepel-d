@@ -1,40 +1,39 @@
 module krepel.memory.memory;
 import krepel.math;
 
-alias KiB = a => a * 1024;
-alias MiB = a => a * 1024.KiB;
-alias GiB = a => a * 1024.MiB;
-alias TiB = a => a * 1024.GiB;
-alias PiB = a => a * 1024.TiB;
+alias KiB = (const Bytes) => Bytes * (cast(typeof(Bytes))1024);
+alias MiB = (const Bytes) => Bytes * (cast(typeof(Bytes))1024).KiB;
+alias GiB = (const Bytes) => Bytes * (cast(typeof(Bytes))1024).MiB;
+alias TiB = (const Bytes) => Bytes * (cast(typeof(Bytes))1024).GiB;
+alias PiB = (const Bytes) => Bytes * (cast(typeof(Bytes))1024).TiB;
 
-alias KB = a => a * 1000;
-alias MB = a => a * 1000.KiB;
-alias GB = a => a * 1000.MiB;
-alias TB = a => a * 1000.GiB;
-alias PB = a => a * 1000.TiB;
+alias KB  = (const Bytes) => Bytes * (cast(typeof(Bytes))1000);
+alias MB  = (const Bytes) => Bytes * (cast(typeof(Bytes))1000).KiB;
+alias GB  = (const Bytes) => Bytes * (cast(typeof(Bytes))1000).MiB;
+alias TB  = (const Bytes) => Bytes * (cast(typeof(Bytes))1000).GiB;
+alias PB  = (const Bytes) => Bytes * (cast(typeof(Bytes))1000).TiB;
 
 alias MemoryRegion = ubyte[];
 alias StaticMemoryRegion(size_t N) = ubyte[N];
 
 enum GlobalDefaultAlignment = size_t.sizeof;
 
-auto AlignedSize(size_t Size, size_t Alignment)
+auto AlignedSize(const size_t Size, const size_t Alignment)
 {
-  assert(Alignment.IsPowerOfTwo, "The Alignment must be a power of two.");
-
   if(Alignment == 0)
     return Size;
 
+  assert(Alignment.IsPowerOfTwo, "The Alignment must be a power of two.");
   return ((Size + Alignment - 1) / Alignment) * Alignment;
 }
 
-auto AlignedPointer(T)(T* Pointer, size_t Alignment)
+auto AlignedPointer(T)(const T* Pointer, const size_t Alignment)
 {
   return cast(T*)AlignedSize(cast(size_t)Pointer, Alignment);
 }
 
-alias SetBit    = (Bits, Position) => Bits |  (1 << Position);
-alias RemoveBit = (Bits, Position) => Bits & ~(1 << Position);
+alias SetBit    = (const Bits, const Position) => Bits |  (1 << Position);
+alias RemoveBit = (const Bits, const Position) => Bits & ~(1 << Position);
 
 //
 // Unit Tests
