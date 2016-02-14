@@ -51,6 +51,9 @@ unittest
   assert(AlignedSize(99,  8) == 104);
   assert(AlignedSize(99, 16) == 112);
   assert(AlignedSize(99, 32) == 128);
+
+  assert(AlignedSize(100 - 1, 2) == 100);
+  assert(AlignedSize(101 - 1, 2) == 100);
 }
 
 unittest

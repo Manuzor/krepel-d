@@ -176,7 +176,7 @@ struct SystemMemory
   }
 }
 
-debug = DebugHeapMemory;
+debug = HeapMemory;
 
 /// Can allocate arbitrary sizes of memory blocks and deallocate them in any
 /// order.
@@ -205,20 +205,14 @@ struct HeapMemory
   MemoryRegion Memory;
   size_t DefaultAlignment = GlobalDefaultAlignment;
 
-  debug(DebugHeapMemory) @property bool IsInitialized() const { return cast(bool)FirstBlock; }
+  debug(HeapMemory) @property bool IsInitialized() const { return cast(bool)FirstBlock; }
 
-  // We need at least 1 byte for padding, so we can store the actual padding
-  // value in that byte.
-  enum MinimumPadding = 1;
+  /// The number of bytes needed by a block header.
+  enum BlockOverhead = size_t.sizeof;
 
-  // A block consists of at least the Tag header and some padding. The
-  // actual size of the padding is not known at compile-time, as it depends
-  // on the given memory block and alignment.
-  enum MinimumBlockOverhead = BlockData.sizeof + MinimumPadding;
-
-  // The size a valid block must have at least, which is the
-  // MinimumBlockOverhead plus at least 1 byte for the user.
-  enum MinimumBlockSize = MinimumBlockOverhead + 1;
+  /// The number of bytes required to make use of a block in the case the user
+  /// requests 1 byte of memory with an alignment of 1.
+  enum MinimumBlockSize = BlockOverhead + 1;
 
 
   this(MemoryRegion AvailableMemory)
@@ -228,7 +222,7 @@ struct HeapMemory
 
   void Initialize(MemoryRegion AvailableMemory)
   {
-    debug(DebugHeapMemory)
+    debug(HeapMemory)
     {
       assert(!IsInitialized, "Heap memory must not be initialized.");
       assert(DefaultAlignment.IsPowerOfTwo, "DefaultAlignment is expected to be a power of two.");
@@ -245,55 +239,63 @@ struct HeapMemory
 
   auto Allocate(size_t RequestedBytes, size_t Alignment = 0)
   {
-    debug(DebugHeapMemory) assert(IsInitialized, "Heap memory is not initialized.");
+    debug(HeapMemory)
+    {
+      assert(IsInitialized, "Heap memory is not initialized.");
+      assert(Alignment == 0 || Alignment < ubyte.max,
+             "Alignment value is supposed to fit into 1 byte.");
+      alias DeadBeefType = typeof(0xDeadBeef);
+    }
 
     if(RequestedBytes == 0) return null;
 
     if(Alignment == 0) Alignment = DefaultAlignment;
 
-    const RequestedBytesAligned = AlignedSize(RequestedBytes, 2);
-    const MinimumRequiredBlockSize = MinimumBlockOverhead + RequestedBytesAligned;
+    const RequiredBytes = RequestedBytes + Alignment;
+    debug(HeapMemory) const RequiredBlockSize = BlockOverhead + RequiredBytes + DeadBeefType.sizeof;
+    else                   const RequiredBlockSize = BlockOverhead + RequiredBytes;
 
     auto Block = cast(BlockData*)Memory.ptr;
-    while(true)
+    Block = FindFreeBlock(Block, RequiredBlockSize);
+
+    // No suitable block was found, so we are out of memory for this
+    // allocation request.
+    if(!Block) return null;
+
+    const PotentialUserPointer = cast(ubyte*)Block + BlockOverhead;
+    auto UserPointer = AlignedPointer(PotentialUserPointer, Alignment);
+    if(UserPointer == PotentialUserPointer)
     {
-      // We cannot know the actual padding size, so FindFreeBlock might
-      // return unusable results. This is why we use a while-loop here, so we
-      // can try again with a different block that fits potentially.
+      // The UserPointer is perfectly aligned. However, we need space to save
+      // the padding value, so we shift to the next alignment boundary.
+      UserPointer += Alignment;
+    }
+    const PaddingSize = UserPointer - PotentialUserPointer;
+    assert(PaddingSize > 0 && PaddingSize <= Alignment);
 
-      Block = FindFreeBlock(Block, MinimumRequiredBlockSize);
-      if(!Block) break;
+    // Save padding size.
+    *(UserPointer - 1) = cast(ubyte)PaddingSize;
+    Block.IsAllocated = true;
 
-      auto UserMemoryPointer = AlignedPointer(cast(ubyte*)Block + MinimumBlockOverhead, Alignment);
-      const PaddingSize = cast(ubyte)(UserMemoryPointer - cast(ubyte*)Block - BlockData.sizeof);
-      const AvailableSize = Block.Size - BlockData.sizeof - PaddingSize;
-      assert(AvailableSize.IsEven);
+    const RemainingAvailableSize = Block.Size - RequiredBlockSize;
 
-      if(AvailableSize < RequestedBytes) continue;
+    if(RemainingAvailableSize >= MinimumBlockSize)
+    {
+      // We have enough space left for a new block, so we create one here.
 
-      // Actually allocate the current block.
-      {
-        *(UserMemoryPointer - 1) = PaddingSize;
-        Block.IsAllocated = true;
-      }
-
-      // See if we can create a new block from the remaining block memory;
-      {
-        const RemainingBlockSize = AvailableSize - RequestedBytesAligned;
-        if(RemainingBlockSize >= MinimumBlockSize)
-        {
-          Block.Size = BlockData.sizeof + PaddingSize + RequestedBytesAligned;
-          auto NewFreeBlock = NextBlock(Block);
-          NewFreeBlock.IsAllocated = false;
-          NewFreeBlock.Size = RemainingBlockSize;
-        }
-      }
-
-      return UserMemoryPointer[0 .. RequestedBytes];
+      Block.Size = RequiredBlockSize;
+      auto NewBlock = NextBlock(Block);
+      NewBlock.Size = AlignedSize(RemainingAvailableSize - 1, 2);
+      NewBlock.IsAllocated = false;
     }
 
-    // At this point, we are out of memory.
-    return null;
+    debug(HeapMemory)
+    {
+      auto DeadBeefPointer = cast(DeadBeefType*)(cast(ubyte*)Block + Block.Size - DeadBeefType.sizeof);
+      *DeadBeefPointer = 0xDeadBeef;
+    }
+
+    return UserPointer[0 .. RequestedBytes];
   }
 
   bool Deallocate(MemoryRegion MemoryToDeallocate)
