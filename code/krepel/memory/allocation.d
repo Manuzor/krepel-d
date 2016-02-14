@@ -181,7 +181,16 @@ debug = HeapMemory;
 /// Can allocate arbitrary sizes of memory blocks and deallocate them in any
 /// order.
 ///
-/// Uses and implicit free list and a first-fit for allocations.
+/// Uses an implicit free list and a first-fit for allocations.
+///
+/// Usually a block has a boundary tag at the end to indicate the size of that
+/// block. This is done to enable bidirectional traversal from any given
+/// block. This implementation, however, does not require such a boundary tag.
+/// When allocating memory, a linear search is performed, starting from the
+/// first block. Along the way, all adjacent free blocks are merged, until a
+/// suitable block is found that satisfies the block size requirements of that
+/// allocation request. Thus, we lazily merge adjacent free blocks on demand
+/// only.
 ///
 /// Layout of a memory block:
 /// [********][??????????*][.??????????????]
@@ -256,7 +265,7 @@ struct HeapMemory
     else                   const RequiredBlockSize = BlockOverhead + RequiredBytes;
 
     auto Block = cast(BlockData*)Memory.ptr;
-    Block = FindFreeBlock(Block, RequiredBlockSize);
+    Block = FindFreeBlockAndMergeAdjacent(Block, RequiredBlockSize);
 
     // No suitable block was found, so we are out of memory for this
     // allocation request.
@@ -308,7 +317,6 @@ struct HeapMemory
     if(!IsValidBlockPointer(Block)) return false;
 
     Block.IsAllocated = false;
-    MergeAdjacentFreeBlocks(Block);
 
     return true;
   }
@@ -350,15 +358,25 @@ private:
     return cast(BlockData*)(cast(ubyte*)Block + Block.Size);
   }
 
-  BlockData* FindFreeBlock(BlockData* Block, size_t RequiredBlockSize)
+  /// Traverses all blocks, merging free adjacent blocks together, until a
+  /// block is found that has the RequiredBlockSize (first fit).
+  BlockData* FindFreeBlockAndMergeAdjacent(BlockData* Block, size_t RequiredBlockSize)
   {
-    while(IsValidBlockPointer(Block) &&
-          (Block.IsAllocated || Block.Size < RequiredBlockSize))
+    while(IsValidBlockPointer(Block))
     {
+      if(!Block.IsAllocated)
+      {
+        MergeAdjacentFreeBlocks(Block);
+        if(Block.Size >= RequiredBlockSize)
+        {
+          return Block;
+        }
+      }
+
       Block = NextBlock(Block);
     }
 
-    return Block;
+    return null;
   }
 
   /// A valid block pointer is a block that is not null and belongs to this heap's memory.
@@ -378,7 +396,14 @@ private:
       NeighborBlock = NextBlock(NeighborBlock);
     }
 
-    Block.Size = NewBlockSize;
+    if(NewBlockSize != Block.Size)
+    {
+      assert(NewBlockSize > Block.Size, "We are supposed to merge free "
+                                        "blocks together and GAIN space "
+                                        "here, not lose it!");
+
+      Block.Size = NewBlockSize;
+    }
   }
 }
 
