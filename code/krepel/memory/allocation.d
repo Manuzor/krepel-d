@@ -522,6 +522,10 @@ unittest
 
   assert(SystemHeap.Deallocate(Block2));
   //debug {} else assert(!SystemHeap.Deallocate(Block2));
+
+  auto Block3 = SystemHeap.Allocate(9, 16);
+  assert(Block3);
+  assert(Block3.ptr == AlignedPointer(Block3.ptr, 16));
 }
 
 // Heap Memory Allocation
