@@ -23,7 +23,8 @@ Type* Construct(Type, ArgTypes...)(MemoryRegion RawMemory, auto ref ArgTypes Arg
 Type Construct(Type, ArgTypes...)(Type Instance, auto ref ArgTypes Args)
   if(is(Type == class))
 {
-  return Construct!Type((cast(ubyte*)Instance)[0 .. Meta.ClassInstanceSizeOf!Type], Args);
+  MemoryRegion RawMemory = (cast(ubyte*)Instance)[0 .. Meta.ClassInstanceSizeOf!Type];
+  return Construct!Type(RawMemory, Args);
 }
 
 Type* Construct(Type, ArgTypes...)(Type* Pointer, auto ref ArgTypes Args)
