@@ -73,21 +73,21 @@ template Map(alias Func, Args...)
   debug(krepel_meta_Map) pragma(msg, "[krepel_meta_Map] Result: " ~ Map.stringof);
 }
 
-//debug = krepel_meta_AnySatisy;
+//debug = krepel_meta_AnySatisfy;
 template AnySatisfy(alias Func, Args...)
 {
-  debug(krepel_meta_AnySatisy) pragma(msg, "[krepel_meta_AnySatisy] Func = ", Func.stringof);
+  debug(krepel_meta_AnySatisfy) pragma(msg, "[krepel_meta_AnySatisfy] Func = ", Func.stringof);
 
   template Impl(Args...)
   {
     static if(Args.length == 0)
     {
-      debug(krepel_meta_AnySatisy) pragma(msg, "[krepel_meta_AnySatisy] Got empty Args list.");
+      debug(krepel_meta_AnySatisfy) pragma(msg, "[krepel_meta_AnySatisfy] Got empty Args list.");
       enum Impl = false;
     }
     else static if(Args.length == 1)
     {
-      debug(krepel_meta_AnySatisy) pragma(msg, "[krepel_meta_AnySatisy] " ~ Args[0].stringof ~ " => " ~ Func!(Args[0]).stringof);
+      debug(krepel_meta_AnySatisfy) pragma(msg, "[krepel_meta_AnySatisfy] " ~ Args[0].stringof ~ " => " ~ Func!(Args[0]).stringof);
       enum Impl = Func!(Args[0]);
     }
     else
@@ -99,7 +99,7 @@ template AnySatisfy(alias Func, Args...)
 
   alias AnySatisfy = Impl!(Args);
 
-  debug(krepel_meta_AnySatisy) pragma(msg, "[krepel_meta_AnySatisy] Result = ", AnySatisfy.stringof);
+  debug(krepel_meta_AnySatisfy) pragma(msg, "[krepel_meta_AnySatisfy] Result = ", AnySatisfy.stringof);
 }
 
 //debug = krepel_meta_AllSatisfy;
