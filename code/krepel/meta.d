@@ -146,6 +146,12 @@ template IsSomeChar(TypeToTest)
   debug(krepel_meta_IsSomeChar) pragma(msg, "[krepel_meta_IsSomeChar] Result = " ~ IsSomeChar.stringof);
 }
 
+template IsConvertibleTo(SourceType, DestType)
+{
+  static if(is(SourceType : DestType)) enum IsConvertibleTo = true;
+  else                                 enum IsConvertibleTo = false;
+}
+
 template HasMember(ArgTypes...)
   if(ArgTypes.length == 2)
 {
@@ -155,9 +161,18 @@ template HasMember(ArgTypes...)
   enum bool HasMember = __traits(hasMember, Type, ArgTypes[1]);
 }
 
-alias IsArray    = std.traits.isArray;
-alias IsIntegral = std.traits.isIntegral;
-alias IsPointer  = std.traits.isPointer;
+template ClassInstanceSizeOf(Type)
+{
+  static assert(is(Type == class), "The type " ~ Type.stringof ~ " is not a class.");
+  enum ClassInstanceSizeOf = __traits(classInstanceSize, Type);
+}
+
+enum bool IsPlainOldData(Type) = __traits(isPOD, Type);
+
+alias IsArray                = std.traits.isArray;
+alias IsIntegral             = std.traits.isIntegral;
+alias IsPointer              = std.traits.isPointer;
+alias ClassInstanceAlignment = std.traits.classInstanceAlignment;
 
 /// Example:
 /// struct A

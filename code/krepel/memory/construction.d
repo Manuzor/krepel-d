@@ -1,38 +1,109 @@
 module krepel.memory.construction;
 
+import krepel.memory;
 import Meta = krepel.meta;
 
-void Construct(T, ArgTypes...)(T[] Array, ArgTypes Args)
+private static import std.conv;
+
+// TODO(Manu): Get rid of phobos?
+
+
+Type Construct(Type, ArgTypes...)(MemoryRegion RawMemory, auto ref ArgTypes Args)
+  if(is(Type == class))
 {
-  static if(ArgTypes.length)
+  return std.conv.emplace!Type(cast(void[])RawMemory, Args);
+}
+
+Type* Construct(Type, ArgTypes...)(MemoryRegion RawMemory, auto ref ArgTypes Args)
+  if(!is(Type == class))
+{
+  return std.conv.emplace!Type(cast(void[])RawMemory, Args);
+}
+
+Type Construct(Type, ArgTypes...)(Type Instance, auto ref ArgTypes Args)
+  if(is(Type == class))
+{
+  return Construct!Type((cast(ubyte*)Instance)[0 .. Meta.ClassInstanceSizeOf!Type], Args);
+}
+
+Type* Construct(Type, ArgTypes...)(Type* Pointer, auto ref ArgTypes Args)
+  if(!is(Type == class))
+{
+  return std.conv.emplace!Type(Pointer, Args);
+}
+
+void Destruct(Type)(Type Instance)
+  if(is(Type == class))
+{
+  // TODO(Manu): assert(Instance)?
+  if(Instance)
   {
-    static if(Meta.HasMember!(T, "__ctor")) foreach(ref Element; Array) Element.__ctor(Args);
-    else                                    foreach(ref Element; Array) Element = T(Args);
+    static if(Meta.HasMember!("__dtor")) Instance.__dtor();
+    BlitInitialData((&Instance)[0 .. 1]);
+  }
+}
+
+void Destruct(Type)(Type* Instance)
+  if(!is(Type == class))
+{
+  // TODO(Manu): assert(Instance)?
+  if(Instance)
+  {
+    // TODO(Manu): Find out what the heck a xdtor is.
+
+    static if(Meta.HasMember!(Type, "__dtor"))  Instance.__dtor();
+    static if(Meta.HasMember!(Type, "__xdtor")) Instance.__dtor();
+    BlitInitialData(Instance[0 .. 1]);
+  }
+}
+
+void ConstructArray(Type, ArgTypes...)(Type[] Array, auto ref ArgTypes Args)
+{
+  static if(Meta.IsPlainOldData!Type)
+  {
+    static      if(Args.length == 0) BlitInitialData(Array);
+    else static if(Args.length == 1) Array[] = Args[0];
+    else
+    {
+      static assert(false,"Cannot initialize plain old data "
+                          "with more than one argument.");
+    }
   }
   else
   {
-    // TODO(Manu): This does a copy operation, but can it be done another way?
-    Array[] = T.init;
+    static if(is(Type == class)) foreach(    Element; Array) Construct(Element);
+    else                         foreach(ref Element; Array) Construct(&Element);
   }
 }
 
-void Construct(T, ArgTypes...)(ref T Instance, ArgTypes Args)
+
+void DestructArray(Type)(Type[] Array)
 {
-  // Make a single-element slice from `Instance` and call the other overload.
-  Construct((&Instance)[0..1], Args);
+  static if(Meta.IsPlainOldData!Type)
+  {
+    BlitInitialData(Array);
+  }
+  else
+  {
+    static if(is(Type == class)) foreach(    Element; Array) Destruct(Element);
+    else                         foreach(ref Element; Array) Destruct(&Element);
+  }
 }
 
-void Destruct(T)(T[] Array)
+private void BlitInitialData(Type)(Type[] BlitTargets)
 {
-  // TODO(Manu): See what Phobos' destroy() does that we don't.
-  static if(Meta.HasMember!(T, "__dtor")) foreach(ref Element; Array) Element.__dtor();
-  else                                    foreach(ref Element; Array) Element = T.init;
-}
+  auto RawInit = cast(ubyte[])typeid(Type).initializer();
 
-void Destruct(T)(ref T Instance)
-{
-  // Make a single-element slice from `Instance` and call the other overload.
-  Destruct((&Instance)[0..1]);
+  foreach(ref Target; BlitTargets)
+  {
+    static if(is(Type == class))
+      auto RawTarget = (cast(ubyte*) Target)[0 .. Meta.ClassInstanceSizeOf!Type];
+    else
+      auto RawTarget = (cast(ubyte*)&Target)[0 .. Type.sizeof];
+
+    if(RawInit.ptr) RawTarget[] = RawInit[];
+    else            RawTarget[] = 0;
+  }
 }
 
 
@@ -40,7 +111,7 @@ void Destruct(T)(ref T Instance)
 // Unit Tests
 //
 
-// Construct single object
+// Single struct object construction
 unittest
 {
   nothrow @nogc static struct TestData
@@ -51,10 +122,50 @@ unittest
 
   ubyte[TestData.sizeof] Buffer = 0;
   auto DataPtr = cast(TestData*)Buffer.ptr;
-  Construct(*DataPtr, 42, 3.1415f);
+  Construct(DataPtr, 42, 3.1415f);
   assert(DataPtr.Value == 42);
   assert(DataPtr.Precision == 3.1415f);
-  Destruct(*DataPtr);
+
+  Destruct(DataPtr);
   assert(DataPtr.Value != 42);
   assert(DataPtr.Precision != 3.1415f);
+}
+
+// Single class object construction
+unittest
+{
+  class FooClass            {          int Data() { return 42;   } }
+  class BarClass : FooClass { override int Data() { return 1337; } }
+
+  void[1024] Buffer = void;
+  auto Bar = cast(BarClass)Buffer.ptr;
+  Construct!BarClass(Bar);
+  assert(Bar.Data == 1337);
+  FooClass Foo = Bar;
+  assert(Foo.Data == 1337);
+}
+
+// Array of structs
+unittest
+{
+  static struct TestData
+  {
+    int Value = 42;
+
+    ~this() { Value = 666; }
+  }
+
+  ubyte[5 * TestData.sizeof] Buffer;
+  const Size = TestData.sizeof;
+  auto Array = cast(TestData[])Buffer[0 .. 5 * TestData.sizeof];
+  foreach(ref Element; Array) assert(Element.Value == 0);
+  assert(Array[0].Value == 0);
+  ConstructArray(Array);
+  foreach(ref Element; Array)
+  {
+    assert(Element.Value == 42);
+    Element.Value = 1337;
+  }
+  DestructArray(Array);
+  foreach(ref Element; Array) assert(Element.Value == 42);
 }

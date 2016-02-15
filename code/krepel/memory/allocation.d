@@ -57,35 +57,49 @@ struct ForwardAllocator(M)
 
   MemoryType Memory;
 
-  /// Creates a new instance of T without constructing it.
-  T* NewUnconstructed(T)()
+  /// Creates a new instance of Type without constructing it.
+  Type* NewUnconstructed(Type)()
   {
-    auto Raw = Memory.Allocate(T.sizeof, T.alignof);
+    auto Raw = Memory.Allocate(Type.sizeof, Type.alignof);
     if(Raw is null) return null;
-    assert(Raw.length >= T.sizeof);
-    auto Instance = cast(T*)Raw.ptr;
+    assert(Raw.length >= Type.sizeof);
+    auto Instance = cast(Type*)Raw.ptr;
     return Instance;
   }
 
   /// Free the memory occupied by Instance without destructing it.
   /// Note: If the memory type used does not support deallocation
   ///       (e.g. StackMemory), this function does nothing.
-  void DeleteUndestructed(T)(T* Instance)
+  void DeleteUndestructed(Type)(Type* Instance)
   {
     static if(MemoryType.Features & SupportsDeallocation)
     {
       if(Instance)
       {
-        Memory.Deallocate(Instance[0 .. T.sizeof]);
+        Memory.Deallocate(Instance[0 .. Type.sizeof]);
       }
     }
   }
 
-  /// Allocate a new instance of type T and construct it using the given Args.
-  T* New(T, ArgTypes...)(auto ref ArgTypes Args)
+  /// Allocate a new instance of type Type and construct it using the given Args.
+  Type* New(Type, ArgTypes...)(auto ref ArgTypes Args)
+    if(!is(Type == class))
   {
-    auto Instance = NewUnconstructed!T();
-    Construct(*Instance, Args);
+    return NewUnconstructed!Type().Construct(Args);
+  }
+
+  Type New(Type, ArgTypes...)(auto ref ArgTypes Args)
+    if(is(Type == class))
+  {
+    static assert(!__traits(isAbstractClass, Type), "Cannot instantiate abstract class.");
+    enum SizeOfT = __traits(classInstanceSize, Type);
+    enum AlignmentOfT = Meta.ClassInstanceAlignment!Type;
+    auto Raw = Memory.Allocate(SizeOfT, AlignmentOfT);
+    if(Raw is null) return null;
+    assert(Raw.length >= Type.sizeof);
+    auto Instance = cast(Type)Raw.ptr;
+
+    Construct(Instance, Args);
     return Instance;
   }
 
@@ -93,25 +107,25 @@ struct ForwardAllocator(M)
   /// Note: If the memory type used does not support deallocation
   ///       (e.g. StackMemory), this function only destructs Instance,
   ///       but does not free memory.
-  void Delete(T)(T* Instance)
+  void Delete(Type)(Type* Instance)
   {
     if(Instance)
     {
-      Destruct(*Instance);
+      Destruct(Instance);
       DeleteUndestructed(Instance);
     }
   }
 
-  /// Creates a new array of T's without constructing them.
-  T[] NewUnconstructedArray(T)(size_t Count)
+  /// Creates a new array of Type's without constructing them.
+  Type[] NewUnconstructedArray(Type)(size_t Count)
   {
     // TODO(Manu): Implement.
-    auto RawMemory = Memory.Allocate(Count * T.sizeof, T.alignof);
+    auto RawMemory = Memory.Allocate(Count * Type.sizeof, Type.alignof);
 
     // Out of memory?
     if(RawMemory is null) return null;
 
-    auto Array = cast(T[])RawMemory[0 .. Count * T.sizeof];
+    auto Array = cast(Type[])RawMemory[0 .. Count * Type.sizeof];
     return Array;
   }
 
@@ -119,7 +133,7 @@ struct ForwardAllocator(M)
   /// elements.
   /// Note: If the memory type used does not support deallocation
   ///       (e.g. StackMemory), this function does nothing.
-  void DeleteUndestructed(T)(T[] Array)
+  void DeleteUndestructed(Type)(Type[] Array)
   {
     static if(MemoryType.Features & SupportsDeallocation)
     {
@@ -127,11 +141,11 @@ struct ForwardAllocator(M)
     }
   }
 
-  /// Creates a new array of T's and construct each element of it with the
+  /// Creates a new array of Type's and construct each element of it with the
   /// given Args.
-  T[] NewArray(T, ArgTypes...)(size_t Count, auto ref ArgTypes Args)
+  Type[] NewArray(Type, ArgTypes...)(size_t Count, auto ref ArgTypes Args)
   {
-    auto Array = NewUnconstructedArray!T(Count);
+    auto Array = NewUnconstructedArray!Type(Count);
     Construct(Array, Args);
     return Array;
   }
@@ -140,7 +154,7 @@ struct ForwardAllocator(M)
   /// Note: If the memory type used does not support deallocation
   ///       (e.g. StackMemory), this function only destructs Instance,
   ///       but does not free memory.
-  void Delete(T)(T[] Array)
+  void Delete(Type)(Type[] Array)
   {
     Destruct(Array);
     DeleteUndestructed(Array);
@@ -681,11 +695,31 @@ unittest
   assert(Data.Integer == 1337);
 
   StackAllocator.Delete(Data);
-  assert(Data.Integer == 0xDeadBeef);
+  assert(Data.Boolean == true);
+  assert(Data.Integer == 42);
 
   Data = StackAllocator.NewUnconstructed!TestData();
   assert(Data.Integer == 0);
-  Construct(*Data);
+  Construct(Data);
   assert(Data.Boolean == true);
   assert(Data.Integer == 42);
+}
+
+// ForwardAllocator allocating class instances.
+unittest
+{
+  class SuperClass
+  {
+    int Data() { return 42; }
+  }
+
+  class SubClass : SuperClass
+  {
+    override int Data() { return 1337; }
+  }
+
+  ForwardAllocator!(StaticStackMemory!128) StackAllocator;
+  SuperClass Instance = StackAllocator.New!SubClass();
+  assert(Instance);
+  assert(Instance.Data == 1337);
 }

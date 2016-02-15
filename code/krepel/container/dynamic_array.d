@@ -52,7 +52,7 @@ struct DynamicArray(T, A = typeof(null))
     return Slice;
   }
 
-  auto Count() const { return Data.length; }
+  @property auto Count() const { return Data.length; }
 
   void Reserve(size_t NewCount)
   {
@@ -65,7 +65,7 @@ struct DynamicArray(T, A = typeof(null))
       const Count = this.Count;
       // TODO(Manu): Move data instead of copying?
       NewMemory[0 .. Count] = Data[];
-      Destruct(Data);
+      DestructArray(Data);
       Allocator.DeleteUndestructed(Capacity);
       Capacity = NewMemory;
       Data = Capacity[0 .. Count];
@@ -78,26 +78,35 @@ struct DynamicArray(T, A = typeof(null))
   }
 
   void PushBack(ArgTypes...)(auto ref ArgTypes Args)
+    if(ArgTypes.length)
   {
-    static assert(is(ArgTypes[0] : ElementType),
-                  "The input type " ~ ArgTypes[0].stringof ~
-                  " is not compatible to " ~ ElementType.stringof);
-
     const Offset = Data.ptr - Capacity.ptr;
-    auto NewCount = Data.length + ArgTypes.length;
+    const NewCount = Data.length + ArgTypes.length;
     auto InsertionIndex = Data.length;
-    Reserve(Data.length + ArgTypes.length);
+    Reserve(NewCount);
     Data = Capacity[Offset .. NewCount];
-    foreach(Arg; Args)
+    foreach(ref Arg; Args)
     {
+      static assert(Meta.IsConvertibleTo!(typeof(Arg), ElementType),
+                    "Invalid argument type " ~ typeof(Arg).stringof);
       Data[InsertionIndex] = Arg;
       ++InsertionIndex;
     }
   }
 
+  void PushBack(InputType : ElementType)(InputType[] Slice)
+  {
+    const Offset = Data.ptr - Capacity.ptr;
+    const OldCount = Data.length;
+    const NewCount = OldCount + Slice.length;
+    Reserve(NewCount);
+    Data = Capacity[Offset .. NewCount];
+    Data[OldCount .. NewCount] = Slice[];
+  }
+
   void PopBack(size_t Amount = 1)
   {
-    Destruct(Data[$-Amount .. $]);
+    DestructArray(Data[$-Amount .. $]);
     Data = Data[0 .. $ - Amount];
   }
 }
