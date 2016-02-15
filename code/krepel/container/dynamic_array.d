@@ -48,12 +48,6 @@ struct DynamicArray(T, A = typeof(null))
     return Data[Index];
   }
 
-  inout(ElementType)[] opIndex(T)(T[] Slice) inout
-    if(is(T : inout(ElementType)))
-  {
-    return Slice;
-  }
-
   @property auto Count() const { return Data.length; }
 
   void Reserve(size_t NewCount)
@@ -156,4 +150,21 @@ unittest
   assert(Arr[0] == 123);
   assert(Arr[1] == 42);
   assert(Arr[2] == 1337);
+}
+
+unittest
+{
+  alias AllocatorType = ForwardAllocator!(StaticStackMemory!1024);
+  alias ArrayType = DynamicArray!(int, AllocatorType);
+
+  AllocatorType Allocator;
+  auto Array = ArrayType(Allocator);
+  assert(Array.AllocatorPtr);
+
+  Array.PushBack(0, 1, 2, 3, 4);
+
+  auto Slice = Array[1 .. 3];
+  assert(Slice.length == 2);
+  assert(Slice[0] == 1);
+  assert(Slice[1] == 2);
 }
