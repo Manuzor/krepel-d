@@ -21,12 +21,14 @@ struct DynamicArray(T, A = typeof(null))
     AllocatorType* AllocatorPtr;
   }
 
-  ElementType[] Capacity;
+  ElementType[] AvailableMemory;
 
-  // Is always a subset of Capacity.
+  // Is always a subset of AvailableMemory.
   ElementType[] Data;
 
   @property auto ref Allocator() inout { return *AllocatorPtr; }
+
+  @property auto Capacity() const { return AvailableMemory.length; }
 
   this(ref AllocatorType Allocator)
   {
@@ -56,7 +58,7 @@ struct DynamicArray(T, A = typeof(null))
 
   void Reserve(size_t NewCount)
   {
-    if(Capacity.length >= NewCount) return;
+    if(Capacity >= NewCount) return;
 
     NewCount = Max(NewCount, MinimumElementAllocationCount);
     auto NewMemory = Allocator.NewUnconstructedArray!(ElementType)(NewCount);
@@ -66,9 +68,9 @@ struct DynamicArray(T, A = typeof(null))
       // TODO(Manu): Move data instead of copying?
       NewMemory[0 .. Count] = Data[];
       DestructArray(Data);
-      Allocator.DeleteUndestructed(Capacity);
-      Capacity = NewMemory;
-      Data = Capacity[0 .. Count];
+      Allocator.DeleteUndestructed(AvailableMemory);
+      AvailableMemory = NewMemory;
+      Data = AvailableMemory[0 .. Count];
     }
     else
     {
@@ -80,11 +82,11 @@ struct DynamicArray(T, A = typeof(null))
   void PushBack(ArgTypes...)(auto ref ArgTypes Args)
     if(ArgTypes.length)
   {
-    const Offset = Data.ptr - Capacity.ptr;
+    const Offset = Data.ptr - AvailableMemory.ptr;
     const NewCount = Data.length + ArgTypes.length;
     auto InsertionIndex = Data.length;
     Reserve(NewCount);
-    Data = Capacity[Offset .. NewCount];
+    Data = AvailableMemory[Offset .. NewCount];
     foreach(ref Arg; Args)
     {
       static assert(Meta.IsConvertibleTo!(typeof(Arg), ElementType),
@@ -96,11 +98,11 @@ struct DynamicArray(T, A = typeof(null))
 
   void PushBack(InputType : ElementType)(InputType[] Slice)
   {
-    const Offset = Data.ptr - Capacity.ptr;
+    const Offset = Data.ptr - AvailableMemory.ptr;
     const OldCount = Data.length;
     const NewCount = OldCount + Slice.length;
     Reserve(NewCount);
-    Data = Capacity[Offset .. NewCount];
+    Data = AvailableMemory[Offset .. NewCount];
     Data[OldCount .. NewCount] = Slice[];
   }
 
