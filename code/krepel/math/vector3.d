@@ -170,6 +170,11 @@ struct Vector3
     this.Data[1..3] = Vec.Data[];
   }
 
+  this(inout(float[]) Data)
+  {
+    this.Data[] = Data[];
+  }
+
   /// Normalizes the Vector (Vector will have a length of 1.0)
   void Normalize()
   {
@@ -366,6 +371,12 @@ struct Vector3
     assert(V3.X == 5);
     assert(V3.Y == 5);
     assert(V3.Z == 5);
+
+    float[3] a = [1,2,3];
+    V3 = Vector3(a);
+    assert(V3.X == 1);
+    assert(V3.Y == 2);
+    assert(V3.Z == 3);
   }
 
   // Addition test
