@@ -52,7 +52,6 @@ void Destruct(Type)(Type* Instance)
   {
     // TODO(Manu): Find out what the heck a xdtor is.
 
-    static if(Meta.HasMember!(Type, "__dtor"))  Instance.__dtor();
     static if(Meta.HasMember!(Type, "__xdtor")) Instance.__dtor();
     BlitInitialData(Instance[0 .. 1]);
   }
@@ -147,13 +146,16 @@ unittest
 }
 
 // Array of structs
+version(unittest) static int DestructionCount;
 unittest
 {
+  DestructionCount = 0;
+
   static struct TestData
   {
     int Value = 42;
 
-    ~this() { Value = 666; }
+    ~this() { DestructionCount++; }
   }
 
   ubyte[5 * TestData.sizeof] Buffer;
@@ -167,6 +169,8 @@ unittest
     assert(Element.Value == 42);
     Element.Value = 1337;
   }
+  assert(DestructionCount == 0);
   DestructArray(Array);
+  assert(DestructionCount == Array.length);
   foreach(ref Element; Array) assert(Element.Value == 42);
 }
