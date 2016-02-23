@@ -25,19 +25,14 @@ mixin template MemoryMixinTemplate(size_t InFeatures)
 }
 
 /// Adds the Contains function to a memory type so it can be asked whether a
-/// given memory region or pointer belongs to this memory.
+/// given memory region belongs to them.
 mixin template MemoryContainsCheckMixin(alias Member)
 {
   bool Contains(const MemoryRegion SomeRegion) const
   {
-    return SomeRegion.ptr >= Member.ptr &&
-           SomeRegion.ptr - Member.ptr + SomeRegion.length < Member.length;
-  }
-
-  bool Contains(const ubyte* SomePointer) const
-  {
-    return SomePointer >= Member.ptr &&
-           SomePointer < Member.ptr + Member.length;
+    bool IsWithinLeftBound  = SomeRegion.ptr >= Member.ptr;
+    bool IsWithinRightBound = SomeRegion.ptr + SomeRegion.length <= Member.ptr + Member.length;
+    return IsWithinLeftBound && IsWithinRightBound;
   }
 }
 
@@ -475,9 +470,9 @@ mixin template StackMemoryTemplate()
 
     if(Alignment == 0) Alignment = DefaultAlignment;
 
-    const MemoryPointer = &Memory[AllocationMark];
+    const MemoryPointer = Memory.ptr + AllocationMark;
     auto AlignedMemoryPointer = AlignedPointer(MemoryPointer, Alignment);
-    const Padding = AlignedMemoryPointer - &Memory[AllocationMark];
+    const Padding = AlignedMemoryPointer - MemoryPointer;
     const NewMark = AllocationMark + Padding + RequestedBytes;
 
     // Out of memory?
@@ -650,23 +645,30 @@ unittest
 // HybridMemory tests
 unittest
 {
-  ubyte[256] Buffer;
-  auto Heap1  = HeapMemory(Buffer[  0 .. 128]);
-  auto Heap2  = HeapMemory(Buffer[128 .. 256]);
-  auto Hybrid = HybridMemory!(HeapMemory*, HeapMemory*)(&Heap1, &Heap2);
+  ubyte[256] HeapBuffer;
+  auto Stack  = StaticStackMemory!32();
+  auto Heap   = HeapMemory(HeapBuffer[]);
+  auto Hybrid = HybridMemory!(typeof(Stack)*, typeof(Heap)*)(&Stack, &Heap);
 
-  auto Block1 = Hybrid.Allocate(16);
+  auto Block1 = Hybrid.Allocate(16, 1);
   assert(Block1);
   assert(Block1.length == 16);
-  assert(Heap1.Contains(Block1));
-  auto Block2 = Hybrid.Allocate(16);
+  assert(Stack.Contains(Block1));
+  auto Block2 = Hybrid.Allocate(16, 1);
   assert(Block2.length == 16);
-  assert(Heap1.Contains(Block1));
+  assert(Stack.Contains(Block2));
   auto Block3 = Hybrid.Allocate(16);
   assert(Block3.length == 16);
-  assert(Heap1.Contains(Block1));
+  assert(!Stack.Contains(Block3));
+  assert(Heap.Contains(Block3));
   auto Block4 = Hybrid.Allocate(16);
   assert(Block4);
+
+  // Note(Manu): Cannot deallocate Block1 and Block2 since it's a stack
+  // allocator.
+
+  assert(Hybrid.Deallocate(Block3));
+  assert(Hybrid.Deallocate(Block4));
 
   // TODO(Manu): Test reliably for the out-of-memory case somehow.
   //assert(Heap.Allocate(1) is null);
