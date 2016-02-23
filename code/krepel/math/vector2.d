@@ -283,6 +283,11 @@ struct Vector2
     }
   }
 
+  Vector2 opUnary(string Operator : "-")() inout
+  {
+    return typeof(return)(-X, -Y);
+  }
+
   __gshared immutable UnitX           = Vector2(1,0);
   __gshared immutable UnitY           = Vector2(0,1);
   __gshared immutable UnitScaleVector = Vector2(1,1);

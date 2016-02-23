@@ -383,6 +383,11 @@ struct Vector3
     }
   }
 
+  Vector3 opUnary(string Operator : "-")() const
+  {
+    return typeof(return)(-X, -Y, -Z);
+  }
+
   __gshared immutable ForwardVector   = Vector3(1,0,0);
   __gshared immutable RightVector     = Vector3(0,1,0);
   __gshared immutable UpVector        = Vector3(0,0,1);

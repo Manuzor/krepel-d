@@ -367,6 +367,11 @@ struct Vector4
     }
   }
 
+  Vector4 opUnary(string Operator : "-")() inout
+  {
+    return typeof(return)(-X, -Y, -Z, -W);
+  }
+
   __gshared immutable ForwardVector   = Vector4(1,0,0,0);
   __gshared immutable RightVector     = Vector4(0,1,0,0);
   __gshared immutable UpVector        = Vector4(0,0,1,0);
