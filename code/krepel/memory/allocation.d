@@ -695,10 +695,13 @@ unittest
   assert(Data.Integer == 1337);
 
   StackAllocator.Delete(Data);
-  assert(Data.Boolean == true);
-  assert(Data.Integer == 42);
+  assert(Data.Boolean == false);
+  assert(Data.Integer == 0xDeadBeef);
 
   Data = StackAllocator.NewUnconstructed!TestData();
+  // StackAllocator's memory is initialized to zero, so all the unconstructed
+  // data we get from it must also be 0.
+  assert(Data.Boolean == false);
   assert(Data.Integer == 0);
   Construct(Data);
   assert(Data.Boolean == true);

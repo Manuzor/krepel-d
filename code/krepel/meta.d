@@ -169,6 +169,18 @@ template ClassInstanceSizeOf(Type)
 
 enum bool IsPlainOldData(Type) = __traits(isPOD, Type);
 
+template HasDestructor(Type)
+{
+  static if(__traits(hasMember, Type, "__dtor"))
+  {
+    enum HasDestructor = true;
+  }
+  else
+  {
+    enum HasDestructor = false;
+  }
+}
+
 alias IsArray                = std.traits.isArray;
 alias IsIntegral             = std.traits.isIntegral;
 alias IsPointer              = std.traits.isPointer;

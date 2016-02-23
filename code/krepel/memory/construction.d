@@ -40,7 +40,7 @@ void Destruct(Type)(Type Instance)
   if(Instance)
   {
     static if(Meta.HasMember!("__dtor")) Instance.__dtor();
-    BlitInitialData((&Instance)[0 .. 1]);
+    //BlitInitialData((&Instance)[0 .. 1]);
   }
 }
 
@@ -51,9 +51,35 @@ void Destruct(Type)(Type* Instance)
   if(Instance)
   {
     // TODO(Manu): Find out what the heck a xdtor is.
+    //static if(Meta.HasMember!(Type, "__xdtor")) Instance.__dtor();
 
-    static if(Meta.HasMember!(Type, "__xdtor")) Instance.__dtor();
-    BlitInitialData(Instance[0 .. 1]);
+    static if(Meta.HasDestructor!Type)
+    {
+      // Call the destructor on the instance.
+      Instance.__dtor();
+
+      // Destruct all the members of Instance.
+      foreach(MemberName; __traits(allMembers, Type))
+      {
+        alias MemberType = typeof(mixin(`Instance.` ~ MemberName));
+        static if(Meta.HasDestructor!MemberType)
+        {
+          static if(is(MemberType == class))
+          {
+            Destruct(mixin(`Instance.` ~ MemberName));
+          }
+          else
+          {
+            Destruct(mixin(`&Instance.` ~ MemberName));
+          }
+        }
+      }
+    }
+
+    // TODO(Manu): Decide whether it's actually necessary to blit over the
+    // initial data. The thing should be *destructed* afterall, not
+    // reinitialized.
+    //BlitInitialData(Instance[0 .. 1]);
   }
 }
 
@@ -127,8 +153,8 @@ unittest
   assert(DataPtr.Precision == 3.1415f);
 
   Destruct(DataPtr);
-  assert(DataPtr.Value != 42);
-  assert(DataPtr.Precision != 3.1415f);
+  assert(DataPtr.Value == 42);
+  assert(DataPtr.Precision == 3.1415f);
 }
 
 // Single class object construction
@@ -172,5 +198,5 @@ unittest
   assert(DestructionCount == 0);
   DestructArray(Array);
   assert(DestructionCount == Array.length);
-  foreach(ref Element; Array) assert(Element.Value == 42);
+  foreach(ref Element; Array) assert(Element.Value == 1337);
 }
