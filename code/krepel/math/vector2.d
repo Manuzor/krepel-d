@@ -208,7 +208,7 @@ struct Vector2
 
   private static bool IsValidSwizzleChar(const char Char)
   {
-    return Char == 'X' || Char == 'Y' || Char == '0';
+    return Char == 'X' || Char == 'Y' || Char == '0' || Char == '1';
   }
 
   private static bool IsValidSwizzleString(string String)
