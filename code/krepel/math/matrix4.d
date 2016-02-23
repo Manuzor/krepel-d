@@ -1,6 +1,7 @@
 module krepel.math.matrix4;
 
 import krepel.math.vector3;
+import krepel.math.vector4;
 
 @nogc:
 @safe:
@@ -31,6 +32,27 @@ Matrix4 GetTransposed(Matrix4 Mat)
   Transposed.M[3][3] = Mat.M[3][3];
 
   return Transposed;
+}
+
+/// Homogenous transform of a 4 dimensional Vector
+/// @return Result = Vector*Mat
+Vector4 TransformVector(Matrix4 Mat, Vector4 Vector)
+{
+  Vector4 Result;
+
+  Result.Data[0] = Mat.M[0][0] * Vector.Data[0] + Mat.M[1][0] * Vector.Data[1] + Mat.M[2][0] * Vector.Data[2] + Mat.M[3][0] * Vector.Data[3];
+  Result.Data[1] = Mat.M[0][1] * Vector.Data[0] + Mat.M[1][1] * Vector.Data[1] + Mat.M[2][1] * Vector.Data[2] + Mat.M[3][1] * Vector.Data[3];
+  Result.Data[2] = Mat.M[0][2] * Vector.Data[0] + Mat.M[1][2] * Vector.Data[1] + Mat.M[2][2] * Vector.Data[2] + Mat.M[3][2] * Vector.Data[3];
+  Result.Data[3] = Mat.M[0][3] * Vector.Data[0] + Mat.M[1][3] * Vector.Data[1] + Mat.M[2][3] * Vector.Data[2] + Mat.M[3][3] * Vector.Data[3];
+
+  return Result;
+}
+
+/// Homogenous transform of a 3 dimensional Vector
+/// @return Result = Vector.XYZ1*Mat
+Vector3 TransformPosition(Matrix4 Mat, Vector3 Vector)
+{
+  return TransformVector(Mat, Vector.XYZ1).XYZ;
 }
 
 /// Returns transposed multiplication of the two matrices
@@ -95,6 +117,14 @@ align(16) struct Matrix4
   this(float[4][4] Data)
   {
     M[] = Data[];
+  }
+
+  this(Vector3 XAxis, Vector3 YAxis, Vector3 ZAxis, Vector3 Position = Vector3.ZeroVector)
+  {
+    M = [XAxis.XYZ0.Data,
+         YAxis.XYZ0.Data,
+         ZAxis.XYZ0.Data,
+         Position.XYZ1.Data];
   }
 
   Vector3 Translation() @property const
@@ -200,4 +230,60 @@ unittest
     [ 9,10,11,12],
     [13,14,15,16]]);
   assert(Mat.Translation == Vector3(13,14,15));
+}
+
+/// Axis creation
+unittest
+{
+  Matrix4 Mat = Matrix4(Vector3(1,0,0), Vector3(0,1,0), Vector3(0,0,1), Vector3(10,50,20));
+  Matrix4 Expected = Matrix4([
+    [1,0,0,0],
+    [0,1,0,0],
+    [0,0,1,0],
+    [10,50,20,1]]);
+    assert(Expected.M[0][0] == Mat.M[0][0]);
+    assert(Expected.M[0][1] == Mat.M[0][1]);
+    assert(Expected.M[0][2] == Mat.M[0][2]);
+    assert(Expected.M[0][3] == Mat.M[0][3]);
+
+    assert(Expected.M[1][0] == Mat.M[1][0]);
+    assert(Expected.M[1][1] == Mat.M[1][1]);
+    assert(Expected.M[1][2] == Mat.M[1][2]);
+    assert(Expected.M[1][3] == Mat.M[1][3]);
+
+    assert(Expected.M[2][0] == Mat.M[2][0]);
+    assert(Expected.M[2][1] == Mat.M[2][1]);
+    assert(Expected.M[2][2] == Mat.M[2][2]);
+    assert(Expected.M[2][3] == Mat.M[2][3]);
+
+    assert(Expected.M[3][0] == Mat.M[3][0]);
+    assert(Expected.M[3][1] == Mat.M[3][1]);
+    assert(Expected.M[3][2] == Mat.M[3][2]);
+    assert(Expected.M[3][3] == Mat.M[3][3]);
+}
+
+/// Transform Position
+unittest
+{
+  // Rotate 90 Degrees CCW around the Z Axis
+  Matrix4 Mat = Matrix4(-Vector3.RightVector, Vector3.ForwardVector, Vector3.UpVector, Vector3(0,0,0));
+  Vector3 Pos = Vector3(1,0,0);
+  Vector3 ExpectedPos = Vector3(0,-1,0);
+
+  Vector3 Transformed = Mat.TransformPosition(Pos);
+
+  assert(ExpectedPos.X == Transformed.X);
+  assert(ExpectedPos.Y == Transformed.Y);
+  assert(ExpectedPos.Z == Transformed.Z);
+
+  Mat = Matrix4(Vector3.ForwardVector, Vector3.RightVector, Vector3.UpVector, Vector3(10,20,50));
+  Pos = Vector3(1,0,0);
+  ExpectedPos = Vector3(11,20,50);
+
+  Transformed = Mat.TransformPosition(Pos);
+
+  assert(ExpectedPos.X == Transformed.X);
+  assert(ExpectedPos.Y == Transformed.Y);
+  assert(ExpectedPos.Z == Transformed.Z);
+
 }
