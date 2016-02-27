@@ -2,6 +2,7 @@ module krepel.math.matrix4;
 
 import krepel.math.vector3;
 import krepel.math.vector4;
+import krepel.math.math;
 
 @nogc:
 @safe:
@@ -32,6 +33,71 @@ Matrix4 GetTransposed(Matrix4 Mat)
   Transposed.M[3][3] = Mat.M[3][3];
 
   return Transposed;
+}
+
+/// Calculcates the Determinant of the 4x4 Matrix
+float GetDeterminant(Matrix4 Mat)
+{
+  /*
+  _         _
+  |a, b, c, d|
+  |e, f, g, h|
+  |i, j, k, l|
+  |m, n, o ,p|
+  _         _
+  */
+
+  /*
+          |f, g, h|
+  detA = a|j, k, l|
+          |n, o ,p|
+  */
+  float detA = Mat.M[0][0] * (
+    (Mat.M[1][1] * (Mat.M[2][2] * Mat.M[3][3] - Mat.M[2][3] * Mat.M[3][2])) -
+    (Mat.M[1][2] * (Mat.M[2][1] * Mat.M[3][3] - Mat.M[2][3] * Mat.M[3][1])) +
+    (Mat.M[1][3] * (Mat.M[2][1] * Mat.M[3][2] - Mat.M[2][2] * Mat.M[3][1]))
+  );
+
+  /*
+          |e, g, h|
+  detB = b|i, k, l|
+          |m, o ,p|
+  */
+  float detB = Mat.M[0][1] * (
+    (Mat.M[1][0] * (Mat.M[2][2] * Mat.M[3][3] - Mat.M[2][3] * Mat.M[3][2])) -
+    (Mat.M[1][2] * (Mat.M[2][0] * Mat.M[3][3] - Mat.M[2][3] * Mat.M[3][0])) +
+    (Mat.M[1][3] * (Mat.M[2][0] * Mat.M[3][2] - Mat.M[2][2] * Mat.M[3][0]))
+  );
+
+  /*
+          |e, f, h|
+  detC = c|i, j, l|
+          |m, n ,p|
+  */
+  float detC = Mat.M[0][2] * (
+    (Mat.M[1][0] * (Mat.M[2][1] * Mat.M[3][3] - Mat.M[2][3] * Mat.M[3][1])) -
+    (Mat.M[1][1] * (Mat.M[2][0] * Mat.M[3][3] - Mat.M[2][3] * Mat.M[3][0])) +
+    (Mat.M[1][3] * (Mat.M[2][0] * Mat.M[3][1] - Mat.M[2][1] * Mat.M[3][0]))
+  );
+
+  /*
+          |e, f, g|
+  detD = d|i, j, k|
+          |m, n ,o|
+  */
+  float detD = Mat.M[0][3] * (
+    (Mat.M[1][0] * (Mat.M[2][1] * Mat.M[3][2] - Mat.M[2][2] * Mat.M[3][1])) -
+    (Mat.M[1][1] * (Mat.M[2][0] * Mat.M[3][2] - Mat.M[2][2] * Mat.M[3][0])) +
+    (Mat.M[1][2] * (Mat.M[2][0] * Mat.M[3][1] - Mat.M[2][1] * Mat.M[3][0]))
+  );
+
+  return detA - detB + detC - detD;
+}
+
+/// Checks if the matrix can be inverted (if the Determinant is 1)
+bool IsInvertible(Matrix4 Mat)
+{
+  return NearlyEquals(Mat.GetDeterminant(),1);
 }
 
 /// Homogenous transform of a 4 dimensional Vector
@@ -286,4 +352,22 @@ unittest
   assert(ExpectedPos.Y == Transformed.Y);
   assert(ExpectedPos.Z == Transformed.Z);
 
+}
+/// Determinant
+unittest
+{
+  assert(Matrix4.Identity.GetDeterminant() == 1);
+  assert(Matrix4.Identity.IsInvertible());
+
+  Matrix4 Mat = Matrix4([
+    [ 1, 2, 3, 4],
+    [ 5, 6, 7, 8],
+    [ 9,10,11,12],
+    [13,14,15,16]]);
+
+  assert(Mat.GetDeterminant() == 0);
+
+  Mat = Matrix4(Vector3.ForwardVector, Vector3.RightVector, Vector3.UpVector, Vector3(10, 20, 50));
+  assert(Mat.GetDeterminant() == 1);
+  assert(Mat.IsInvertible());
 }
