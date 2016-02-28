@@ -295,16 +295,7 @@ Vector3 GetScaledAxis(Matrix4 Mat, EAxisType Type)
 
 Vector3 GetUnitAxis(Matrix4 Mat, EAxisType Type)
 {
-  final switch(Type)
-  {
-  case EAxisType.X:
-    return Vector3(Mat.M[0][0],Mat.M[0][1],Mat.M[0][2]).SafeNormalizedCopy();
-  case EAxisType.Y:
-    return Vector3(Mat.M[1][0],Mat.M[1][1],Mat.M[1][2]).SafeNormalizedCopy();
-  case EAxisType.Z:
-    return Vector3(Mat.M[2][0],Mat.M[2][1],Mat.M[2][2]).SafeNormalizedCopy();
-  }
-  assert(false, "No Valid Axis Value");
+  return GetScaledAxis(Mat, Type).SafeNormalizedCopy();
 }
 
 /// 4x4 Matrix accessed first by row, then by column
