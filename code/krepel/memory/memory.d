@@ -38,6 +38,23 @@ alias SetBit    = (const Bits, const Position) => Bits |  (1 << Position);
 alias RemoveBit = (const Bits, const Position) => Bits & ~(1 << Position);
 alias HasBit    = (const Bits, const Position) => cast(bool)(Bits &  (1 << Position));
 
+version(unittest)
+{
+  /// Utility function that returns a string
+  string SetupGlobalAllocatorForTesting(size_t N)()
+  {
+    if (__ctfe) return `
+      {
+        ubyte[` ~ N.stringof ~ `] _Buffer;
+        GlobalAllocator.Memory.Initialize(_Buffer);
+      }
+      scope(exit) GlobalAllocator.Memory.Deinitialize();
+    `;
+    assert(false, "This function is only supposed to be used in "
+                  "combination with a mixin() statement.");
+  }
+}
+
 //
 // Unit Tests
 //

@@ -125,9 +125,7 @@ template IsSomeDynamicArray(T)
 
 unittest
 {
-  ubyte[100 * int.sizeof] Buffer;
-  GlobalAllocator.Memory.Initialize(Buffer[]);
-  scope(exit) GlobalAllocator.Memory.Memory = null;
+  mixin(SetupGlobalAllocatorForTesting!(400));
 
   DynamicArray!int Arr;
   assert(Arr.Count == 0);

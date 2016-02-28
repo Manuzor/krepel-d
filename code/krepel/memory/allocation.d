@@ -255,6 +255,8 @@ struct HeapMemory
     FirstBlock.IsAllocated = false;
   }
 
+  void Deinitialize() { FirstBlock = null; }
+
   auto Allocate(size_t RequestedBytes, size_t Alignment = 0)
   {
     debug(HeapMemory)
@@ -273,8 +275,7 @@ struct HeapMemory
     debug(HeapMemory) const RequiredBlockSize = BlockOverhead + RequiredBytes + DeadBeefType.sizeof;
     else                   const RequiredBlockSize = BlockOverhead + RequiredBytes;
 
-    auto Block = cast(BlockData*)Memory.ptr;
-    Block = FindFreeBlockAndMergeAdjacent(Block, RequiredBlockSize);
+    auto Block = FindFreeBlockAndMergeAdjacent(FirstBlock, RequiredBlockSize);
 
     // No suitable block was found, so we are out of memory for this
     // allocation request.

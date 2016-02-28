@@ -1,5 +1,4 @@
 module krepel;
 
-public import Log = krepel.log;
-
+public import krepel.krepel;
 public import krepel.memory;
