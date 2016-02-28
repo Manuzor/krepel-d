@@ -62,10 +62,20 @@ float Length(Vector3 Vec)
 }
 
 /// Creates a copy of the Vector, which is Normalized in its length (has a length of 1.0)
-Vector3 NormalizedCopy(Vector3 Vec)
+/// May contain NaN if Vector is Nearly Zero
+Vector3 UnsafeNormalizedCopy(Vector3 Vec)
 {
   Vector3 Copy = Vec;
-  Copy.Normalize();
+  Copy.UnsafeNormalize();
+  return Copy;
+}
+
+/// Creates a copy of the Vector, which is Normalized in its length (has a length of 1.0)
+/// If the vector has no component which is bigger than Epsilon, the function returns a ZeroVector.
+Vector3 SafeNormalizedCopy(Vector3 Vec, float Epsilon = 1e-4f)
+{
+  Vector3 Copy = Vec;
+  Copy.SafeNormalize(Epsilon);
   return Copy;
 }
 
@@ -109,12 +119,19 @@ bool NearlyEquals(Vector3 A, Vector3 B, float Epsilon = 1e-4f)
          krepel.math.NearlyEquals(A.Z, B.Z, Epsilon);
 }
 
+bool IsNearlyZero(Vector3 Vec, float Epsilon = 1e-4f)
+{
+  return krepel.math.NearlyEquals(Vec.X, 0.0f, Epsilon) &&
+         krepel.math.NearlyEquals(Vec.Y, 0.0f, Epsilon) &&
+         krepel.math.NearlyEquals(Vec.Z, 0.0f, Epsilon);
+}
+
 /// Returns a clamped copy of the given Vector
 /// The retuned Vector will be of size <= MaxSize
 /// Input Vector will not be modified
 Vector3 ClampSize(Vector3 Vec, float MaxSize)
 {
-  Vector3 Normal = Vec.NormalizedCopy();
+  Vector3 Normal = Vec.SafeNormalizedCopy();
   return Normal * Min(Vec.Length(), MaxSize);
 }
 
@@ -125,7 +142,7 @@ Vector3 ClampSize2D(Vector3 Vec, float MaxSize)
 {
   Vector3 Clamped = Vec;
   Clamped.Z = 0;
-  Clamped.Normalize();
+  Clamped.SafeNormalize();
   Clamped *= Min(Vec.Length2D(), MaxSize);
   Clamped.Z = Vec.Z;
   return Clamped;
@@ -170,13 +187,34 @@ struct Vector3
     this.Data[1..3] = Vec.Data[];
   }
 
-  /// Normalizes the Vector (Vector will have a length of 1.0)
-  void Normalize()
+  this(in ref float[3] Data)
   {
-    // Don't return result to avoid confusion with NormalizedCopy
+    this.Data[] = Data[];
+  }
+
+  /// Normalizes the Vector (Vector will have a length of 1.0)
+  void UnsafeNormalize()
+  {
+    // Don't return result to avoid confusion with UnsafeNormalizedCopy
     // and stress that this operation modifies the Vector on which it is called
     float Length = this.Length();
     this /= Length;
+  }
+
+  /// Normalizes the Vector (Vector will have a length of 1.0)
+  void SafeNormalize(float Epsilon = 1e-4f)
+  {
+    if(!this.IsNearlyZero(Epsilon))
+    {
+      // Don't return result to avoid confusion with SafeNormalizedCopy
+      // and stress that this operation modifies the Vector on which it is called
+      float Length = this.Length();
+      this /= Length;
+    }
+    else
+    {
+      this.Data[] = Vector3.ZeroVector.Data[];
+    }
   }
 
   // Dot product
@@ -270,7 +308,7 @@ struct Vector3
 
   private static bool IsValidSwizzleChar(const char Char)
   {
-    return Char == 'X' || Char == 'Y' || Char == 'Z' || Char == '0';
+    return Char == 'X' || Char == 'Y' || Char == 'Z' || Char == '0' || Char == '1';
   }
 
   private static bool IsValidSwizzleString(string String)
@@ -345,6 +383,11 @@ struct Vector3
     }
   }
 
+  Vector3 opUnary(string Operator : "-")() const
+  {
+    return typeof(return)(-X, -Y, -Z);
+  }
+
   __gshared immutable ForwardVector   = Vector3(1,0,0);
   __gshared immutable RightVector     = Vector3(0,1,0);
   __gshared immutable UpVector        = Vector3(0,0,1);
@@ -366,6 +409,12 @@ struct Vector3
     assert(V3.X == 5);
     assert(V3.Y == 5);
     assert(V3.Z == 5);
+
+    immutable float[3] a = [1,2,3];
+    V3 = Vector3(a);
+    assert(V3.X == 1);
+    assert(V3.Y == 2);
+    assert(V3.Z == 3);
   }
 
   // Addition test
@@ -457,17 +506,49 @@ struct Vector3
     assert(Vec3 == Vector3.RightVector);
   }
 
-  /// Normalization
+  /// Safe Normalization
   unittest
   {
     Vector3 Vec = Vector3(1,1,1);
-    Vec.Normalize();
+    Vec.SafeNormalize();
     float Expected = 1.0f/Sqrt(3);
     assert(Vec == Vector3(Expected, Expected, Expected));
 
+    Vec = Vector3.ZeroVector;
+    Vec.SafeNormalize();
+    assert(Vec == Vector3.ZeroVector);
+
+    Vec = Vector3(1e-5f,0,0);
+    Vec.SafeNormalize();
+    assert(Vec == Vector3.ZeroVector);
+
     Vec = Vector3(1,1,1);
-    auto Normalized = Vec.NormalizedCopy();
-    auto NormalizedUFCS = NormalizedCopy(Vec);
+    auto Normalized = Vec.SafeNormalizedCopy();
+    auto NormalizedUFCS = SafeNormalizedCopy(Vec);
+    assert(Vec == Vector3(1,1,1));
+    assert(Normalized == Vector3(Expected, Expected, Expected));
+    assert(NormalizedUFCS == Vector3(Expected, Expected, Expected));
+  }
+
+  /// Unsafe Normalization
+  unittest
+  {
+    Vector3 Vec = Vector3(1,1,1);
+    Vec.UnsafeNormalize();
+    float Expected = 1.0f/Sqrt(3);
+    assert(Vec == Vector3(Expected, Expected, Expected));
+
+    Vec = Vector3.ZeroVector;
+    Vec.UnsafeNormalize();
+    assert(Vec.ContainsNaN);
+
+    Vec = Vector3(1e-5f,0,0);
+    Vec.UnsafeNormalize();
+    assert(Vec.ContainsNaN);
+
+    Vec = Vector3(1,1,1);
+    auto Normalized = Vec.UnsafeNormalizedCopy();
+    auto NormalizedUFCS = UnsafeNormalizedCopy(Vec);
     assert(Vec == Vector3(1,1,1));
     assert(Normalized == Vector3(Expected, Expected, Expected));
     assert(NormalizedUFCS == Vector3(Expected, Expected, Expected));

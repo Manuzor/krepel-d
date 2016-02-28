@@ -292,7 +292,7 @@ struct Vector4
 
   private static bool IsValidSwizzleChar(const char Char)
   {
-    return Char == 'X' || Char == 'Y' || Char == 'Z' || Char == 'W' || Char == '0';
+    return Char == 'X' || Char == 'Y' || Char == 'Z' || Char == 'W' || Char == '0' || Char == '1';
   }
 
   private static bool IsValidSwizzleString(string String)
@@ -365,6 +365,11 @@ struct Vector4
         SwizzleString[2] ~","~
         SwizzleString[3] ~")");
     }
+  }
+
+  Vector4 opUnary(string Operator : "-")() inout
+  {
+    return typeof(return)(-X, -Y, -Z, -W);
   }
 
   __gshared immutable ForwardVector   = Vector4(1,0,0,0);

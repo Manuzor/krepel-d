@@ -208,7 +208,7 @@ struct Vector2
 
   private static bool IsValidSwizzleChar(const char Char)
   {
-    return Char == 'X' || Char == 'Y' || Char == '0';
+    return Char == 'X' || Char == 'Y' || Char == '0' || Char == '1';
   }
 
   private static bool IsValidSwizzleString(string String)
@@ -281,6 +281,11 @@ struct Vector2
         SwizzleString[2] ~","~
         SwizzleString[3] ~")");
     }
+  }
+
+  Vector2 opUnary(string Operator : "-")() inout
+  {
+    return typeof(return)(-X, -Y);
   }
 
   __gshared immutable UnitX           = Vector2(1,0);
