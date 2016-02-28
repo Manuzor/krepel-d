@@ -209,7 +209,7 @@ Vector3 TransformPosition(Matrix4 Mat, Vector3 Vector)
 }
 
 /// Transforms a direction, not taking the translation part of the matrix into account
-/// @return Result = Vector.XYZ1*Mat
+/// @return Result = Vector.XYZ0*Mat
 Vector3 TransformVector(Matrix4 Mat, Vector3 Vector)
 {
   return TransformVector(Mat, Vector.XYZ0).XYZ;

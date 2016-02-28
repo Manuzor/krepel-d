@@ -206,7 +206,7 @@ struct Vector3
   {
     if(!this.IsNearlyZero(Epsilon))
     {
-      // Don't return result to avoid confusion with UnsafeNormalizedCopy
+      // Don't return result to avoid confusion with SafeNormalizedCopy
       // and stress that this operation modifies the Vector on which it is called
       float Length = this.Length();
       this /= Length;
