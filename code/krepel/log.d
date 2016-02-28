@@ -10,21 +10,22 @@ import core.sys.windows.windows;
 nothrow:
 @nogc:
 
-void Info(T, ArgTypes...)(Span!T Message, ArgTypes Args)
+void Info(T, ArgTypes...)(T[] Message, ArgTypes Args)
   if(Meta.IsSomeChar!T)
 {
-  char[1024] Buffer_ = void;
-  Span!char Buffer = MakeSpan(Buffer_);
+  // TODO(Manu): Use Args!
 
-  while(Message.Count)
+  char[1024] Buffer = void;
+
+  while(Message.length)
   {
-    auto Amount = Min(Buffer.Count - 1, Message.Count);
+    auto Amount = Min(Buffer.length - 1, Message.length);
 
     Buffer[Amount] = '\0';
     // Copy over the data.
-    Buffer[0 .. Amount].Assign = Message[0 .. Amount];
+    Buffer[0 .. Amount] = Message[0 .. Amount];
 
-    OutputDebugStringA(cast(const(char)*)Buffer.Data);
+    OutputDebugStringA(cast(const(char)*)Buffer.ptr);
 
     Message = Message[Amount .. $];
   }

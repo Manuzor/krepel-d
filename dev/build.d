@@ -324,7 +324,7 @@ void Win32Build(ref BuildContext Context, ref BuildRuleData BuildRule)
     case ConfigurationKind.Release:
     {
       Context.BuildArgs ~= "-release"; // Compile in release mode.
-      Context.BuildArgs ~= "-inline";  // Try inlining functions..
+      Context.BuildArgs ~= "-inline";  // Try inlining functions.
       Context.BuildArgs ~= "-O";       // Optimize.
     } break;
   }
@@ -438,10 +438,13 @@ void Win32Build(ref BuildContext Context, ref BuildRuleData BuildRule)
 
   foreach(Path; WindowsLibDirs)
   {
-    foreach(SubPath; Path.dirEntries(SpanMode.shallow).array.sort!"b.name < a.name")
+    if(Path.exists)
     {
-      LibPath ~= buildNormalizedPath(SubPath, "um", WindowsKitsLibSubfolder);
-      LibPath ~= buildNormalizedPath(SubPath, "ucrt", WindowsKitsLibSubfolder);
+      foreach(SubPath; Path.dirEntries(SpanMode.shallow).array.sort!"b.name < a.name")
+      {
+        LibPath ~= buildNormalizedPath(SubPath, "um", WindowsKitsLibSubfolder);
+        LibPath ~= buildNormalizedPath(SubPath, "ucrt", WindowsKitsLibSubfolder);
+      }
     }
   }
 
