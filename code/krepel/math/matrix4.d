@@ -291,7 +291,6 @@ Vector3 GetScaledAxis(Matrix4 Mat, EAxisType Type)
   case EAxisType.Z:
     return Vector3(Mat.M[2][0],Mat.M[2][1],Mat.M[2][2]);
   }
-  assert(false, "No Valid Axis Value");
 }
 
 Vector3 GetUnitAxis(Matrix4 Mat, EAxisType Type)
