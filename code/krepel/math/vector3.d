@@ -119,7 +119,7 @@ bool NearlyEquals(Vector3 A, Vector3 B, float Epsilon = 1e-4f)
          krepel.math.NearlyEquals(A.Z, B.Z, Epsilon);
 }
 
-bool IsNearlyZero(Vector3 Vec, float Epsilon)
+bool IsNearlyZero(Vector3 Vec, float Epsilon = 1e-4f)
 {
   return krepel.math.NearlyEquals(Vec.X, 0.0f, Epsilon) &&
          krepel.math.NearlyEquals(Vec.Y, 0.0f, Epsilon) &&
