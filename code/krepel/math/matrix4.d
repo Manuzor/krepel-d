@@ -332,6 +332,16 @@ align(16) struct Matrix4
     return MatrixMultiply(this, Mat);
   }
 
+  auto ref opIndex(int Index) inout
+  {
+    return M[Index];
+  }
+
+  auto ref opIndex(int Row, int Column) inout
+  {
+    return M[Row][Column];
+  }
+
   __gshared immutable Identity = Matrix4([
     [1, 0, 0, 0],
     [0, 1, 0, 0],
@@ -381,25 +391,7 @@ unittest
     [ 3, 7,11,15],
     [ 4, 8,12,16]]);
   Matrix4 Transposed = Original.GetTransposed();
-  assert(ExpectedTranspose.M[0][0] == Transposed.M[0][0]);
-  assert(ExpectedTranspose.M[0][1] == Transposed.M[0][1]);
-  assert(ExpectedTranspose.M[0][2] == Transposed.M[0][2]);
-  assert(ExpectedTranspose.M[0][3] == Transposed.M[0][3]);
-
-  assert(ExpectedTranspose.M[1][0] == Transposed.M[1][0]);
-  assert(ExpectedTranspose.M[1][1] == Transposed.M[1][1]);
-  assert(ExpectedTranspose.M[1][2] == Transposed.M[1][2]);
-  assert(ExpectedTranspose.M[1][3] == Transposed.M[1][3]);
-
-  assert(ExpectedTranspose.M[2][0] == Transposed.M[2][0]);
-  assert(ExpectedTranspose.M[2][1] == Transposed.M[2][1]);
-  assert(ExpectedTranspose.M[2][2] == Transposed.M[2][2]);
-  assert(ExpectedTranspose.M[2][3] == Transposed.M[2][3]);
-
-  assert(ExpectedTranspose.M[3][0] == Transposed.M[3][0]);
-  assert(ExpectedTranspose.M[3][1] == Transposed.M[3][1]);
-  assert(ExpectedTranspose.M[3][2] == Transposed.M[3][2]);
-  assert(ExpectedTranspose.M[3][3] == Transposed.M[3][3]);
+  assert(ExpectedTranspose == Transposed);
 }
 
 /// GetScaledAxis Value
@@ -571,4 +563,28 @@ unittest
   Matrix = Matrix4(Vector3.ForwardVector, Vector3.RightVector, Vector3.UpVector, Vector3(10, 20, 50));
   assert(Matrix.IsInvertible);
   assert(Matrix * Matrix.SafeInvert() == Matrix4.Identity);
+}
+
+// opIndex
+unittest
+{
+  Matrix4 Mat = Matrix4.Identity;
+
+  assert(Mat[0][0] == 1);
+  assert(Mat[0][1] == 0);
+  assert(Mat[0][2] == 0);
+  assert(Mat[0][3] == 0);
+
+  Mat[0][1] = 10;
+  assert(Mat[0][1] == 10);
+
+
+  assert(Mat[1, 0] == 0);
+  assert(Mat[1, 1] == 1);
+  assert(Mat[1, 2] == 0);
+  assert(Mat[1, 3] == 0);
+
+  Mat[1, 1] = 10;
+  assert(Mat[1, 1] == 10);
+
 }
