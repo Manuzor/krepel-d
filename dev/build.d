@@ -324,7 +324,7 @@ void Win32Build(ref BuildContext Context, ref BuildRuleData BuildRule)
     case ConfigurationKind.Release:
     {
       Context.BuildArgs ~= "-release"; // Compile in release mode.
-      Context.BuildArgs ~= "-inline";  // Try inlining functions..
+      Context.BuildArgs ~= "-inline";  // Try inlining functions.
       Context.BuildArgs ~= "-O";       // Optimize.
     } break;
   }

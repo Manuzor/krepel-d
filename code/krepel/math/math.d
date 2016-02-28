@@ -2,6 +2,7 @@ module krepel.math.math;
 
 import std.math;
 import krepel.algorithm.comparison;
+import Meta = krepel.meta;
 
 @safe:
 @nogc:
@@ -50,6 +51,33 @@ bool NearlyEquals(float A, float B, float Epsilon = 1.0e-4f)
   return Abs(A - B) < Max(Epsilon, (Epsilon * Max(Abs(A), Abs(B))));
 }
 
+/// Checks whether the given number is an odd number.
+/// Note: The given number must be an integral type.
+/// See_Also: IsEven
+bool IsOdd(NumberType)(NumberType Number)
+  if(Meta.IsIntegral!NumberType)
+{
+  // If the first bit is set, we have an odd number.
+  return Number & 1;
+}
+
+/// Checks whether the given number is an even number.
+/// Note: The given number must be an integral type.
+/// See_Also: IsOdd
+alias IsEven = (N) => !IsOdd(N);
+
+/// Checks whether the given number is a power of two.
+/// Note: The given number must be an integral type.
+bool IsPowerOfTwo(NumberType)(NumberType Number)
+  if(Meta.IsIntegral!NumberType)
+{
+  return (Number & (~Number + 1)) == Number;
+}
+
+//
+// Unit Tests
+//
+
 /// Nearly Equals
 unittest
 {
@@ -80,4 +108,35 @@ unittest
   float Correct = 1.0f;
   assert(IsNaN(F));
   assert(!IsNaN(Correct));
+}
+
+// IsOdd / IsEven
+unittest
+{
+  assert(!0.IsOdd);
+  assert( 1.IsOdd);
+  assert(!2.IsOdd);
+  assert( 3.IsOdd);
+
+  assert( 0.IsEven);
+  assert(!1.IsEven);
+  assert( 2.IsEven);
+  assert(!3.IsEven);
+}
+
+// IsPowerOfTwo
+unittest
+{
+  ulong[10] SomePOTs = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512];
+  ulong[27] NonPOTs = [3, 5, 6, 7, 9, 10, 11, 12, 13, 14, 15, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 33];
+
+  foreach(SomePOT; SomePOTs)
+  {
+    assert(SomePOT.IsPowerOfTwo);
+  }
+
+  foreach(NonPOT; NonPOTs)
+  {
+    assert(!NonPOT.IsPowerOfTwo);
+  }
 }
