@@ -282,15 +282,7 @@ enum EAxisType
 
 Vector3 GetScaledAxis(Matrix4 Mat, EAxisType Type)
 {
-  final switch(Type)
-  {
-  case EAxisType.X:
-    return Vector3(Mat.M[0][0],Mat.M[0][1],Mat.M[0][2]);
-  case EAxisType.Y:
-    return Vector3(Mat.M[1][0],Mat.M[1][1],Mat.M[1][2]);
-  case EAxisType.Z:
-    return Vector3(Mat.M[2][0],Mat.M[2][1],Mat.M[2][2]);
-  }
+  return Vector3(Mat.M[Type][0..3]);
 }
 
 Vector3 GetUnitAxis(Matrix4 Mat, EAxisType Type)
