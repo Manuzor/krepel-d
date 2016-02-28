@@ -187,7 +187,7 @@ struct Vector3
     this.Data[1..3] = Vec.Data[];
   }
 
-  this(inout(float[]) Data)
+  this(in ref float[3] Data)
   {
     this.Data[] = Data[];
   }
@@ -410,7 +410,7 @@ struct Vector3
     assert(V3.Y == 5);
     assert(V3.Z == 5);
 
-    float[3] a = [1,2,3];
+    immutable float[3] a = [1,2,3];
     V3 = Vector3(a);
     assert(V3.X == 1);
     assert(V3.Y == 2);
