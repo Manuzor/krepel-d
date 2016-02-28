@@ -1,10 +1,10 @@
-module krepel.container.dynamic_array;
+module krepel.container.array;
 
-import krepel.memory;
+import krepel;
 import krepel.algorithm : Max;
 import Meta = krepel.meta;
 
-struct DynamicArray(T, A = typeof(null))
+struct Array(T, A = typeof(null))
 {
   enum size_t MinimumElementAllocationCount = 16;
 
@@ -26,6 +26,7 @@ struct DynamicArray(T, A = typeof(null))
   // Is always a subset of AvailableMemory.
   ElementType[] Data;
 
+
   @property auto ref Allocator() inout { return *AllocatorPtr; }
 
   @property auto Capacity() const { return AvailableMemory.length; }
@@ -33,6 +34,17 @@ struct DynamicArray(T, A = typeof(null))
   this(ref AllocatorType Allocator)
   {
     AllocatorPtr = &Allocator;
+  }
+
+  ~this()
+  {
+    ClearMemory();
+  }
+
+  void ClearMemory()
+  {
+    DestructArray(Data);
+    Allocator.DeleteUndestructed(AvailableMemory);
   }
 
   inout(ElementType)[] opSlice(size_t LeftIndex, size_t RightIndex) inout
@@ -49,6 +61,7 @@ struct DynamicArray(T, A = typeof(null))
   }
 
   @property auto Count() const { return Data.length; }
+  @property bool IsEmpty() const { return Count == 0; }
 
   void Reserve(size_t NewCount)
   {
@@ -61,8 +74,7 @@ struct DynamicArray(T, A = typeof(null))
       const Count = this.Count;
       // TODO(Manu): Move data instead of copying?
       NewMemory[0 .. Count] = Data[];
-      DestructArray(Data);
-      Allocator.DeleteUndestructed(AvailableMemory);
+      ClearMemory();
       AvailableMemory = NewMemory;
       Data = AvailableMemory[0 .. Count];
     }
@@ -107,15 +119,15 @@ struct DynamicArray(T, A = typeof(null))
   }
 }
 
-template IsSomeDynamicArray(T)
+template IsSomeArray(T)
 {
-  static if(is(T == DynamicArray!(T.ElementType, T.AllocatorType)))
+  static if(is(T == Array!(T.ElementType, T.AllocatorType)))
   {
-    enum bool IsSomeDynamicArray = true;
+    enum bool IsSomeArray = true;
   }
   else
   {
-    enum bool IsSomeDynamicArray = false;
+    enum bool IsSomeArray = false;
   }
 }
 
@@ -127,7 +139,7 @@ unittest
 {
   mixin(SetupGlobalAllocatorForTesting!(400));
 
-  DynamicArray!int Arr;
+  Array!int Arr;
   assert(Arr.Count == 0);
   static assert(!__traits(compiles, Arr.PushBack()));
   Arr.PushBack(123);
@@ -153,7 +165,7 @@ unittest
 unittest
 {
   alias AllocatorType = ForwardAllocator!(StaticStackMemory!1024);
-  alias ArrayType = DynamicArray!(int, AllocatorType);
+  alias ArrayType = Array!(int, AllocatorType);
 
   AllocatorType Allocator;
   auto Array = ArrayType(Allocator);
