@@ -10,7 +10,7 @@ nothrow:
 
 Matrix4 GetTransposed(Matrix4 Mat)
 {
-  Matrix4 Transposed;
+  Matrix4 Transposed = void;
 
   Transposed.M[0][0] = Mat.M[0][0];
   Transposed.M[0][1] = Mat.M[1][0];
@@ -49,7 +49,7 @@ float GetDeterminant(Matrix4 Mat)
 
   /*
           |f, g, h|
-  detA = a|j, k, l|
+  DetA = a|j, k, l|
           |n, o ,p|
   */
   float DetA = Mat.M[0][0] * (
@@ -117,7 +117,7 @@ Matrix4 SafeInvert(Matrix4 Mat)
 /// No checks in release build.
 Matrix4 UnsafeInvert(Matrix4 Mat)
 {
-  Matrix4 Inverted;
+  Matrix4 Inverted = void;
   const float InvDet = 1/Mat.GetDeterminant();
 
   debug
@@ -181,7 +181,7 @@ Matrix4 UnsafeInvert(Matrix4 Mat)
   return Inverted;
 }
 
-/// Checks if the matrix can be inverted (if the Determinant is 1)
+/// Checks if the matrix can be inverted (if the Determinant is non zero)
 bool IsInvertible(Matrix4 Mat)
 {
   return !NearlyEquals(Mat.GetDeterminant(),0);
@@ -191,7 +191,7 @@ bool IsInvertible(Matrix4 Mat)
 /// @return Result = Vector*Mat
 Vector4 TransformVector(Matrix4 Mat, Vector4 Vector)
 {
-  Vector4 Result;
+  Vector4 Result = void;
 
   Result.Data[0] = Mat.M[0][0] * Vector.Data[0] + Mat.M[1][0] * Vector.Data[1] + Mat.M[2][0] * Vector.Data[2] + Mat.M[3][0] * Vector.Data[3];
   Result.Data[1] = Mat.M[0][1] * Vector.Data[0] + Mat.M[1][1] * Vector.Data[1] + Mat.M[2][1] * Vector.Data[2] + Mat.M[3][1] * Vector.Data[3];
@@ -219,7 +219,7 @@ Vector3 TransformVector(Matrix4 Mat, Vector3 Vector)
 /// @return Result = Vector*Mat^-1
 Vector4 InverseTransformVector(Matrix4 Mat, Vector4 Vector)
 {
-  Vector4 Result;
+  Vector4 Result = void;
 
   Matrix4 Inverted = Mat.SafeInvert();
 
@@ -248,7 +248,7 @@ Vector3 InverseTransformVector(Matrix4 Mat, Vector3 Vector)
 /// Returns transposed multiplication of the two matrices
 Matrix4 MatrixMultiply(const ref Matrix4 Mat1, const ref Matrix4 Mat2)
 {
-  Matrix4 Result;
+  Matrix4 Result = void;
 
   Result.M[0][0] = Mat1.M[0][0] * Mat2.M[0][0] + Mat1.M[0][1] * Mat2.M[1][0] + Mat1.M[0][2] * Mat2.M[2][0] + Mat1.M[0][3] * Mat2.M[3][0];
   Result.M[0][1] = Mat1.M[0][0] * Mat2.M[0][1] + Mat1.M[0][1] * Mat2.M[1][1] + Mat1.M[0][2] * Mat2.M[2][1] + Mat1.M[0][3] * Mat2.M[3][1];
