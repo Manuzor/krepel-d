@@ -40,18 +40,17 @@ alias HasBit    = (const Bits, const Position) => cast(bool)(Bits &  (1 << Posit
 
 version(unittest)
 {
-  /// Utility function that returns a string
-  string SetupGlobalAllocatorForTesting(size_t N)()
+  /// Usage: mixin(SetupGlobalAllocatorForTesting!1024);
+  template SetupGlobalAllocatorForTesting(size_t N)
   {
-    if (__ctfe) return `
+     import std.format;
+    enum SetupGlobalAllocatorForTesting = q{
       {
-        ubyte[` ~ N.stringof ~ `] _Buffer;
-        GlobalAllocator.Memory.Initialize(_Buffer);
+        ubyte[%s] _SetupGlobalAllocatorForTesting_Buffer;
+        GlobalAllocator.Memory.Initialize(_SetupGlobalAllocatorForTesting_Buffer);
       }
       scope(exit) GlobalAllocator.Memory.Deinitialize();
-    `;
-    assert(false, "This function is only supposed to be used in "
-                  "combination with a mixin() statement.");
+    }.format(N.stringof);
   }
 }
 
