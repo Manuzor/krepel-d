@@ -12,16 +12,19 @@ struct Map(K, V)
   @property auto Values() inout { return ValueArray[]; }
 
   auto ref opIndex(InKeyType)(auto ref InKeyType Index)
-    if(is(InKeyType : KeyType))
   {
+    static assert(is(typeof(KeyArray[0] == Index)), InvalidKeyMessage!(InKeyType));
+
     auto ArrayIndex = Keys.CountUntil(Index);
     assert(ArrayIndex >= 0);
     return ValueArray[ArrayIndex];
   }
 
   void opIndexAssign(InValueType, InKeyType)(auto ref InValueType Value, auto ref InKeyType Index)
-    if(is(InKeyType : KeyType) && is(InValueType : ValueType))
+    if(is(InValueType : ValueType))
   {
+    static assert(is(typeof(KeyArray[0] == Index)), InvalidKeyMessage!(InKeyType));
+
     auto ArrayIndex = Keys.CountUntil(Index);
     if(ArrayIndex < 0)
     {
@@ -37,6 +40,13 @@ struct Map(K, V)
 private:
   Array!KeyType KeyArray;
   Array!ValueType ValueArray;
+
+  enum InvalidKeyMessage(OtherKeyType) =
+    Format("The type `%s` cannot be used as key because it is "
+           "incomparable to `%s`. A proper definition of opEquals "
+           "is required for this to work.",
+           OtherKeyType.stringof,
+           KeyType.stringof);
 }
 
 //
@@ -65,4 +75,41 @@ unittest
   assert(IntMap[4] == 1338);
   assert(IntMap.Keys.length   == 3);
   assert(IntMap.Values.length == 3);
+}
+
+unittest
+{
+  mixin(SetupGlobalAllocatorForTesting!(1024));
+
+  static struct MyKey
+  {
+    string Name;
+
+    bool opEquals(in ref MyKey Other) const { return this.Name == Other.Name; }
+
+    bool opEquals(in string Value) const
+    {
+      return this.Name == Value;
+    }
+  }
+
+  static struct MyValue
+  {
+    string Data;
+    float SomethingElse;
+  }
+
+  Map!(MyKey, MyValue) TheMap;
+  TheMap[MyKey("this")] = MyValue("that", 3.1415f);
+
+  assert(TheMap[MyKey("this")].Data == "that");
+  assert(TheMap[MyKey("this")].SomethingElse == 3.1415f);
+
+  // With the proper opEquals implementation, the key to this map can be
+  // anything.
+  assert(TheMap["this"].Data == "that");
+
+  static struct InvalidKey {}
+
+  static assert(!__traits(compiles, TheMap[InvalidKey()].Data == "that"));
 }
