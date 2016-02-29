@@ -6,6 +6,9 @@ import Meta = krepel.meta;
 
 struct Array(T, A = typeof(null))
 {
+  @nogc:
+  nothrow:
+
   enum size_t MinimumElementAllocationCount = 16;
 
   alias ElementType = T;

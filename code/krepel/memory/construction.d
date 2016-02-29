@@ -7,6 +7,11 @@ private static import std.conv;
 
 // TODO(Manu): Get rid of phobos?
 
+// Enable these when we got rid of phobos.
+// @nogc:
+// nothrow:
+// pure:
+
 
 Type Construct(Type, ArgTypes...)(MemoryRegion RawMemory, auto ref ArgTypes Args)
   if(is(Type == class))

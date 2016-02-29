@@ -6,6 +6,9 @@ import core.sys.windows.windows;
 import krepel.memory;
 import krepel.math : IsPowerOfTwo;
 
+@nogc:
+nothrow:
+
 /// Dynamically allocates memory from standard system procedures.
 /// Params:
 ///   RequestedBytes = The number of bytes the resulting memory block should have.
