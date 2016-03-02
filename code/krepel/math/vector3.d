@@ -551,7 +551,7 @@ struct Vector3
     auto NormalizedUFCS = UnsafeNormalizedCopy(Vec);
     assert(Vec == Vector3(1,1,1));
     assert(Normalized == Vector3(Expected, Expected, Expected));
-    assert(NearlyEquals(NormalizedUFCS, Vector3(Expected, Expected, Expected)));
+    assert(NormalizedUFCS == Vector3(Expected, Expected, Expected));
   }
 
   /// Project Onto Normal
