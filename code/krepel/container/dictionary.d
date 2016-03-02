@@ -1,9 +1,9 @@
-module krepel.container.map;
+module krepel.container.dictionary;
 
 import krepel;
 import krepel.container.array;
 
-struct Map(K, V)
+struct Dictionary(K, V)
 {
   alias KeyType = K;
   alias ValueType = V;
@@ -98,21 +98,21 @@ unittest
 
   mixin(SetupGlobalAllocatorForTesting!(400));
 
-  Map!(int, int) IntMap;
+  Dictionary!(int, int) Dict;
 
-  IntMap[3] = 42;
-  IntMap[4] = 1337;
-  IntMap[9] = 99;
+  Dict[3] = 42;
+  Dict[4] = 1337;
+  Dict[9] = 99;
 
-  assert(IntMap.Keys.length == 3);
-  assert(IntMap.Values.length == 3);
-  assertThrown!AssertError(IntMap[0]);
-  assert(IntMap[4] == 1337);
+  assert(Dict.Keys.length == 3);
+  assert(Dict.Values.length == 3);
+  assertThrown!AssertError(Dict[0]);
+  assert(Dict[4] == 1337);
 
-  IntMap[4] = 1338;
-  assert(IntMap[4] == 1338);
-  assert(IntMap.Keys.length   == 3);
-  assert(IntMap.Values.length == 3);
+  Dict[4] = 1338;
+  assert(Dict[4] == 1338);
+  assert(Dict.Keys.length   == 3);
+  assert(Dict.Values.length == 3);
 
   void TestFunc(SomeRangeType)(auto ref SomeRangeType SomeRange)
   {
@@ -141,8 +141,8 @@ unittest
     }
   }
 
-  TestFunc(IntMap[]);
-  TestFunc((cast(const)IntMap)[]);
+  TestFunc(Dict[]);
+  TestFunc((cast(const)Dict)[]);
 }
 
 unittest
@@ -167,17 +167,17 @@ unittest
     float SomethingElse;
   }
 
-  Map!(MyKey, MyValue) TheMap;
-  TheMap[MyKey("this")] = MyValue("that", 3.1415f);
+  Dictionary!(MyKey, MyValue) Dict;
+  Dict[MyKey("this")] = MyValue("that", 3.1415f);
 
-  assert(TheMap[MyKey("this")].Data == "that");
-  assert(TheMap[MyKey("this")].SomethingElse == 3.1415f);
+  assert(Dict[MyKey("this")].Data == "that");
+  assert(Dict[MyKey("this")].SomethingElse == 3.1415f);
 
-  // With the proper opEquals implementation, the key to this map can be
-  // anything.
-  assert(TheMap["this"].Data == "that");
+  // With the proper opEquals implementation, the key to this dictionary can
+  // be anything.
+  assert(Dict["this"].Data == "that");
 
   static struct InvalidKey {}
 
-  static assert(!__traits(compiles, TheMap[InvalidKey()].Data == "that"));
+  static assert(!__traits(compiles, Dict[InvalidKey()].Data == "that"));
 }
