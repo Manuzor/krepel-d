@@ -83,8 +83,8 @@ bool ContainsNaN(Vector2 Vec)
 /// Input Vectors will not be modified
 bool NearlyEquals(Vector2 A, Vector2 B, float Epsilon = 1e-4f)
 {
-  return krepel.math.NearlyEquals(A.X, B.X, Epsilon) &&
-         krepel.math.NearlyEquals(A.Y, B.Y, Epsilon);
+  return krepel.math.math.NearlyEquals(A.X, B.X, Epsilon) &&
+         krepel.math.math.NearlyEquals(A.Y, B.Y, Epsilon);
 }
 
 /// Returns a clamped copy of the given Vector

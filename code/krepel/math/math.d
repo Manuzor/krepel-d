@@ -8,6 +8,8 @@ import Meta = krepel.meta;
 @nogc:
 nothrow:
 
+enum PI = 3.14159265359;
+
 /// Returns the square root of the given Value
 float Sqrt(float Value)
 {
@@ -22,23 +24,44 @@ float Abs(float Value)
   return std.math.abs(Value);
 }
 
+/// Calculates the sinus of the Value
+/// Params:
+/// Value = The angle in radians for which the sinus will be calulcated.
+float Sin(float Value)
+{
+  return std.math.sin(Value);
+}
+
+/// Calculates the arcus sinus
+/// Params:
+/// Value = The sinus value.
+/// Returns: the Angle in radians
+float ASin(float Value)
+{
+  return std.math.asin(Value);
+}
+
+/// Calculates the cosinus of the Value
+/// Params:
+/// Value = The angle in radians for which the cosinus will be calulcated.
+float Cos(float Value)
+{
+  return std.math.cos(Value);
+}
+
+/// Calculates the arcus cosinus
+/// Params:
+/// Value = The cosinus value.
+/// Returns: the Angle in radians
+float ACos(float Value)
+{
+  return std.math.acos(Value);
+}
+
 /// Checks if the given float Value is QNaN
 bool IsNaN(float Value)
 {
-  bool Result;
-  asm @nogc @safe nothrow
-  {
-    fld Value; // Load Value to float stack ST(0)
-    ftst; // Compare ST(0) with 0.0
-    fstsw AX; // Write FPU Status Register to AX (16 Bit)
-    and AX, 0x4500; // Filter interesting bits (C0 C2 C3)
-    cmp AX, 0x4500; // Check if C0 C2 and C3 are set
-    lahf; // Load result of cmp into AH
-    and AH, 0x41; // Filter intereseting bits (CF, ZF)
-    xor AH, 0x40; // Check if ZF is set and CF is zero.
-    mov Result, AH; // Write result into bool variable
-  }
-  return !Result;
+  return Value!=Value;
 }
 
 /// Checks if a and b are equals with respect to some epsilon

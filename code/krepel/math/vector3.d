@@ -114,16 +114,16 @@ bool ContainsNaN(Vector3 Vec)
 /// Input Vectors will not be modified
 bool NearlyEquals(Vector3 A, Vector3 B, float Epsilon = 1e-4f)
 {
-  return krepel.math.NearlyEquals(A.X, B.X, Epsilon) &&
-         krepel.math.NearlyEquals(A.Y, B.Y, Epsilon) &&
-         krepel.math.NearlyEquals(A.Z, B.Z, Epsilon);
+  return krepel.math.math.NearlyEquals(A.X, B.X, Epsilon) &&
+         krepel.math.math.NearlyEquals(A.Y, B.Y, Epsilon) &&
+         krepel.math.math.NearlyEquals(A.Z, B.Z, Epsilon);
 }
 
 bool IsNearlyZero(Vector3 Vec, float Epsilon = 1e-4f)
 {
-  return krepel.math.NearlyEquals(Vec.X, 0.0f, Epsilon) &&
-         krepel.math.NearlyEquals(Vec.Y, 0.0f, Epsilon) &&
-         krepel.math.NearlyEquals(Vec.Z, 0.0f, Epsilon);
+  return krepel.math.math.NearlyEquals(Vec.X, 0.0f, Epsilon) &&
+         krepel.math.math.NearlyEquals(Vec.Y, 0.0f, Epsilon) &&
+         krepel.math.math.NearlyEquals(Vec.Z, 0.0f, Epsilon);
 }
 
 /// Returns a clamped copy of the given Vector
@@ -234,7 +234,7 @@ struct Vector3
         "X" ~ Operator ~ "Rhs,"
         "Y" ~ Operator ~ "Rhs,"
         "Z" ~ Operator ~ "Rhs)");
-      Data = Result.Data;
+      Data[] = Result.Data[];
       return this;
     }
     else
@@ -394,7 +394,7 @@ struct Vector3
   __gshared immutable UnitScaleVector = Vector3(1,1,1);
   __gshared immutable ZeroVector      = Vector3(0,0,0);
 
-  // Initialization test
+  /// Initialization test
   unittest
   {
     Vector3 V3 = Vector3(1,2,3);
@@ -417,7 +417,7 @@ struct Vector3
     assert(V3.Z == 3);
   }
 
-  // Addition test
+  /// Addition test
   unittest
   {
     Vector3 V1 = Vector3(1,2,3);
@@ -428,7 +428,7 @@ struct Vector3
     assert(V3.Z == 15);
   }
 
-  // Subtraction test
+  /// Subtraction test
   unittest
   {
     Vector3 V1 = Vector3(1,2,3);
@@ -439,7 +439,7 @@ struct Vector3
     assert(V3.Z == -9);
   }
 
-  // Float multiplication test
+  /// Float multiplication test
   unittest
   {
     Vector3 V1 = Vector3(1,2,3) * 5;
@@ -453,7 +453,7 @@ struct Vector3
     assert(V2 == Vector3(5,10,15));
   }
 
-  // Float division test
+  /// Float division test
   unittest
   {
     Vector3 V1 = Vector3(5,10,15) / 5;
@@ -542,7 +542,7 @@ struct Vector3
     Vec.UnsafeNormalize();
     assert(Vec.ContainsNaN);
 
-    Vec = Vector3(1e-5f,0,0);
+    Vec = Vector3(1e-25f,0,0);
     Vec.UnsafeNormalize();
     assert(Vec.ContainsNaN);
 
