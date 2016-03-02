@@ -11,11 +11,16 @@ private static import std.algorithm;
 private static import std.format;
 private static import std.range;
 
+
 alias Find = std.algorithm.find;
 
 alias StartsWith = std.algorithm.startsWith;
-
 alias CountUntil = std.algorithm.countUntil;
+
+void CopyFrom(DestinationType, SourceType)(auto ref DestinationType Destination, auto ref SourceType Source)
+{
+  std.algorithm.copy(Source, Destination);
+}
 
 alias Zip = std.range.zip;
 alias Put = std.range.put;

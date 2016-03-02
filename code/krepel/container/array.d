@@ -154,8 +154,7 @@ struct Array(T, A = typeof(null))
     auto Hole = Data[Index .. EndIndex];
     DestructArray(Hole);
 
-    import std.algorithm : copy;
-    copy(Data[EndIndex .. $], Data[Index .. $ - CountToRemove]);
+    Data[Index .. $ - CountToRemove].CopyFrom(Data[EndIndex .. $]);
     Data = Data[0 .. $ - CountToRemove];
   }
 
