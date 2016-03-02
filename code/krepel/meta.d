@@ -193,6 +193,9 @@ alias IsForwardRange       = std.range.isForwardRange;
 alias IsBidirectionalRange = std.range.isBidirectionalRange;
 alias IsRandomAccessRange  = std.range.isRandomAccessRange;
 
+/// Get the inner type of a Range
+alias ElementType = std.range.ElementType;
+
 /// Example:
 /// struct A
 /// {

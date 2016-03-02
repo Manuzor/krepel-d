@@ -11,42 +11,16 @@ struct Map(K, V)
   @property auto Keys() inout { return KeyArray[]; }
   @property auto Values() inout { return ValueArray[]; }
 
-  /// Return: RandomAccessRange containing all key-value-pairs of this map.
-  // TODO(Manu): Const-correctness.
+  // TODO(Manu): Collapse with the other overload and make it `inout` once the
+  // compiler allows this.
   auto opIndex()
   {
-    import std.range : empty, popFront, popBack, front, back;
+    return Zip(Keys, Values);
+  }
 
-    // Range that iterates all key-value pairs of this map.
-    static struct KeyValueIterator
-    {
-      static struct KeyValuePair
-      {
-        KeyType* KeyPtr;
-        ValueType* ValuePtr;
-
-        @property ref auto Key() { return *KeyPtr; }
-        @property ref auto Value() { return *ValuePtr; }
-      }
-
-      KeyType[] TheKeys;
-      ValueType[] TheValues;
-
-      // InputRange interface
-      @property bool empty() const { return TheKeys.length == 0; }
-      ref auto front() { return this[0]; }
-      void popFront() { TheKeys.popFront(); TheValues.popFront(); }
-      // ForwardRange interface
-      auto save() { return this; }
-      // BidirectionalRange interface
-      ref auto back() { return this[length-1]; }
-      void popBack() { TheKeys.popBack(); TheValues.popBack(); }
-      // RandomAccessRange interface
-      KeyValuePair opIndex(IndexType)(IndexType Index) { return KeyValuePair(&TheKeys[0], &TheValues[0]); }
-      auto length() const { return TheKeys.length; }
-    }
-
-    return KeyValueIterator(Keys, Values);
+  auto opIndex() const
+  {
+    return Zip(Keys, Values);
   }
 
   auto ref opIndex(InKeyType)(auto ref InKeyType Index)
@@ -114,18 +88,35 @@ unittest
   assert(IntMap.Keys.length   == 3);
   assert(IntMap.Values.length == 3);
 
-  static assert(Meta.IsRandomAccessRange!(typeof(IntMap[])));
-
-  foreach(Pair; IntMap[])
+  void TestFunc(SomeRangeType)(auto ref SomeRangeType SomeRange)
   {
-    // Note(Manu): The order in which we iterate is not defined, that's why we
-    // have to test more liberally here.
+    static assert(Meta.IsRandomAccessRange!SomeRangeType);
 
-    bool First  = Pair.Key == 3 && Pair.Value == 42;
-    bool Second = Pair.Key == 4 && Pair.Value == 1338;
-    bool Third  = Pair.Key == 9 && Pair.Value == 99;
-    assert(First || Second || Third);
+    foreach(Key, Value; SomeRange)
+    {
+      // Note(Manu): The order in which we iterate is not defined, that's why
+      // we have to test more liberally with the tests here.
+
+      bool First  = Key == 3 && Value == 42;
+      bool Second = Key == 4 && Value == 1338;
+      bool Third  = Key == 9 && Value == 99;
+      assert(First || Second || Third);
+    }
+
+    foreach(Pair; SomeRange)
+    {
+      // Note(Manu): The order in which we iterate is not defined, that's why
+      // we have to test more liberally with the tests here.
+
+      bool First  = Pair[0] == 3 && Pair[1] == 42;
+      bool Second = Pair[0] == 4 && Pair[1] == 1338;
+      bool Third  = Pair[0] == 9 && Pair[1] == 99;
+      assert(First || Second || Third);
+    }
   }
+
+  TestFunc(IntMap[]);
+  TestFunc((cast(const)IntMap)[]);
 }
 
 unittest
