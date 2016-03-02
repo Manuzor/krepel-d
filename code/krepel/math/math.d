@@ -8,6 +8,8 @@ import Meta = krepel.meta;
 @nogc:
 nothrow:
 
+enum PI = 3.14159265359;
+
 /// Returns the square root of the given Value
 float Sqrt(float Value)
 {
