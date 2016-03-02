@@ -146,6 +146,7 @@ bool NearlyEquals(Quaternion Quat1, Quaternion Quat2, float Epsilon = 1e-4f)
     krepel.math.math.NearlyEquals(Quat1.W, Quat2.W, Epsilon);
 }
 
+/// Checks if any of the components of the quaternion is QNaN
 bool ContainsNaN(Quaternion Quat)
 {
   return
@@ -186,7 +187,9 @@ struct Quaternion
   }
 
   /// Creates a rotation around the given Axis with the given Angle
-  // @param Axis The Vector which we rotate around, needs NOT be normalized
+  /// Params:
+  /// Axis = The Vector which we rotate around, needs NOT be normalized
+  /// Angle = The amount of rotation in radians
   this(Vector3 Axis, float Angle)
   {
     Axis.SafeNormalize();

@@ -394,7 +394,7 @@ struct Vector3
   __gshared immutable UnitScaleVector = Vector3(1,1,1);
   __gshared immutable ZeroVector      = Vector3(0,0,0);
 
-  // Initialization test
+  /// Initialization test
   unittest
   {
     Vector3 V3 = Vector3(1,2,3);
@@ -417,7 +417,7 @@ struct Vector3
     assert(V3.Z == 3);
   }
 
-  // Addition test
+  /// Addition test
   unittest
   {
     Vector3 V1 = Vector3(1,2,3);
@@ -428,7 +428,7 @@ struct Vector3
     assert(V3.Z == 15);
   }
 
-  // Subtraction test
+  /// Subtraction test
   unittest
   {
     Vector3 V1 = Vector3(1,2,3);
@@ -439,7 +439,7 @@ struct Vector3
     assert(V3.Z == -9);
   }
 
-  // Float multiplication test
+  /// Float multiplication test
   unittest
   {
     Vector3 V1 = Vector3(1,2,3) * 5;
@@ -453,7 +453,7 @@ struct Vector3
     assert(V2 == Vector3(5,10,15));
   }
 
-  // Float division test
+  /// Float division test
   unittest
   {
     Vector3 V1 = Vector3(5,10,15) / 5;

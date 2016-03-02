@@ -25,30 +25,34 @@ float Abs(float Value)
 }
 
 /// Calculates the sinus of the Value
-// @param Value The angle in radians for which the sinus will be calulcated.
+/// Params:
+/// Value = The angle in radians for which the sinus will be calulcated.
 float Sin(float Value)
 {
   return std.math.sin(Value);
 }
 
 /// Calculates the arcus sinus
-// @param Value The sinus value.
-// @return the Angle in radians
+/// Params:
+/// Value = The sinus value.
+/// Returns: the Angle in radians
 float ASin(float Value)
 {
   return std.math.asin(Value);
 }
 
 /// Calculates the cosinus of the Value
-// @param Value The angle in radians for which the cosinus will be calulcated.
+/// Params:
+/// Value = The angle in radians for which the cosinus will be calulcated.
 float Cos(float Value)
 {
   return std.math.cos(Value);
 }
 
 /// Calculates the arcus cosinus
-// @param Value The cosinus value.
-// @return the Angle in radians
+/// Params:
+/// Value = The cosinus value.
+/// Returns: the Angle in radians
 float ACos(float Value)
 {
   return std.math.acos(Value);
