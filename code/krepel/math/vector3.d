@@ -114,16 +114,16 @@ bool ContainsNaN(Vector3 Vec)
 /// Input Vectors will not be modified
 bool NearlyEquals(Vector3 A, Vector3 B, float Epsilon = 1e-4f)
 {
-  return krepel.math.NearlyEquals(A.X, B.X, Epsilon) &&
-         krepel.math.NearlyEquals(A.Y, B.Y, Epsilon) &&
-         krepel.math.NearlyEquals(A.Z, B.Z, Epsilon);
+  return krepel.math.math.NearlyEquals(A.X, B.X, Epsilon) &&
+         krepel.math.math.NearlyEquals(A.Y, B.Y, Epsilon) &&
+         krepel.math.math.NearlyEquals(A.Z, B.Z, Epsilon);
 }
 
 bool IsNearlyZero(Vector3 Vec, float Epsilon = 1e-4f)
 {
-  return krepel.math.NearlyEquals(Vec.X, 0.0f, Epsilon) &&
-         krepel.math.NearlyEquals(Vec.Y, 0.0f, Epsilon) &&
-         krepel.math.NearlyEquals(Vec.Z, 0.0f, Epsilon);
+  return krepel.math.math.NearlyEquals(Vec.X, 0.0f, Epsilon) &&
+         krepel.math.math.NearlyEquals(Vec.Y, 0.0f, Epsilon) &&
+         krepel.math.math.NearlyEquals(Vec.Z, 0.0f, Epsilon);
 }
 
 /// Returns a clamped copy of the given Vector
@@ -234,7 +234,7 @@ struct Vector3
         "X" ~ Operator ~ "Rhs,"
         "Y" ~ Operator ~ "Rhs,"
         "Z" ~ Operator ~ "Rhs)");
-      Data = Result.Data;
+      Data[] = Result.Data[];
       return this;
     }
     else
@@ -542,7 +542,7 @@ struct Vector3
     Vec.UnsafeNormalize();
     assert(Vec.ContainsNaN);
 
-    Vec = Vector3(1e-5f,0,0);
+    Vec = Vector3(1e-25f,0,0);
     Vec.UnsafeNormalize();
     assert(Vec.ContainsNaN);
 
@@ -551,7 +551,7 @@ struct Vector3
     auto NormalizedUFCS = UnsafeNormalizedCopy(Vec);
     assert(Vec == Vector3(1,1,1));
     assert(Normalized == Vector3(Expected, Expected, Expected));
-    assert(NormalizedUFCS == Vector3(Expected, Expected, Expected));
+    assert(NearlyEquals(NormalizedUFCS, Vector3(Expected, Expected, Expected)));
   }
 
   /// Project Onto Normal
