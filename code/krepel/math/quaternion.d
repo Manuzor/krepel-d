@@ -1,6 +1,7 @@
 module krepel.math.quaternion;
 
 import krepel.math.vector3;
+import krepel.math.vector4;
 import krepel.math.math;
 import krepel.math.matrix4;
 
@@ -67,6 +68,45 @@ Matrix4 ToRotationMatrix(Quaternion Quat)
     [XZ + YW, YZ - XW, WW - XX - YY + ZZ, 0.0f],
     [0.0f, 0.0f, 0.0f, 1.0f]
   ]);
+}
+
+Vector3 TransformVector(Quaternion Quat, Vector3 Direction)
+{
+  float XX = Quat.X * Quat.X;
+  float YY = Quat.Y * Quat.Y;
+  float ZZ = Quat.Z * Quat.Z;
+  float WW = Quat.W * Quat.W;
+  float XY = 2 * Quat.X * Quat.Y;
+  float XZ = 2 * Quat.X * Quat.Z;
+  float XW = 2 * Quat.X * Quat.W;
+  float YZ = 2 * Quat.Y * Quat.Z;
+  float YW = 2 * Quat.Y * Quat.W;
+  float ZW = 2 * Quat.Z * Quat.W;
+
+  return Vector3(
+    (WW + XX - YY - ZZ) * Direction.X + (XY - ZW) * Direction.Y + (XZ + YW) * Direction.Z,
+    (XY + ZW) * Direction.X + (WW - XX + YY - ZZ) * Direction.Y + (YZ - XW) * Direction.Z,
+    (XZ - YW) * Direction.X + (YZ + XW) * Direction.Y + (WW - XX - YY + ZZ) * Direction.Z);
+}
+
+Vector4 TransformVector(Quaternion Quat, Vector4 Direction)
+{
+  float XX = Quat.X * Quat.X;
+  float YY = Quat.Y * Quat.Y;
+  float ZZ = Quat.Z * Quat.Z;
+  float WW = Quat.W * Quat.W;
+  float XY = 2 * Quat.X * Quat.Y;
+  float XZ = 2 * Quat.X * Quat.Z;
+  float XW = 2 * Quat.X * Quat.W;
+  float YZ = 2 * Quat.Y * Quat.Z;
+  float YW = 2 * Quat.Y * Quat.W;
+  float ZW = 2 * Quat.Z * Quat.W;
+
+  return Vector4(
+    (WW + XX - YY - ZZ) * Direction.X + (XY - ZW) * Direction.Y + (XZ + YW) * Direction.Z,
+    (XY + ZW) * Direction.X + (WW - XX + YY - ZZ) * Direction.Y + (YZ - XW) * Direction.Z,
+    (XZ - YW) * Direction.X + (YZ + XW) * Direction.Y + (WW - XX - YY + ZZ) * Direction.Z,
+    Direction.W);
 }
 
 Quaternion SafeNormalizedCopy(Quaternion Quat, float Epsilon = 1e-4f)
@@ -236,7 +276,7 @@ unittest
 unittest
 {
   Quaternion RotateCCW = Quaternion(Vector3.UpVector, -PI/2);
-  Vector3 Result = RotateCCW.ToRotationMatrix().TransformVector(Vector3(1,0,0));
+  Vector3 Result = krepel.math.matrix4.TransformVector(RotateCCW.ToRotationMatrix(),Vector3(1,0,0));
 
   assert(krepel.math.vector3.NearlyEquals(Result,Vector3(0,-1,0)));
 }
@@ -247,9 +287,11 @@ unittest
   Quaternion RotateCCW = Quaternion(Vector3.UpVector, -PI/2);
 
   RotateCCW *= RotateCCW;
-  Vector3 Result = RotateCCW.ToRotationMatrix().TransformVector(Vector3(1,0,0));
+  Vector3 Result = krepel.math.matrix4.TransformVector(RotateCCW.ToRotationMatrix(),Vector3(1,0,0));
+  Vector3 Result2 = RotateCCW.TransformVector(Vector3(1,0,0));
 
   assert(krepel.math.vector3.NearlyEquals(Result,Vector3(-1,0,0)));
+  assert(krepel.math.vector3.NearlyEquals(Result,Result2));
 }
 
 /// Axis angle Creation and Getters
