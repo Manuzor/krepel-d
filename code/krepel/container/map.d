@@ -23,30 +23,50 @@ struct Map(K, V)
     return Zip(Keys, Values);
   }
 
-  auto ref opIndex(InKeyType)(auto ref InKeyType Index)
+  auto ref opIndex(InKeyType)(auto ref InKeyType Key)
   {
-    static assert(is(typeof(KeyArray[0] == Index)), InvalidKeyMessage!(InKeyType));
+    static assert(is(typeof(KeyArray[0] == Key)), InvalidKeyMessage!(InKeyType));
 
-    auto ArrayIndex = Keys.CountUntil(Index);
-    assert(ArrayIndex >= 0);
-    return ValueArray[ArrayIndex];
+    auto Index = Keys.CountUntil(Key);
+    assert(Index >= 0);
+    return ValueArray[Index];
   }
 
-  void opIndexAssign(InValueType, InKeyType)(auto ref InValueType Value, auto ref InKeyType Index)
+  void opIndexAssign(InValueType, InKeyType)(auto ref InValueType Value, auto ref InKeyType Key)
     if(is(InValueType : ValueType))
   {
-    static assert(is(typeof(KeyArray[0] == Index)), InvalidKeyMessage!(InKeyType));
+    static assert(is(typeof(KeyArray[0] == Key)), InvalidKeyMessage!(InKeyType));
 
-    auto ArrayIndex = Keys.CountUntil(Index);
-    if(ArrayIndex < 0)
+    auto Index = Keys.CountUntil(Key);
+    if(Index < 0)
     {
-      KeyArray.PushBack(Index);
+      KeyArray.PushBack(Key);
       ValueArray.PushBack(Value);
     }
     else
     {
-      ValueArray[ArrayIndex] = Value;
+      ValueArray[Index] = Value;
     }
+  }
+
+  bool Contains(InKeyType)(auto ref InKeyType Key) const
+  {
+    return Keys.CountUntil(Key) >= 0;
+  }
+
+  void Remove(InKeyType)(auto ref InKeyType Key)
+  {
+    auto Index = Keys.CountUntil(Key);
+    assert(Index >= 0, "The given Key does not exist. Consider using TryRemove instead.");
+    RemoveAt(Index);
+  }
+
+  bool TryRemove(InKeyType)(auto ref InKeyType Key)
+  {
+    auto Index = Keys.CountUntil(Key);
+    if(Index < 0) return false;
+    RemoveAt(Index);
+    return true;
   }
 
 private:
@@ -59,6 +79,12 @@ private:
            "is required for this to work.",
            OtherKeyType.stringof,
            KeyType.stringof);
+
+  void RemoveAt(IndexType)(IndexType Index)
+  {
+    KeyArray.RemoveAtSwap(Index);
+    ValueArray.RemoveAtSwap(Index);
+  }
 }
 
 //
