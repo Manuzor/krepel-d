@@ -38,6 +38,16 @@ Quaternion ComponentWiseSubtraction(Quaternion Quat1, Quaternion Quat2)
   );
 }
 
+float LengthSquared(Quaternion Quat)
+{
+  return Quat.X * Quat.X + Quat.Y * Quat.Y + Quat.Z * Quat.Z + Quat.W * Quat.W;
+}
+
+float Length(Quaternion Quat)
+{
+  return Sqrt(LengthSquared(Quat));
+}
+
 Matrix4 ToRotationMatrix(Quaternion Quat)
 {
   float XX = Quat.X * Quat.X;
@@ -59,6 +69,23 @@ Matrix4 ToRotationMatrix(Quaternion Quat)
   ]);
 }
 
+Quaternion SafeNormalizedCopy(Quaternion Quat, float Epsilon = 1e-4f)
+{
+  Quat.SafeNormalize(Epsilon);
+  return Quat;
+}
+
+Quaternion UnsafeNormalizedCopy(Quaternion Quat)
+{
+  Quat.UnsafeNormalize();
+  return Quat;
+}
+
+bool IsNormalized(Quaternion Quat)
+{
+  return krepel.math.math.NearlyEquals(LengthSquared(Quat),1);
+}
+
 float GetAngle(Quaternion Quat)
 {
   return ACos(Quat.W) * 2;
@@ -68,6 +95,24 @@ Vector3 GetAxis(Quaternion Quat)
 {
   float Scale = Sin(GetAngle(Quat) * 0.5f);
   return Vector3(Quat.Data[0..3]) / Scale;
+}
+
+bool NearlyEquals(Quaternion Quat1, Quaternion Quat2, float Epsilon = 1e-4f)
+{
+  return
+    krepel.math.math.NearlyEquals(Quat1.X, Quat2.X, Epsilon) &&
+    krepel.math.math.NearlyEquals(Quat1.Y, Quat2.Y, Epsilon) &&
+    krepel.math.math.NearlyEquals(Quat1.Z, Quat2.Z, Epsilon) &&
+    krepel.math.math.NearlyEquals(Quat1.W, Quat2.W, Epsilon);
+}
+
+bool ContainsNaN(Quaternion Quat)
+{
+  return
+    krepel.math.math.IsNaN(Quat.X) ||
+    krepel.math.math.IsNaN(Quat.Y) ||
+    krepel.math.math.IsNaN(Quat.Z) ||
+    krepel.math.math.IsNaN(Quat.W);
 }
 
 struct Quaternion
@@ -112,6 +157,36 @@ struct Quaternion
     Z = Sinus * Axis.Z;
   }
 
+  void SafeNormalize(float Epsilon = 1e-4f)
+  {
+    float Length = this.Length;
+    if (Length > Epsilon)
+    {
+      X /= Length;
+      Y /= Length;
+      Z /= Length;
+      W /= Length;
+    }
+    else
+    {
+      this = this.init;
+    }
+  }
+
+  void UnsafeNormalize()
+  {
+    float Length = this.Length;
+    X /= Length;
+    Y /= Length;
+    Z /= Length;
+    W /= Length;
+  }
+
+  void opOpAssign(string Operator)(Quaternion Quat)
+  {
+    this.Data[] = this.opBinary!(Operator)(Quat).Data[];
+  }
+
   Quaternion opBinary(string Operator)(Quaternion Quat)
   {
     static if(Operator == "*")
@@ -127,6 +202,8 @@ struct Quaternion
       return ComponentWiseSubtraction(this, Quat);
     }
   }
+
+  __gshared immutable Identity = Quaternion();
 }
 
 /// Default Initialization
@@ -158,21 +235,63 @@ unittest
 /// From Axis Angle Creation and Rotation Matrix Conversion
 unittest
 {
-  Quaternion RotateCCW = Quaternion(Vector3.UpVector, -3.141529f/2);
+  Quaternion RotateCCW = Quaternion(Vector3.UpVector, -PI/2);
   Vector3 Result = RotateCCW.ToRotationMatrix().TransformVector(Vector3(1,0,0));
 
-  assert(Result.NearlyEquals(Vector3(0,-1,0)));
+  assert(krepel.math.vector3.NearlyEquals(Result,Vector3(0,-1,0)));
 }
 
 /// Quaternion concatenation
 unittest
 {
-  // TODO(Marvin): Unit test quaternion concatenation
+  Quaternion RotateCCW = Quaternion(Vector3.UpVector, -PI/2);
+
+  RotateCCW *= RotateCCW;
+  Vector3 Result = RotateCCW.ToRotationMatrix().TransformVector(Vector3(1,0,0));
+
+  assert(krepel.math.vector3.NearlyEquals(Result,Vector3(-1,0,0)));
 }
 
+/// Axis angle Creation and Getters
 unittest
 {
   Quaternion Quat = Quaternion(Vector3(1,2,3), 2);
-  assert(Quat.GetAngle().NearlyEquals(2));
-  assert(Quat.GetAxis().NearlyEquals(Vector3(1,2,3).SafeNormalizedCopy()));
+  assert(krepel.math.math.NearlyEquals(Quat.GetAngle(),2));
+  assert(krepel.math.vector3.NearlyEquals(
+    Quat.GetAxis(),
+    krepel.math.vector3.SafeNormalizedCopy(Vector3(1,2,3))));
+}
+
+/// Safe Normalization
+unittest
+{
+  Quaternion Quat = Quaternion(1,2,3,4);
+
+  assert(!Quat.IsNormalized);
+  Quat.SafeNormalize();
+  assert(Quat.IsNormalized);
+
+  Quat = Quaternion(0,0,0,0);
+  assert(!Quat.IsNormalized);
+  Quat.SafeNormalize();
+  assert(Quat.IsNormalized);
+  assert(Quat == Quat.Identity);
+}
+
+/// Unsafe Normalization NaN Check
+unittest
+{
+  Quaternion Quat = Quaternion(1,2,3,4);
+
+  assert(!Quat.IsNormalized);
+  Quat.UnsafeNormalize();
+  assert(Quat.IsNormalized);
+
+  Quat = Quaternion(0,0,0,0);
+  assert(!Quat.ContainsNaN());
+  assert(!Quat.IsNormalized);
+  Quat.UnsafeNormalize();
+  assert(!Quat.IsNormalized);
+  assert(Quat != Quat.Identity);
+  assert(Quat.ContainsNaN);
 }
