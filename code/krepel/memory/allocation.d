@@ -47,6 +47,10 @@ template IsSomeMemory(M)
 /// objects or entire arrays.
 struct ForwardAllocator(M)
 {
+  // TODO(Manu): Add the following once Construct and Destruct are compatible.
+  // @nogc:
+  // nothrow:
+
   alias MemoryType = M;
   static assert(IsSomeMemory!MemoryType);
 
@@ -159,6 +163,9 @@ struct ForwardAllocator(M)
 /// Forwards all calls to the appropriate krepel.system.* functions.
 struct SystemMemory
 {
+  @nogc:
+  nothrow:
+
   mixin MemoryMixinTemplate!(SupportsReallocation | SupportsDeallocation);
 
   private import krepel.system;
@@ -217,6 +224,9 @@ debug = HeapMemory;
 /// efficient way while guaranteeing alignment requirements.
 struct HeapMemory
 {
+  @nogc:
+  nothrow:
+
   mixin MemoryMixinTemplate!(SupportsDeallocation);
   mixin MemoryContainsCheckMixin!(Memory);
 
@@ -255,6 +265,8 @@ struct HeapMemory
     FirstBlock.IsAllocated = false;
   }
 
+  void Deinitialize() { FirstBlock = null; }
+
   auto Allocate(size_t RequestedBytes, size_t Alignment = 0)
   {
     debug(HeapMemory)
@@ -273,8 +285,7 @@ struct HeapMemory
     debug(HeapMemory) const RequiredBlockSize = BlockOverhead + RequiredBytes + DeadBeefType.sizeof;
     else                   const RequiredBlockSize = BlockOverhead + RequiredBytes;
 
-    auto Block = cast(BlockData*)Memory.ptr;
-    Block = FindFreeBlockAndMergeAdjacent(Block, RequiredBlockSize);
+    auto Block = FindFreeBlockAndMergeAdjacent(FirstBlock, RequiredBlockSize);
 
     // No suitable block was found, so we are out of memory for this
     // allocation request.
@@ -339,6 +350,9 @@ private:
   ///       is used as a flag.
   static struct BlockData
   {
+    @nogc:
+    nothrow:
+
     size_t HeaderData;
 
     @property size_t Size() { return HeaderData.RemoveBit(0); }
@@ -418,6 +432,9 @@ private:
 
 struct StackMemory
 {
+  @nogc:
+  nothrow:
+
   MemoryRegion Memory;
   size_t AllocationMark;
 
@@ -444,6 +461,9 @@ struct StackMemory
 
 struct StaticStackMemory(size_t N)
 {
+  @nogc:
+  nothrow:
+
   static assert(N > 0, "Need at least one byte of static memory.");
 
   StaticMemoryRegion!N Memory;

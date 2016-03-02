@@ -1,11 +1,14 @@
-module krepel.container.dynamic_array;
+module krepel.container.array;
 
-import krepel.memory;
-import krepel.algorithm : Max;
+import krepel;
+import krepel.algorithm : Min, Max;
 import Meta = krepel.meta;
 
-struct DynamicArray(T, A = typeof(null))
+struct Array(T, A = typeof(null))
 {
+  @nogc:
+  nothrow:
+
   enum size_t MinimumElementAllocationCount = 16;
 
   alias ElementType = T;
@@ -26,13 +29,34 @@ struct DynamicArray(T, A = typeof(null))
   // Is always a subset of AvailableMemory.
   ElementType[] Data;
 
+
   @property auto ref Allocator() inout { return *AllocatorPtr; }
 
   @property auto Capacity() const { return AvailableMemory.length; }
 
+  // Note(Manu): Disable copy construction.
+  @disable this(this);
+
   this(ref AllocatorType Allocator)
   {
     AllocatorPtr = &Allocator;
+  }
+
+  ~this()
+  {
+    ClearMemory();
+  }
+
+  void ClearMemory()
+  {
+    Clear();
+    Allocator.DeleteUndestructed(AvailableMemory);
+  }
+
+  void Clear()
+  {
+    DestructArray(Data);
+    Data = null;
   }
 
   inout(ElementType)[] opSlice(size_t LeftIndex, size_t RightIndex) inout
@@ -49,6 +73,7 @@ struct DynamicArray(T, A = typeof(null))
   }
 
   @property auto Count() const { return Data.length; }
+  @property bool IsEmpty() const { return Count == 0; }
 
   void Reserve(size_t NewCount)
   {
@@ -61,8 +86,7 @@ struct DynamicArray(T, A = typeof(null))
       const Count = this.Count;
       // TODO(Manu): Move data instead of copying?
       NewMemory[0 .. Count] = Data[];
-      DestructArray(Data);
-      Allocator.DeleteUndestructed(AvailableMemory);
+      ClearMemory();
       AvailableMemory = NewMemory;
       Data = AvailableMemory[0 .. Count];
     }
@@ -90,7 +114,7 @@ struct DynamicArray(T, A = typeof(null))
     }
   }
 
-  void PushBack(InputType : ElementType)(InputType[] Slice)
+  void PushBack(InputType : ElementType)(in InputType[] Slice)
   {
     const Offset = Data.ptr - AvailableMemory.ptr;
     const OldCount = Data.length;
@@ -100,22 +124,87 @@ struct DynamicArray(T, A = typeof(null))
     Data[OldCount .. NewCount] = Slice[];
   }
 
+  void opOpAssign(string Op : "~", ArgType)(auto ref ArgType Arg)
+  {
+    PushBack(Arg);
+  }
+
   void PopBack(size_t Amount = 1)
   {
     DestructArray(Data[$-Amount .. $]);
     Data = Data[0 .. $ - Amount];
   }
+
+  // TODO(Manu): PushFront
+
+  void PopFront(size_t Amount = 1)
+  {
+    DestructArray(Data[0 .. Amount]);
+    Data = Data[Amount .. $];
+  }
+
+  @property ref auto Front() inout { return Data[0]; }
+  @property ref auto Back() inout { return Data[0]; }
+
+  void RemoveAt(IndexType, CountType)(IndexType Index, CountType CountToRemove = 1)
+  {
+    assert(CountToRemove >= 0 && Index >= 0 && Index + CountToRemove <= Count);
+
+    const EndIndex = Index + CountToRemove;
+    auto Hole = Data[Index .. EndIndex];
+    DestructArray(Hole);
+
+    import std.algorithm : copy;
+    copy(Data[EndIndex .. $], Data[Index .. $ - CountToRemove]);
+    Data = Data[0 .. $ - CountToRemove];
+  }
+
+  void RemoveAtSwap(IndexType, CountType)(IndexType Index, CountType CountToRemove = 1)
+  {
+    auto Hole = Data[Index .. Index + CountToRemove];
+    DestructArray(Hole);
+
+    const NumElementsAfterHole = Data.length - (Index + CountToRemove);
+    const NumElementsToMove = Min(Hole.length, NumElementsAfterHole);
+
+    Hole[0 .. NumElementsToMove] = Data[$ - NumElementsToMove .. $];
+
+    Data = Data[0 .. $ - CountToRemove];
+  }
+
+  /// InputRange interface
+  alias empty = IsEmpty;
+  /// Ditto
+  alias front = Front;
+  /// Ditto
+  alias popFront = PopFront;
+
+  /// ForwardRange interface
+  // TODO(Manu): Implement proper copying.
+  //auto save() const { return this; }
+
+  /// BidirectionalRange interface
+  alias back = Back;
+  /// Ditto
+  alias popBack = PopBack;
+
+  /// RandomAccessRange interface
+  // Note(Manu): opIndex is implemented above.
+  alias length = Count;
+
+  /// OutputRange interface
+  alias put = PushBack;
 }
 
-template IsSomeDynamicArray(T)
+template IsSomeArray(T)
 {
-  static if(is(T == DynamicArray!(T.ElementType, T.AllocatorType)))
+  static if(is(T == Array!(T.ElementType, T.AllocatorType)))
   {
-    enum bool IsSomeDynamicArray = true;
+    enum bool IsSomeArray = true;
   }
   else
   {
-    enum bool IsSomeDynamicArray = false;
+    enum bool IsSomeArray = false;
   }
 }
 
@@ -125,11 +214,15 @@ template IsSomeDynamicArray(T)
 
 unittest
 {
-  ubyte[100 * int.sizeof] Buffer;
-  GlobalAllocator.Memory.Initialize(Buffer[]);
-  scope(exit) GlobalAllocator.Memory.Memory = null;
+  alias IntArray = Array!int;
+  static assert(Meta.IsInputRange!IntArray);
+}
 
-  DynamicArray!int Arr;
+unittest
+{
+  mixin(SetupGlobalAllocatorForTesting!(400));
+
+  Array!int Arr;
   assert(Arr.Count == 0);
   static assert(!__traits(compiles, Arr.PushBack()));
   Arr.PushBack(123);
@@ -150,12 +243,21 @@ unittest
   assert(Arr[0] == 123);
   assert(Arr[1] == 42);
   assert(Arr[2] == 1337);
+  Arr.RemoveAt(0);
+  assert(Arr.Count == 2);
+  assert(Arr[0] == 42);
+  Arr ~= 666;
+  assert(Arr.Count == 3);
+  Arr.RemoveAtSwap(0);
+  assert(Arr.Count == 2);
+  assert(Arr[0] == 666);
+  assert(Arr[1] == 1337);
 }
 
 unittest
 {
   alias AllocatorType = ForwardAllocator!(StaticStackMemory!1024);
-  alias ArrayType = DynamicArray!(int, AllocatorType);
+  alias ArrayType = Array!(int, AllocatorType);
 
   AllocatorType Allocator;
   auto Array = ArrayType(Allocator);

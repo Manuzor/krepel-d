@@ -3,6 +3,7 @@ module krepel.meta;
 private static import std.traits;
 private static import std.conv;
 private static import std.bitmanip;
+private static import std.range;
 
 // Creates a sequence of zero or more aliases (types, string literals, ...).
 template AliasSequence(Args...)
@@ -185,6 +186,15 @@ alias IsArray                = std.traits.isArray;
 alias IsIntegral             = std.traits.isIntegral;
 alias IsPointer              = std.traits.isPointer;
 alias ClassInstanceAlignment = std.traits.classInstanceAlignment;
+
+alias IsInputRange         = std.range.isInputRange;
+alias IsOutputRange        = std.range.isOutputRange;
+alias IsForwardRange       = std.range.isForwardRange;
+alias IsBidirectionalRange = std.range.isBidirectionalRange;
+alias IsRandomAccessRange  = std.range.isRandomAccessRange;
+
+/// Get the inner type of a Range
+alias ElementType = std.range.ElementType;
 
 /// Example:
 /// struct A

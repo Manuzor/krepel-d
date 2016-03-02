@@ -5,6 +5,10 @@ import core.sys.windows.windows;
 
 import krepel.memory;
 import krepel.math : IsPowerOfTwo;
+import krepel.log;
+
+@nogc:
+nothrow:
 
 /// Dynamically allocates memory from standard system procedures.
 /// Params:
@@ -92,4 +96,32 @@ private auto AlignAndSavePadding(ubyte* InputPointer, size_t Alignment)
   // Save the padding value in the byte immediately to the left of the pointer the user will see.
   *(cast(ubyte*)ResultPointer - 1) = cast(ubyte)Padding;
   return ResultPointer;
+}
+
+/// Log sink that outputs to Visual Studio's Output window.
+void VisualStudioLogSink(LogLevel Level, char[] Message)
+{
+  char[1024] Buffer = void;
+
+  final switch(Level)
+  {
+    case LogLevel.Info:    OutputDebugStringA("Info: ");    break;
+    case LogLevel.Warning: OutputDebugStringA("Warning: "); break;
+    case LogLevel.Error:   OutputDebugStringA("Error: ");   break;
+  }
+
+  while(Message.length)
+  {
+    auto Amount = Min(Buffer.length - 1, Message.length);
+
+    Buffer[Amount] = '\0';
+    // Copy over the data.
+    Buffer[0 .. Amount] = Message[0 .. Amount];
+
+    OutputDebugStringA(cast(const(char)*)Buffer.ptr);
+
+    Message = Message[Amount .. $];
+  }
+
+  OutputDebugStringA("\n");
 }

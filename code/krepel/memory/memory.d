@@ -1,6 +1,10 @@
 module krepel.memory.memory;
 import krepel.math;
 
+@nogc:
+nothrow:
+pure:
+
 alias KiB = (const Bytes) => Bytes * (cast(typeof(Bytes))1024);
 alias MiB = (const Bytes) => Bytes * (cast(typeof(Bytes))1024).KiB;
 alias GiB = (const Bytes) => Bytes * (cast(typeof(Bytes))1024).MiB;
@@ -37,6 +41,22 @@ auto AlignedPointer(T)(const T* Pointer, const size_t Alignment)
 alias SetBit    = (const Bits, const Position) => Bits |  (1 << Position);
 alias RemoveBit = (const Bits, const Position) => Bits & ~(1 << Position);
 alias HasBit    = (const Bits, const Position) => cast(bool)(Bits &  (1 << Position));
+
+version(unittest)
+{
+  /// Usage: mixin(SetupGlobalAllocatorForTesting!1024);
+  template SetupGlobalAllocatorForTesting(size_t N)
+  {
+     import std.format;
+    enum SetupGlobalAllocatorForTesting = q{
+      {
+        ubyte[%s] _SetupGlobalAllocatorForTesting_Buffer;
+        GlobalAllocator.Memory.Initialize(_SetupGlobalAllocatorForTesting_Buffer);
+      }
+      scope(exit) GlobalAllocator.Memory.Deinitialize();
+    }.format(N.stringof);
+  }
+}
 
 //
 // Unit Tests
