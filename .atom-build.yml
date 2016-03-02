@@ -1,0 +1,16 @@
+cmd: build.bat
+name: Build Krepel Tests
+args:
+  - krepel_tests
+errorMatch:
+  - "(?<file>[:\\/0-9a-zA-Z\\._\\\\\\-]+)\\((?<line>\\d+),(?<col>\\d+)\\): Error:.*"
+sh: true
+targets:
+  Win32 Experiments:
+    cmd: build.bat
+    name: Win32 Experiments
+    args:
+      - win32_experiments
+    errorMatch:
+      - "(?<file>[:\\/0-9a-zA-Z\\._\\\\\\-]+)\\((?<line>\\d+),(?<col>\\d+)\\): Error:.*"
+    sh: true
