@@ -51,16 +51,16 @@ float Length(Quaternion Quat)
 
 Matrix4 ToRotationMatrix(Quaternion Quat)
 {
-  float XX = Quat.X * Quat.X;
-  float YY = Quat.Y * Quat.Y;
-  float ZZ = Quat.Z * Quat.Z;
-  float WW = Quat.W * Quat.W;
-  float XY = 2 * Quat.X * Quat.Y;
-  float XZ = 2 * Quat.X * Quat.Z;
-  float XW = 2 * Quat.X * Quat.W;
-  float YZ = 2 * Quat.Y * Quat.Z;
-  float YW = 2 * Quat.Y * Quat.W;
-  float ZW = 2 * Quat.Z * Quat.W;
+  const float XX = Quat.X * Quat.X;
+  const float YY = Quat.Y * Quat.Y;
+  const float ZZ = Quat.Z * Quat.Z;
+  const float WW = Quat.W * Quat.W;
+  const float XY = 2 * Quat.X * Quat.Y;
+  const float XZ = 2 * Quat.X * Quat.Z;
+  const float XW = 2 * Quat.X * Quat.W;
+  const float YZ = 2 * Quat.Y * Quat.Z;
+  const float YW = 2 * Quat.Y * Quat.W;
+  const float ZW = 2 * Quat.Z * Quat.W;
 
   return Matrix4([
     [WW + XX - YY - ZZ, XY + ZW, XZ - YW, 0.0f],
@@ -72,16 +72,16 @@ Matrix4 ToRotationMatrix(Quaternion Quat)
 
 Vector3 TransformVector(Quaternion Quat, Vector3 Direction)
 {
-  float XX = Quat.X * Quat.X;
-  float YY = Quat.Y * Quat.Y;
-  float ZZ = Quat.Z * Quat.Z;
-  float WW = Quat.W * Quat.W;
-  float XY = 2 * Quat.X * Quat.Y;
-  float XZ = 2 * Quat.X * Quat.Z;
-  float XW = 2 * Quat.X * Quat.W;
-  float YZ = 2 * Quat.Y * Quat.Z;
-  float YW = 2 * Quat.Y * Quat.W;
-  float ZW = 2 * Quat.Z * Quat.W;
+  const float XX = Quat.X * Quat.X;
+  const float YY = Quat.Y * Quat.Y;
+  const float ZZ = Quat.Z * Quat.Z;
+  const float WW = Quat.W * Quat.W;
+  const float XY = 2 * Quat.X * Quat.Y;
+  const float XZ = 2 * Quat.X * Quat.Z;
+  const float XW = 2 * Quat.X * Quat.W;
+  const float YZ = 2 * Quat.Y * Quat.Z;
+  const float YW = 2 * Quat.Y * Quat.W;
+  const float ZW = 2 * Quat.Z * Quat.W;
 
   return Vector3(
     (WW + XX - YY - ZZ) * Direction.X + (XY - ZW) * Direction.Y + (XZ + YW) * Direction.Z,
@@ -91,16 +91,16 @@ Vector3 TransformVector(Quaternion Quat, Vector3 Direction)
 
 Vector4 TransformVector(Quaternion Quat, Vector4 Direction)
 {
-  float XX = Quat.X * Quat.X;
-  float YY = Quat.Y * Quat.Y;
-  float ZZ = Quat.Z * Quat.Z;
-  float WW = Quat.W * Quat.W;
-  float XY = 2 * Quat.X * Quat.Y;
-  float XZ = 2 * Quat.X * Quat.Z;
-  float XW = 2 * Quat.X * Quat.W;
-  float YZ = 2 * Quat.Y * Quat.Z;
-  float YW = 2 * Quat.Y * Quat.W;
-  float ZW = 2 * Quat.Z * Quat.W;
+  const float XX = Quat.X * Quat.X;
+  const float YY = Quat.Y * Quat.Y;
+  const float ZZ = Quat.Z * Quat.Z;
+  const float WW = Quat.W * Quat.W;
+  const float XY = 2 * Quat.X * Quat.Y;
+  const float XZ = 2 * Quat.X * Quat.Z;
+  const float XW = 2 * Quat.X * Quat.W;
+  const float YZ = 2 * Quat.Y * Quat.Z;
+  const float YW = 2 * Quat.Y * Quat.W;
+  const float ZW = 2 * Quat.Z * Quat.W;
 
   return Vector4(
     (WW + XX - YY - ZZ) * Direction.X + (XY - ZW) * Direction.Y + (XZ + YW) * Direction.Z,
@@ -126,14 +126,14 @@ bool IsNormalized(Quaternion Quat)
   return krepel.math.math.NearlyEquals(LengthSquared(Quat),1);
 }
 
-float GetAngle(Quaternion Quat)
+float Angle(Quaternion Quat)
 {
   return ACos(Quat.W) * 2;
 }
 
-Vector3 GetAxis(Quaternion Quat)
+Vector3 Axis(Quaternion Quat)
 {
-  float Scale = Sin(GetAngle(Quat) * 0.5f);
+  const float Scale = Sin(Angle(Quat) * 0.5f);
   return Vector3(Quat.Data[0..3]) / Scale;
 }
 
@@ -191,7 +191,7 @@ struct Quaternion
   {
     Axis.SafeNormalize();
     W = Cos(Angle * 0.5f);
-    float Sinus = Sin(Angle * 0.5f);
+    const float Sinus = Sin(Angle * 0.5f);
     X = Sinus * Axis.X;
     Y = Sinus * Axis.Y;
     Z = Sinus * Axis.Z;
@@ -199,7 +199,7 @@ struct Quaternion
 
   void SafeNormalize(float Epsilon = 1e-4f)
   {
-    float Length = this.Length;
+    const float Length = this.Length;
     if (Length > Epsilon)
     {
       X /= Length;
@@ -215,7 +215,7 @@ struct Quaternion
 
   void UnsafeNormalize()
   {
-    float Length = this.Length;
+    const float Length = this.Length;
     X /= Length;
     Y /= Length;
     Z /= Length;
@@ -240,6 +240,10 @@ struct Quaternion
     else static if(Operator == "-")
     {
       return ComponentWiseSubtraction(this, Quat);
+    }
+    else
+    {
+      static assert(false, "No operator " ~ Operator ~ " defined");
     }
   }
 
@@ -298,9 +302,9 @@ unittest
 unittest
 {
   Quaternion Quat = Quaternion(Vector3(1,2,3), 2);
-  assert(krepel.math.math.NearlyEquals(Quat.GetAngle(),2));
+  assert(krepel.math.math.NearlyEquals(Quat.Angle(),2));
   assert(krepel.math.vector3.NearlyEquals(
-    Quat.GetAxis(),
+    Quat.Axis(),
     krepel.math.vector3.SafeNormalizedCopy(Vector3(1,2,3))));
 }
 
