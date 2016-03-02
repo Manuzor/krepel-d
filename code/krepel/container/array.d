@@ -1,7 +1,7 @@
 module krepel.container.array;
 
 import krepel;
-import krepel.algorithm : Max;
+import krepel.algorithm : Min, Max;
 import Meta = krepel.meta;
 
 struct Array(T, A = typeof(null))
@@ -120,6 +120,32 @@ struct Array(T, A = typeof(null))
     DestructArray(Data[$-Amount .. $]);
     Data = Data[0 .. $ - Amount];
   }
+
+  void RemoveAt(IndexType, CountType)(IndexType Index, CountType CountToRemove = 1)
+  {
+    assert(CountToRemove >= 0 && Index >= 0 && Index + CountToRemove <= Count);
+
+    const EndIndex = Index + CountToRemove;
+    auto Hole = Data[Index .. EndIndex];
+    DestructArray(Hole);
+
+    import std.algorithm : copy;
+    copy(Data[EndIndex .. $], Data[Index .. $ - CountToRemove]);
+    Data = Data[0 .. $ - CountToRemove];
+  }
+
+  void RemoveAtSwap(IndexType, CountType)(IndexType Index, CountType CountToRemove = 1)
+  {
+    auto Hole = Data[Index .. Index + CountToRemove];
+    DestructArray(Hole);
+
+    const NumElementsAfterHole = Data.length - (Index + CountToRemove);
+    const NumElementsToMove = Min(Hole.length, NumElementsAfterHole);
+
+    Hole[0 .. NumElementsToMove] = Data[$ - NumElementsToMove .. $];
+
+    Data = Data[0 .. $ - CountToRemove];
+  }
 }
 
 template IsSomeArray(T)
@@ -163,6 +189,16 @@ unittest
   assert(Arr[0] == 123);
   assert(Arr[1] == 42);
   assert(Arr[2] == 1337);
+  Arr.RemoveAt(0);
+  assert(Arr.Count == 2);
+  assert(Arr[0] == 42);
+  assert(Arr[1] == 1337);
+  Arr.PushBack(666);
+  assert(Arr.Count == 3);
+  Arr.RemoveAtSwap(0);
+  assert(Arr.Count == 2);
+  assert(Arr[0] == 666);
+  assert(Arr[1] == 1337);
 }
 
 unittest
