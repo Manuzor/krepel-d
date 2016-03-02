@@ -34,6 +34,9 @@ struct Array(T, A = typeof(null))
 
   @property auto Capacity() const { return AvailableMemory.length; }
 
+  // Note(Manu): Disable copy construction.
+  @disable this(this);
+
   this(ref AllocatorType Allocator)
   {
     AllocatorPtr = &Allocator;
@@ -46,8 +49,14 @@ struct Array(T, A = typeof(null))
 
   void ClearMemory()
   {
-    DestructArray(Data);
+    Clear();
     Allocator.DeleteUndestructed(AvailableMemory);
+  }
+
+  void Clear()
+  {
+    DestructArray(Data);
+    Data = null;
   }
 
   inout(ElementType)[] opSlice(size_t LeftIndex, size_t RightIndex) inout
@@ -105,7 +114,7 @@ struct Array(T, A = typeof(null))
     }
   }
 
-  void PushBack(InputType : ElementType)(InputType[] Slice)
+  void PushBack(InputType : ElementType)(in InputType[] Slice)
   {
     const Offset = Data.ptr - AvailableMemory.ptr;
     const OldCount = Data.length;
@@ -115,11 +124,27 @@ struct Array(T, A = typeof(null))
     Data[OldCount .. NewCount] = Slice[];
   }
 
+  void opOpAssign(string Op : "~", ArgType)(auto ref ArgType Arg)
+  {
+    PushBack(Arg);
+  }
+
   void PopBack(size_t Amount = 1)
   {
     DestructArray(Data[$-Amount .. $]);
     Data = Data[0 .. $ - Amount];
   }
+
+  // TODO(Manu): PushFront
+
+  void PopFront(size_t Amount = 1)
+  {
+    DestructArray(Data[0 .. Amount]);
+    Data = Data[Amount .. $];
+  }
+
+  @property ref auto Front() inout { return Data[0]; }
+  @property ref auto Back() inout { return Data[0]; }
 
   void RemoveAt(IndexType, CountType)(IndexType Index, CountType CountToRemove = 1)
   {
@@ -146,6 +171,29 @@ struct Array(T, A = typeof(null))
 
     Data = Data[0 .. $ - CountToRemove];
   }
+
+  /// InputRange interface
+  alias empty = IsEmpty;
+  /// Ditto
+  alias front = Front;
+  /// Ditto
+  alias popFront = PopFront;
+
+  /// ForwardRange interface
+  // TODO(Manu): Implement proper copying.
+  //auto save() const { return this; }
+
+  /// BidirectionalRange interface
+  alias back = Back;
+  /// Ditto
+  alias popBack = PopBack;
+
+  /// RandomAccessRange interface
+  // Note(Manu): opIndex is implemented above.
+  alias length = Count;
+
+  /// OutputRange interface
+  alias put = PushBack;
 }
 
 template IsSomeArray(T)
@@ -163,6 +211,12 @@ template IsSomeArray(T)
 //
 // Unit Tests
 //
+
+unittest
+{
+  alias IntArray = Array!int;
+  static assert(Meta.IsInputRange!IntArray);
+}
 
 unittest
 {
@@ -192,8 +246,7 @@ unittest
   Arr.RemoveAt(0);
   assert(Arr.Count == 2);
   assert(Arr[0] == 42);
-  assert(Arr[1] == 1337);
-  Arr.PushBack(666);
+  Arr ~= 666;
   assert(Arr.Count == 3);
   Arr.RemoveAtSwap(0);
   assert(Arr.Count == 2);

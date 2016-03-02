@@ -1,7 +1,6 @@
 module krepel.win32_main;
 
 import krepel;
-import Log = krepel.log;
 
 import krepel.win32;
 
@@ -27,7 +26,10 @@ int WinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
   {
     import std.string;
 
-    MessageBoxA(null, Error.toString().toStringz(),
+    import std.conv;
+    auto ErrorString = Error.toString();
+    ErrorString = ErrorString[0 .. Min(2000, ErrorString.length)];
+    MessageBoxA(null, ErrorString.toStringz(),
                 "Error",
                 MB_OK | MB_ICONEXCLAMATION);
 
@@ -43,6 +45,9 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
               LPSTR CommandLine, int ShowCode)
 {
   //MessageBoxA(null, "Hello World?", "Hello", MB_OK);
+
+  Log.Sinks ~= ToDelegate(&StdoutLogSink);
+  Log.Sinks ~= ToDelegate(&VisualStudioLogSink);
 
   Log.Info("=== Beginning of Log");
   scope(exit) Log.Info("=== End of Log");
