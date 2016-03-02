@@ -16,10 +16,13 @@ alias Find = std.algorithm.find;
 
 alias StartsWith = std.algorithm.startsWith;
 alias CountUntil = std.algorithm.countUntil;
+alias CopyTo     = std.algorithm.copy;
 
+/// Alternative to CopyTo with just another wording and argument order.
+/// See_Also: CopyTo
 auto CopyFrom(DestinationType, SourceType)(auto ref DestinationType Destination, auto ref SourceType Source)
 {
-  return std.algorithm.copy(Source, Destination);
+  return Source.CopyTo(Destination);
 }
 
 alias Zip = std.range.zip;

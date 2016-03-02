@@ -154,7 +154,7 @@ struct Array(T, A = typeof(null))
     auto Hole = Data[Index .. EndIndex];
     DestructArray(Hole);
 
-    Data[Index .. $ - CountToRemove].CopyFrom(Data[EndIndex .. $]);
+    Data[EndIndex .. $].CopyTo(Data[Index .. $ - CountToRemove]);
     Data = Data[0 .. $ - CountToRemove];
   }
 
