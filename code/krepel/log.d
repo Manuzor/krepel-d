@@ -6,9 +6,6 @@ import Meta = krepel.meta;
 
 import krepel.container;
 
-// TODO(Manu): Remove this. Logging should be independent.
-import core.sys.windows.windows;
-
 /// The global default log.
 LogState Log;
 
