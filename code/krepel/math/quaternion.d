@@ -89,8 +89,58 @@ Vector3 TransformVector(Quaternion Quat, Vector3 Direction)
     (XZ - YW) * Direction.X + (YZ + XW) * Direction.Y + (WW - XX - YY + ZZ) * Direction.Z);
 }
 
+/// Rotation of the Vector
+/// The W component of the vector will be unchanged
 Vector4 TransformVector(Quaternion Quat, Vector4 Direction)
 {
+  const float XX = Quat.X * Quat.X;
+  const float YY = Quat.Y * Quat.Y;
+  const float ZZ = Quat.Z * Quat.Z;
+  const float WW = Quat.W * Quat.W;
+  const float XY = 2 * Quat.X * Quat.Y;
+  const float XZ = 2 * Quat.X * Quat.Z;
+  const float XW = 2 * Quat.X * Quat.W;
+  const float YZ = 2 * Quat.Y * Quat.Z;
+  const float YW = 2 * Quat.Y * Quat.W;
+  const float ZW = 2 * Quat.Z * Quat.W;
+
+  return Vector4(
+    (WW + XX - YY - ZZ) * Direction.X + (XY - ZW) * Direction.Y + (XZ + YW) * Direction.Z,
+    (XY + ZW) * Direction.X + (WW - XX + YY - ZZ) * Direction.Y + (YZ - XW) * Direction.Z,
+    (XZ - YW) * Direction.X + (YZ + XW) * Direction.Y + (WW - XX - YY + ZZ) * Direction.Z,
+    Direction.W);
+}
+
+/// Inverse Rotation of the Vector, using the Inverse Quaternion of the given one.
+/// E.g. if the Quaternion will rotate your Vector on the Z Axis in Clockwise direction, this operation will rotate
+/// the given Vector in Counter-Clockwise Direction
+Vector3 InverseTransformVector(Quaternion Quat, Vector3 Direction)
+{
+  Quat.Invert();
+  const float XX = Quat.X * Quat.X;
+  const float YY = Quat.Y * Quat.Y;
+  const float ZZ = Quat.Z * Quat.Z;
+  const float WW = Quat.W * Quat.W;
+  const float XY = 2 * Quat.X * Quat.Y;
+  const float XZ = 2 * Quat.X * Quat.Z;
+  const float XW = 2 * Quat.X * Quat.W;
+  const float YZ = 2 * Quat.Y * Quat.Z;
+  const float YW = 2 * Quat.Y * Quat.W;
+  const float ZW = 2 * Quat.Z * Quat.W;
+
+  return Vector3(
+    (WW + XX - YY - ZZ) * Direction.X + (XY - ZW) * Direction.Y + (XZ + YW) * Direction.Z,
+    (XY + ZW) * Direction.X + (WW - XX + YY - ZZ) * Direction.Y + (YZ - XW) * Direction.Z,
+    (XZ - YW) * Direction.X + (YZ + XW) * Direction.Y + (WW - XX - YY + ZZ) * Direction.Z);
+}
+
+/// Inverse Rotation of the Vector, using the Inverse Quaternion of the given one.
+/// E.g. if the Quaternion will rotate your Vector on the Z Axis in Clockwise direction, this operation will rotate
+/// the given Vector in Counter-Clockwise Direction
+/// The W component of the vector will be unchanged
+Vector4 InverseTransformVector(Quaternion Quat, Vector4 Direction)
+{
+  Quat.Invert();
   const float XX = Quat.X * Quat.X;
   const float YY = Quat.Y * Quat.Y;
   const float ZZ = Quat.Z * Quat.Z;
@@ -154,6 +204,13 @@ bool ContainsNaN(Quaternion Quat)
     krepel.math.math.IsNaN(Quat.Y) ||
     krepel.math.math.IsNaN(Quat.Z) ||
     krepel.math.math.IsNaN(Quat.W);
+}
+
+/// Creates an inversed Copy of the Quaternion, which will rotate in the opposite direction.
+Quaternion InversedCopy(Quaternion Quat)
+{
+  Quat.Invert();
+  return Quat;
 }
 
 struct Quaternion
@@ -223,6 +280,15 @@ struct Quaternion
     Y /= Length;
     Z /= Length;
     W /= Length;
+  }
+
+  /// Inverts the quaternion, meaning that it rotates in the opposite direction (using the negative Axis)
+  /// This will change the direction of the Axis and not the Angle
+  void Invert()
+  {
+    X *= -1;
+    Y *= -1;
+    Z *= -1;
   }
 
   void opOpAssign(string Operator)(Quaternion Quat)
@@ -299,6 +365,32 @@ unittest
 
   assert(krepel.math.vector3.NearlyEquals(Result,Vector3(-1,0,0)));
   assert(krepel.math.vector3.NearlyEquals(Result,Result2));
+}
+
+/// Inversion
+unittest
+{
+  Quaternion RotateCCW = Quaternion(Vector3.UpVector, -PI/2);
+  Quaternion RotateCW = RotateCCW.InversedCopy();
+  Vector3 Result = RotateCCW.TransformVector(Vector3(1,0,0));
+  assert(krepel.math.vector3.NearlyEquals(Result, Vector3(0,-1,0)));
+  Vector3 Result2 = RotateCW.TransformVector(Result);
+  Vector3 Result3 = RotateCCW.InverseTransformVector(Result);
+  assert(krepel.math.vector3.NearlyEquals(Result2, Vector3(1,0,0)));
+  assert(krepel.math.vector3.NearlyEquals(Result2, Result3));
+}
+
+/// Inversion Vec4
+unittest
+{
+  Quaternion RotateCCW = Quaternion(Vector3.UpVector, -PI/2);
+  Quaternion RotateCW = RotateCCW.InversedCopy();
+  Vector4 Result = RotateCCW.TransformVector(Vector4(1,0,0,5));
+  assert(krepel.math.vector4.NearlyEquals(Result, Vector4(0,-1,0,5)));
+  Vector4 Result2 = RotateCW.TransformVector(Result);
+  Vector4 Result3 = RotateCCW.InverseTransformVector(Result);
+  assert(krepel.math.vector4.NearlyEquals(Result2, Vector4(1,0,0,5)));
+  assert(krepel.math.vector4.NearlyEquals(Result2, Result3));
 }
 
 /// Axis angle Creation and Getters
