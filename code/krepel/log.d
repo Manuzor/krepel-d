@@ -29,7 +29,7 @@ enum LogLevel
 {
   Info,
   Warning,
-  Error,
+  Failure,
 }
 
 alias LogSink = void delegate(LogLevel, char[]);
@@ -53,8 +53,7 @@ template LogMessageDispatch(LogLevel Level)
 
 alias Info    = LogMessageDispatch!(LogLevel.Info);
 alias Warning = LogMessageDispatch!(LogLevel.Warning);
-alias Error   = LogMessageDispatch!(LogLevel.Error);
-
+alias Failure = LogMessageDispatch!(LogLevel.Failure);
 
 void StdoutLogSink(LogLevel Level, char[] Message)
 {
@@ -62,7 +61,7 @@ void StdoutLogSink(LogLevel Level, char[] Message)
   {
     case LogLevel.Info:    io.write("Info: ");    break;
     case LogLevel.Warning: io.write("Warning: "); break;
-    case LogLevel.Error:   io.write("Error: ");   break;
+    case LogLevel.Failure: io.write("Failure: "); break;
   }
 
   io.writeln(Message);
@@ -91,6 +90,6 @@ unittest
 
   auto Log = MyLog(LogBuffer, LogBuffer);
   auto Message = "Hello";
-  Log.Info(Message);
+  Log.Failure(Message);
   assert(LogBuffer[0 .. Message.length] == Message);
 }
