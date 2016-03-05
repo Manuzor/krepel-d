@@ -70,16 +70,37 @@ struct Array(T)
   @property auto Count() const { return Data.length; }
   @property bool IsEmpty() const { return Count == 0; }
 
+  @property auto SlackLeft() const { return Data.ptr - AvailableMemory.ptr; }
+  @property auto SlackRight() const { return Capacity - Count - SlackLeft; }
+
   void Reserve(size_t NewCount)
   {
-    if(Capacity >= NewCount) return;
+    // If there's enough space to the right of the current Data region, we
+    // don't have to do anything.
+    if(Count + SlackRight >= NewCount) return;
 
+    // If we still have enough total memory available to account for NewCount,
+    // we just move the current Data region to the left.
+    if(Capacity >= NewCount)
+    {
+      assert(SlackLeft > 0,
+             "When there's not enough room on the right of Data, but "
+             "there's enough Capacity for NewCount, then the Data region must "
+             "be somewhere to the right of AvailableMemory.ptr.");
+
+      AvailableMemory[0 .. Count].CopyFrom(Data);
+      Data = AvailableMemory[0 .. Count];
+      return;
+    }
+
+    // If there is truly not enough space left, we allocate new space, move
+    // the old data over to the new memory region and update AvailableMemory
+    // and Data.
     NewCount = Max(NewCount, MinimumElementAllocationCount);
-    auto NewMemory = Allocator.NewUnconstructedArray!(ElementType)(NewCount);
+    auto NewMemory = Allocator.NewUnconstructedArray!ElementType(NewCount);
     if(NewMemory.length == NewCount)
     {
       const Count = this.Count;
-      // TODO(Manu): Move data instead of copying?
       NewMemory[0 .. Count] = Data[];
       ClearMemory();
       AvailableMemory = NewMemory;
@@ -92,18 +113,23 @@ struct Array(T)
     }
   }
 
-  void PushBack(ArgTypes...)(auto ref ArgTypes Args)
+  void PushBack(ArgTypes...)(in auto ref ArgTypes Args)
     if(ArgTypes.length)
   {
-    const Offset = Data.ptr - AvailableMemory.ptr;
+    auto PreviousCount = this.Count;
+
+    // Reserve enough memory
     const NewCount = Data.length + ArgTypes.length;
-    auto InsertionIndex = Data.length;
     Reserve(NewCount);
-    Data = AvailableMemory[Offset .. NewCount];
+
+    auto InsertionIndex = this.Count;
+    Data = AvailableMemory[SlackLeft .. NewCount];
     foreach(ref Arg; Args)
     {
       static assert(Meta.IsConvertibleTo!(typeof(Arg), ElementType),
-                    "Invalid argument type " ~ typeof(Arg).stringof);
+                    Format("Expected something that is convertible to %s, got %s",
+                           ElementType.stringof, typeof(Arg).stringof));
+
       Data[InsertionIndex] = Arg;
       ++InsertionIndex;
     }
@@ -111,15 +137,15 @@ struct Array(T)
 
   void PushBack(InputType : ElementType)(in InputType[] Slice)
   {
-    const Offset = Data.ptr - AvailableMemory.ptr;
+    // Reserve enough memory
     const OldCount = Data.length;
-    const NewCount = OldCount + Slice.length;
+    const NewCount = Data.length + Slice.length;
     Reserve(NewCount);
-    Data = AvailableMemory[Offset .. NewCount];
+    Data = AvailableMemory[SlackLeft .. NewCount];
     Data[OldCount .. NewCount] = Slice[];
   }
 
-  void opOpAssign(string Op : "~", ArgType)(auto ref ArgType Arg)
+  void opOpAssign(string Op : "~", ArgType)(in auto ref ArgType Arg)
   {
     PushBack(Arg);
   }
@@ -260,4 +286,7 @@ unittest
   assert(Slice.length == 2);
   assert(Slice[0] == 1);
   assert(Slice[1] == 2);
+
+  static assert(!__traits(compiles, Array.PushBack(1.0)),
+                "A double is not implicitly convertible to an int.");
 }
