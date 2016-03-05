@@ -282,8 +282,9 @@ struct HeapMemory
     if(Alignment == 0) Alignment = DefaultAlignment;
 
     const RequiredBytes = RequestedBytes + Alignment;
-    debug(HeapMemory) const RequiredBlockSize = BlockOverhead + RequiredBytes + DeadBeefType.sizeof;
-    else                   const RequiredBlockSize = BlockOverhead + RequiredBytes;
+    const PaddingToAchieveAnEvenBlockSize = RequiredBytes.IsEven ? 0 : 1;
+    debug(HeapMemory) const RequiredBlockSize = BlockOverhead + RequiredBytes + PaddingToAchieveAnEvenBlockSize + DeadBeefType.sizeof;
+    else              const RequiredBlockSize = BlockOverhead + RequiredBytes + PaddingToAchieveAnEvenBlockSize;
 
     auto Block = FindFreeBlockAndMergeAdjacent(FirstBlock, RequiredBlockSize);
 
