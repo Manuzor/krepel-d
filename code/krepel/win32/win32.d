@@ -107,7 +107,7 @@ void VisualStudioLogSink(LogLevel Level, char[] Message)
   {
     case LogLevel.Info:    OutputDebugStringA("Info: ");    break;
     case LogLevel.Warning: OutputDebugStringA("Warning: "); break;
-    case LogLevel.Error:   OutputDebugStringA("Error: ");   break;
+    case LogLevel.Failure: OutputDebugStringA("Failure: "); break;
   }
 
   while(Message.length)
