@@ -1,10 +1,11 @@
 module krepel.win32_main;
+version(Windows):
 
 import krepel;
-
 import krepel.win32;
 
-version(Windows):
+
+import std.string : toStringz, fromStringz;
 
 extern(Windows)
 int WinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
@@ -24,12 +25,10 @@ int WinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
   }
   catch(Throwable Error)
   {
-    import std.string;
 
-    import std.conv;
     auto ErrorString = Error.toString();
-    ErrorString = ErrorString[0 .. Min(2000, ErrorString.length)];
-    MessageBoxA(null, ErrorString.toStringz(),
+    auto ShortErrorString = ErrorString[0 .. Min(2000, ErrorString.length)];
+    MessageBoxA(null, ShortErrorString.toStringz(),
                 "Error",
                 MB_OK | MB_ICONEXCLAMATION);
 
@@ -46,16 +45,21 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
 {
   //MessageBoxA(null, "Hello World?", "Hello", MB_OK);
 
-  Log.Sinks ~= ToDelegate(&StdoutLogSink);
+  const MemorySize = 6.GiB;
+  auto RawMemory = VirtualAlloc(null,
+                                MemorySize,
+                                MEM_RESERVE | MEM_COMMIT,
+                                PAGE_READWRITE);
+  assert(RawMemory);
+  GlobalAllocator.Memory.Initialize((cast(ubyte*)RawMemory)[0 .. MemorySize]);
+
+  // Note(Manu): There's no point to add the stdout log sink since stdout
+  // isn't attached to anything in a windows application. We add the VS log
+  // sink instead.
   Log.Sinks ~= ToDelegate(&VisualStudioLogSink);
 
   Log.Info("=== Beginning of Log");
   scope(exit) Log.Info("=== End of Log");
-
-  // TODO(Manu): Allocate the global memory block.
-  {
-    //GlobalAllocator.Memory = ...
-  }
 
   if(!Win32LoadXInput())
   {
@@ -86,6 +90,34 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
 
     if(Window)
     {
+      import dxgi;
+
+      IDXGIFactory1 DXGIFactory;
+      if(SUCCEEDED(CreateDXGIFactory1(&DXGIFactory.uuidof, cast(void**)&DXGIFactory)))
+      {
+        assert(DXGIFactory);
+
+        UINT CurrentAdapterIndex;
+        IDXGIAdapter1 DXGIAdapter;
+        while(SUCCEEDED(DXGIFactory.EnumAdapters1(CurrentAdapterIndex, DXGIAdapter)))
+        {
+          scope(exit) CurrentAdapterIndex++;
+          DXGI_ADAPTER_DESC AdapterDesc = void;
+          if(SUCCEEDED(DXGIAdapter.GetDesc(AdapterDesc)))
+          {
+            Log.Info("Adapter[%d]: %s", CurrentAdapterIndex, AdapterDesc.Description[].ByUTF!char);
+          }
+          else
+          {
+            Log.Failure("Failed to get adapter %d's description.", CurrentAdapterIndex);
+          }
+        }
+      }
+      else
+      {
+        Log.Failure("Failed to create DXGI factory.");
+      }
+
       GlobalRunning = true;
 
       while(GlobalRunning)
