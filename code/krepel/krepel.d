@@ -62,25 +62,3 @@ alias ByUTF = std.utf.byUTF;
 alias Yes  = std.typecons.Yes;
 alias No   = std.typecons.No;
 alias Flag = std.typecons.Flag;
-
-version(none)
-void main()
-{
-  import krepel.memory;
-
-  import std.c.stdlib;
-
-  const BufferSize = 1.MiB;
-  auto BufferPtr = cast(ubyte*)malloc(BufferSize);
-  scope(exit) free(BufferPtr);
-
-  GlobalAllocator.Memory.Initialize(BufferPtr[0 .. BufferSize]);
-  scope(exit) GlobalAllocator.Memory.Deinitialize();
-
-  Log.Sinks ~= ToDelegate(&StdoutLogSink);
-
-  Log.Info("Hello");
-  Log.Info("World");
-
-  return;
-}

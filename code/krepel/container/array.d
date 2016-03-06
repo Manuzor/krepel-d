@@ -171,7 +171,7 @@ struct Array(T, A = typeof(null))
     }
   }
 
-  void PushBack(ArgTypes...)(in auto ref ArgTypes Args)
+  void PushBack(ArgTypes...)(auto ref ArgTypes Args)
     if(ArgTypes.length)
   {
     auto NewData = ExpandUninitialized(ArgTypes.length);
@@ -186,7 +186,7 @@ struct Array(T, A = typeof(null))
     }
   }
 
-  void PushBack(InputType : ElementType)(in InputType[] Slice)
+  void PushBack(InputType : ElementType)(InputType[] Slice)
   {
     const NumNewElements = Slice.length;
     if(NumNewElements)
@@ -195,7 +195,7 @@ struct Array(T, A = typeof(null))
     }
   }
 
-  void opOpAssign(string Op : "~", ArgType)(in auto ref ArgType Arg)
+  void opOpAssign(string Op : "~", ArgType)(auto ref ArgType Arg)
   {
     PushBack(Arg);
   }
