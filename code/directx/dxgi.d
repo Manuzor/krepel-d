@@ -256,11 +256,12 @@ struct DXGI_SWAP_CHAIN_DESC
 }
 
 
-
 mixin template DeclareIID(ComType, alias IIDString)
 {
   static if(!is(ComType : IUnknown))
-  pragma(msg, "Warning: The type " ~ ComType.stringof ~ " does not derive from IUnknown.");
+  {
+    pragma(msg, "Warning: The type " ~ ComType.stringof ~ " does not derive from IUnknown.");
+  }
 
   // Format of a UUID:
   // [0  1  2  3  4  5  6  7]  8  [9  10 11 12] 13 [14 15 16 17] 18 [19 20] [21 22] 23 [24 25] [26 27] [28 29] [30 31] [32 33] [34 35]
@@ -286,32 +287,29 @@ mixin template DeclareIID(ComType, alias IIDString)
                IIDString[32 .. 34], // IID.Data4[6] <=> xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxx[xx]xx
                IIDString[34 .. 36], // IID.Data4[7] <=> xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxx[xx]
                ));
+
+  /// Example: uuidof!IDXGIObject
+  ref auto uuidof(T)() if(is(T == ComType)) { mixin("return IID_%s;".format(ComType.stringof)); }
+
+  /// Example:
+  ///   IDXGIObject Object = /* ... */;
+  ///   auto Foo = Object.uuidof;
+  ref auto uuidof(T)(auto ref T) if(is(T == ComType)) { return uuidof!ComType; }
 }
 
-mixin template DeclareMember_uuidof()
-{
-  //mixin("immutable __gshared uuidof = IID_%s;".format(typeof(this).stringof));
-  mixin("static @property auto uuidof() { return IID_%s; }".format(typeof(this).stringof));
-}
-
-
-extern(C) const(IID) IID_IDXGIObject;
-
-//DeclareIID(IDXGIObject, "aec22fb8-76f3-4639-9be0-28eb43a67a2e")
+mixin DeclareIID!(IDXGIObject, "aec22fb8-76f3-4639-9be0-28eb43a67a2e");
 interface IDXGIObject : IUnknown
 {
 extern(Windows):
-  mixin DeclareMember_uuidof;
-
   HRESULT SetPrivateData(REFGUID Name,
                          UINT DataSize,
-                         const(void)* pData);
+                         in void* pData);
 
   HRESULT SetPrivateDataInterface(REFGUID Name,
-                                  const(IUnknown)* pUnknown);
+                                  in IUnknown pUnknown);
 
   HRESULT GetPrivateData(REFGUID Name,
-                         UINT* pDataSize,
+                         ref UINT pDataSize,
                          void* pData);
 
   HRESULT GetParent(REFIID riid,
@@ -319,47 +317,33 @@ extern(Windows):
 }
 
 
-extern(C) const(IID) IID_IDXGIDeviceSubObject;
-
-//DeclareIID(IDXGIDeviceSubObject, "3d3e0379-f9de-4d58-bb6c-18d62992f1a6")
+mixin DeclareIID!(IDXGIDeviceSubObject, "3d3e0379-f9de-4d58-bb6c-18d62992f1a6");
 interface IDXGIDeviceSubObject : IDXGIObject
 {
 extern(Windows):
-  mixin DeclareMember_uuidof;
-
   HRESULT GetDevice(REFIID riid,
                     void** ppDevice);
 }
 
 
-
-extern(C) const(IID) IID_IDXGIResource;
-
-//DeclareIID(IDXGIResource, "035f3ab4-482e-4e50-b41f-8a7f8bd8960b")
+mixin DeclareIID!(IDXGIResource, "035f3ab4-482e-4e50-b41f-8a7f8bd8960b");
 interface IDXGIResource : IDXGIDeviceSubObject
 {
 extern(Windows):
-  mixin DeclareMember_uuidof;
+  HRESULT GetSharedHandle(ref HANDLE pSharedHandle);
 
-  HRESULT GetSharedHandle(HANDLE* pSharedHandle);
-
-  HRESULT GetUsage(DXGI_USAGE* pUsage);
+  HRESULT GetUsage(ref DXGI_USAGE pUsage);
 
   HRESULT SetEvictionPriority(UINT EvictionPriority);
 
-  HRESULT GetEvictionPriority(UINT* pEvictionPriority);
+  HRESULT GetEvictionPriority(ref UINT pEvictionPriority);
 }
 
 
-
-extern(C) const(IID) IID_IDXGIKeyedMutex;
-
-//DeclareIID(IDXGIKeyedMutex, "9d8e1289-d7b3-465f-8126-250e349af85d")
+mixin DeclareIID!(IDXGIKeyedMutex, "9d8e1289-d7b3-465f-8126-250e349af85d");
 interface IDXGIKeyedMutex : IDXGIDeviceSubObject
 {
 extern(Windows):
-  mixin DeclareMember_uuidof;
-
   HRESULT AcquireSync(UINT64 Key,
                       DWORD dwMilliseconds);
 
@@ -374,52 +358,41 @@ enum DXGI_MAP : uint
 }
 
 
-extern(C) const(IID) IID_IDXGISurface;
-
-//DeclareIID(IDXGISurface, "cafcb56c-6ac3-4889-bf47-9e23bbd260ec")
+mixin DeclareIID!(IDXGISurface, "cafcb56c-6ac3-4889-bf47-9e23bbd260ec");
 interface IDXGISurface : IDXGIDeviceSubObject
 {
 extern(Windows):
-  mixin DeclareMember_uuidof;
+  HRESULT GetDesc(ref DXGI_SURFACE_DESC pDesc);
 
-  HRESULT GetDesc(DXGI_SURFACE_DESC* pDesc);
-
-  HRESULT Map(DXGI_MAPPED_RECT* pLockedRect, UINT MapFlags);
+  HRESULT Map(ref DXGI_MAPPED_RECT pLockedRect,
+              UINT MapFlags);
 
   HRESULT Unmap();
 }
 
 
-extern(C) const(IID) IID_IDXGISurface1;
-
-//DeclareIID(IDXGISurface1, "4AE63092-6327-4c1b-80AE-BFE12EA32B86")
+mixin DeclareIID!(IDXGISurface1, "4AE63092-6327-4c1b-80AE-BFE12EA32B86");
 interface IDXGISurface1 : IDXGISurface
 {
 extern(Windows):
-  mixin DeclareMember_uuidof;
-
   HRESULT GetDC(BOOL Discard,
-                HDC* phdc);
+                ref HDC phdc);
 
-  HRESULT ReleaseDC(RECT* pDirtyRect);
+  HRESULT ReleaseDC(RECT* pDirtyRect = null);
 }
 
 
-extern(C) const(IID) IID_IDXGIAdapter;
-
-//DeclareIID(IDXGIAdapter, "2411e7e1-12ac-4ccf-bd14-9798e8534dc0")
+mixin DeclareIID!(IDXGIAdapter, "2411e7e1-12ac-4ccf-bd14-9798e8534dc0");
 interface IDXGIAdapter : IDXGIObject
 {
 extern(Windows):
-  mixin DeclareMember_uuidof;
-
   HRESULT EnumOutputs(UINT Output,
-                      IDXGIOutput** ppOutput);
+                      ref IDXGIOutput ppOutput);
 
-  HRESULT GetDesc(DXGI_ADAPTER_DESC* pDesc);
+  HRESULT GetDesc(ref DXGI_ADAPTER_DESC pDesc);
 
   HRESULT CheckInterfaceSupport(REFGUID InterfaceName,
-                                LARGE_INTEGER* pUMDVersion);
+                                ref LARGE_INTEGER pUMDVersion);
 }
 
 enum DXGI_ENUM_MODES : uint
@@ -429,42 +402,38 @@ enum DXGI_ENUM_MODES : uint
 }
 
 
-extern(C) const(IID) IID_IDXGIOutput;
-
-//DeclareIID(IDXGIOutput, "ae02eedb-c735-4690-8d52-5a8dc20213aa")
+mixin DeclareIID!(IDXGIOutput, "ae02eedb-c735-4690-8d52-5a8dc20213aa");
 interface IDXGIOutput : IDXGIObject
 {
 extern(Windows):
-  mixin DeclareMember_uuidof;
-
-  HRESULT GetDesc(DXGI_OUTPUT_DESC* pDesc);
+  HRESULT GetDesc(ref DXGI_OUTPUT_DESC pDesc);
 
   HRESULT GetDisplayModeList(DXGI_FORMAT EnumFormat,
                              UINT Flags,
-                             UINT* pNumModes,
-                             DXGI_MODE_DESC* pDesc);
+                             ref UINT pNumModes,
+                             DXGI_MODE_DESC* pDesc = null);
 
-  HRESULT FindClosestMatchingMode(const(DXGI_MODE_DESC)* pModeToMatch,
-                                  DXGI_MODE_DESC* pClosestMatch,
-                                  IUnknown* pConcernedDevice);
+  HRESULT FindClosestMatchingMode(ref in DXGI_MODE_DESC pModeToMatch,
+                                  ref DXGI_MODE_DESC pClosestMatch,
+                                  IUnknown pConcernedDevice = null);
 
   HRESULT WaitForVBlank();
-  HRESULT TakeOwnership(IUnknown* pDevice,
+  HRESULT TakeOwnership(IUnknown pDevice,
                         BOOL Exclusive);
 
   void ReleaseOwnership();
 
-  HRESULT GetGammaControlCapabilities(DXGI_GAMMA_CONTROL_CAPABILITIES* pGammaCaps);
+  HRESULT GetGammaControlCapabilities(ref DXGI_GAMMA_CONTROL_CAPABILITIES pGammaCaps);
 
-  HRESULT SetGammaControl(const(DXGI_GAMMA_CONTROL)* pArray);
+  HRESULT SetGammaControl(ref in DXGI_GAMMA_CONTROL pArray);
 
   HRESULT GetGammaControl(DXGI_GAMMA_CONTROL* pArray);
 
-  HRESULT SetDisplaySurface(IDXGISurface* pScanoutSurface);
+  HRESULT SetDisplaySurface(IDXGISurface pScanOutSurface);
 
-  HRESULT GetDisplaySurfaceData(IDXGISurface* pDestination);
+  HRESULT GetDisplaySurfaceData(IDXGISurface pDestination);
 
-  HRESULT GetFrameStatistics(DXGI_FRAME_STATISTICS* pStats);
+  HRESULT GetFrameStatistics(ref DXGI_FRAME_STATISTICS pStats);
 }
 
 
@@ -483,14 +452,10 @@ enum DXGI_PRESENT
 }
 
 
-extern(C) const(IID) IID_IDXGISwapChain;
-
-//DeclareIID(IDXGISwapChain, "310d36a0-d2e7-4c0a-aa04-6a9d23b8886a")
+mixin DeclareIID!(IDXGISwapChain, "310d36a0-d2e7-4c0a-aa04-6a9d23b8886a");
 interface IDXGISwapChain : IDXGIDeviceSubObject
 {
 extern(Windows):
-  mixin DeclareMember_uuidof;
-
   HRESULT Present(UINT SyncInterval,
                   UINT Flags);
 
@@ -499,12 +464,12 @@ extern(Windows):
                     void** ppSurface);
 
   HRESULT SetFullscreenState(BOOL Fullscreen,
-                             IDXGIOutput* pTarget);
+                             IDXGIOutput pTarget);
 
   HRESULT GetFullscreenState(BOOL* pFullscreen,
-                             IDXGIOutput** ppTarget);
+                             ref IDXGIOutput ppTarget);
 
-  HRESULT GetDesc(DXGI_SWAP_CHAIN_DESC* pDesc);
+  HRESULT GetDesc(ref DXGI_SWAP_CHAIN_DESC pDesc);
 
   HRESULT ResizeBuffers(UINT BufferCount,
                         UINT Width,
@@ -512,13 +477,13 @@ extern(Windows):
                         DXGI_FORMAT NewFormat,
                         UINT SwapChainFlags);
 
-  HRESULT ResizeTarget(const(DXGI_MODE_DESC)* pNewTargetParameters);
+  HRESULT ResizeTarget(in ref DXGI_MODE_DESC pNewTargetParameters);
 
-  HRESULT GetContainingOutput(IDXGIOutput** ppOutput);
+  HRESULT GetContainingOutput(ref IDXGIOutput ppOutput);
 
-  HRESULT GetFrameStatistics(DXGI_FRAME_STATISTICS* pStats);
+  HRESULT GetFrameStatistics(ref DXGI_FRAME_STATISTICS pStats);
 
-  HRESULT GetLastPresentCount(UINT* pLastPresentCount);
+  HRESULT GetLastPresentCount(ref UINT pLastPresentCount);
 
 }
 
@@ -531,57 +496,51 @@ enum DXGI_MWA
 }
 
 
-extern(C) const(IID) IID_IDXGIFactory;
-
-//DeclareIID(IDXGIFactory, "7b7166ec-21c7-44ae-b21a-c9ae321ae369")
+mixin DeclareIID!(IDXGIFactory, "7b7166ec-21c7-44ae-b21a-c9ae321ae369");
 interface IDXGIFactory : IDXGIObject
 {
 extern(Windows):
-  mixin DeclareMember_uuidof;
-
   HRESULT EnumAdapters(UINT Adapter,
-                       IDXGIAdapter** ppAdapter);
+                       ref IDXGIAdapter ppAdapter);
 
   HRESULT MakeWindowAssociation(HWND WindowHandle,
                                 UINT Flags);
 
-  HRESULT GetWindowAssociation(HWND* pWindowHandle);
+  HRESULT GetWindowAssociation(ref HWND pWindowHandle);
 
-  HRESULT CreateSwapChain(IUnknown* pDevice,
-                          DXGI_SWAP_CHAIN_DESC* pDesc,
-                          IDXGISwapChain** ppSwapChain);
+  HRESULT CreateSwapChain(IUnknown pDevice,
+                          ref DXGI_SWAP_CHAIN_DESC pDesc,
+                          ref IDXGISwapChain ppSwapChain);
 
   HRESULT CreateSoftwareAdapter(HMODULE Module,
-                                IDXGIAdapter** ppAdapter);
+                                ref IDXGIAdapter ppAdapter);
 
 }
 
+
+extern(Windows) HRESULT CreateDXGIFactory(REFIID riid, void** ppFactory);
 extern(Windows) HRESULT CreateDXGIFactory1(REFIID riid, void** ppFactory);
 
 
-extern(C) const(IID) IID_IDXGIDevice;
-
-//DeclareIID(IDXGIDevice, "54ec77fa-1377-44e6-8c32-88fd5f44c84c")
+mixin DeclareIID!(IDXGIDevice, "54ec77fa-1377-44e6-8c32-88fd5f44c84c");
 interface IDXGIDevice : IDXGIObject
 {
 extern(Windows):
-  mixin DeclareMember_uuidof;
+  HRESULT GetAdapter(ref IDXGIAdapter pAdapter);
 
-  HRESULT GetAdapter(IDXGIAdapter** pAdapter);
-
-  HRESULT CreateSurface(const(DXGI_SURFACE_DESC)* pDesc,
+  HRESULT CreateSurface(in ref DXGI_SURFACE_DESC pDesc,
                         UINT NumSurfaces,
                         DXGI_USAGE Usage,
-                        const(DXGI_SHARED_RESOURCE)* pSharedResource,
-                        IDXGISurface** ppSurface);
+                        in ref DXGI_SHARED_RESOURCE pSharedResource,
+                        ref IDXGISurface ppSurface);
 
-  HRESULT QueryResourceResidency(const(IUnknown*)* ppResources,
+  HRESULT QueryResourceResidency(IUnknown* ppResources,
                                  DXGI_RESIDENCY* pResidencyStatus,
                                  UINT NumResources);
 
   HRESULT SetGPUThreadPriority(INT Priority);
 
-  HRESULT GetGPUThreadPriority(INT* pPriority);
+  HRESULT GetGPUThreadPriority(ref INT pPriority);
 }
 
 enum DXGI_ADAPTER_FLAG
@@ -613,42 +572,30 @@ struct DXGI_DISPLAY_COLOR_SPACE
 }
 
 
-extern(C) const(IID) IID_IDXGIFactory1;
-
-//DeclareIID(IDXGIFactory1, "770aae78-f26f-4dba-a829-253c83d1b387")
+mixin DeclareIID!(IDXGIFactory1, "770aae78-f26f-4dba-a829-253c83d1b387");
 interface IDXGIFactory1 : IDXGIFactory
 {
 extern(Windows):
-  mixin DeclareMember_uuidof;
-
   HRESULT EnumAdapters1(UINT Adapter,
-                        IDXGIAdapter1** ppAdapter);
+                        ref IDXGIAdapter1 ppAdapter);
 
   BOOL IsCurrent();
 }
 
 
-extern(C) const(IID) IID_IDXGIAdapter1;
-
-//DeclareIID(IDXGIAdapter1, "29038f61-3839-4626-91fd-086879011a05")
+mixin DeclareIID!(IDXGIAdapter1, "29038f61-3839-4626-91fd-086879011a05");
 interface IDXGIAdapter1 : IDXGIAdapter
 {
 extern(Windows):
-  mixin DeclareMember_uuidof;
-
-  HRESULT GetDesc1(DXGI_ADAPTER_DESC1* pDesc);
+  HRESULT GetDesc1(ref DXGI_ADAPTER_DESC1 pDesc);
 }
 
 
-extern(C) const(IID) IID_IDXGIDevice1;
-
-//DeclareIID(IDXGIDevice1, "77db970f-6276-48ba-ba28-070143b4392c")
+mixin DeclareIID!(IDXGIDevice1, "77db970f-6276-48ba-ba28-070143b4392c");
 interface IDXGIDevice1 : IDXGIDevice
 {
 extern(Windows):
-  mixin DeclareMember_uuidof;
-
   HRESULT SetMaximumFrameLatency(UINT MaxLatency);
 
-  HRESULT GetMaximumFrameLatency(UINT* pMaxLatency);
+  HRESULT GetMaximumFrameLatency(ref UINT pMaxLatency);
 }
