@@ -9,6 +9,65 @@ import Meta = krepel.meta;
 /// The global default allocator.
 __gshared ForwardAllocator!HeapMemory GlobalAllocator;
 
+interface IMemory
+{
+  bool Contains(const MemoryRegion SomeRegion);
+
+  MemoryRegion Allocate(size_t RequestedBytes, size_t Alignment = 0);
+
+  bool Deallocate(MemoryRegion MemoryToDeallocate);
+}
+
+private class GenericMemory : IMemory
+{
+  void* WrappedPtr;
+  bool Contains(const MemoryRegion SomeRegion) { return false; }
+  MemoryRegion Allocate(size_t RequestedBytes, size_t Alignment = 0) { return null; }
+  bool Deallocate(MemoryRegion MemoryToDeallocate) { return false; }
+}
+
+template Wrap(SomeMemoryType)
+  if(IsSomeMemory!SomeMemoryType)
+{
+  class WrapperClass : IMemory
+  {
+    SomeMemoryType* WrappedPtr;
+
+    final override bool Contains(const MemoryRegion SomeRegion)
+    {
+      return WrappedPtr.Contains(SomeRegion);
+    }
+
+    final override MemoryRegion Allocate(size_t RequestedBytes, size_t Alignment = 0)
+    {
+      return WrappedPtr.Allocate(RequestedBytes, Alignment);
+    }
+
+    final override bool Deallocate(MemoryRegion MemoryToDeallocate)
+    {
+      return WrappedPtr.Deallocate(MemoryToDeallocate);
+    }
+  }
+
+  WrapperClass Wrap(ref SomeMemoryType SomeMemory)
+  {
+    WrapperClass Wrapper = void;
+    if(SomeMemory.IsWrapped)
+    {
+      Wrapper = cast(WrapperClass)SomeMemory.WrapperMemory.ptr;
+      assert(Wrapper.WrappedPtr == &SomeMemory);
+    }
+    else
+    {
+      Wrapper = Construct!WrapperClass(SomeMemory.WrapperMemory);
+      Wrapper.WrappedPtr = &SomeMemory;
+      SomeMemory.IsWrapped = true;
+    }
+
+    return Wrapper;
+  }
+}
+
 /// Memory Features
 enum : ubyte
 {
@@ -22,6 +81,9 @@ mixin template MemoryMixinTemplate(size_t InFeatures)
 {
   alias ThisIsAMemoryType = typeof(this);
   enum size_t Features = InFeatures;
+
+  bool IsWrapped;
+  ubyte[Meta.ClassInstanceSizeOf!GenericMemory] WrapperMemory = void;
 }
 
 /// Adds the Contains function to a memory type so it can be asked whether a
@@ -227,9 +289,6 @@ struct HeapMemory
   @nogc:
   nothrow:
 
-  mixin MemoryMixinTemplate!(SupportsDeallocation);
-  mixin MemoryContainsCheckMixin!(Memory);
-
   MemoryRegion Memory;
   size_t DefaultAlignment = GlobalDefaultAlignment;
 
@@ -241,6 +300,9 @@ struct HeapMemory
   /// The number of bytes required to make use of a block in the case the user
   /// requests 1 byte of memory with an alignment of 1.
   enum MinimumBlockSize = BlockOverhead + 1;
+
+  mixin MemoryMixinTemplate!(SupportsDeallocation);
+  mixin MemoryContainsCheckMixin!(Memory);
 
 
   this(MemoryRegion AvailableMemory)
@@ -503,6 +565,11 @@ mixin template StackMemoryTemplate()
     AllocationMark = NewMark;
     return RequestedMemory;
   }
+
+  bool Deallocate(MemoryRegion Memory)
+  {
+    return false;
+  }
 }
 
 /// Wraps two other memory types.
@@ -515,10 +582,10 @@ struct HybridMemory(P, S)
 
   static assert(IsSomeMemory!PrimaryMemoryType && IsSomeMemory!SecondaryMemoryType);
 
-  mixin MemoryMixinTemplate!(PrimaryMemoryType.Features | SecondaryMemoryType.Features);
-
   PrimaryMemoryType    PrimaryMemory;
   SecondaryMemoryType  SecondaryMemory;
+
+  mixin MemoryMixinTemplate!(PrimaryMemoryType.Features | SecondaryMemoryType.Features);
 
 
   auto Allocate(size_t RequestedBytes, size_t Alignment = 0)
@@ -748,4 +815,26 @@ unittest
   SuperClass Instance = StackAllocator.New!SubClass();
   assert(Instance);
   assert(Instance.Data == 1337);
+}
+
+// IMemory
+unittest
+{
+  StaticStackMemory!128 SomeStackMemory;
+  assert(!SomeStackMemory.IsWrapped);
+  auto SomeMemory = Wrap(SomeStackMemory);
+  assert(SomeStackMemory.IsWrapped);
+
+  auto Mem = SomeMemory.Allocate(32);
+  Mem[] = 42;
+
+  foreach(Byte; SomeStackMemory.Memory[0 .. 32])
+  {
+    assert(Byte == 42);
+  }
+
+  foreach(Byte; SomeStackMemory.Memory[32 .. $])
+  {
+    assert(Byte != 42);
+  }
 }
