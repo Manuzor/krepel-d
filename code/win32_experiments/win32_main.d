@@ -4,6 +4,8 @@ import krepel;
 
 import krepel.win32;
 
+import krepel.resources;
+
 version(Windows):
 
 extern(Windows)

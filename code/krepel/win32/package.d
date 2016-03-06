@@ -9,3 +9,5 @@ public import krepel.win32.win32;
 
 // Wrapper and helper for XInput.
 public import krepel.win32.xinput;
+
+public import krepel.win32.win32file;
