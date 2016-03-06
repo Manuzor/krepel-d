@@ -11,3 +11,4 @@ public import krepel.win32.win32;
 public import krepel.win32.xinput;
 
 public import krepel.win32.win32file;
+public import krepel.win32.system;
