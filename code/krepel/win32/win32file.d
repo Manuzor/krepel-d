@@ -10,14 +10,14 @@ class Win32File : IFile
 
   this(const char[] Path)
   {
-    auto NewHandle = CreateFile(
-      Path.ptr,
-      GENERIC_READ | GENERIC_WRITE,
-      0,
-      null,
-      OPEN_EXISTING,
-      FILE_ATTRIBUTE_NORMAL
-      );
+    //auto NewHandle = CreateFile(
+    //  Path.ptr,
+    //  GENERIC_READ | GENERIC_WRITE,
+    //  0,
+    //  null,
+    //  OPEN_EXISTING,
+    //  FILE_ATTRIBUTE_NORMAL
+    //  );
   }
 
   override int Read(MemoryRegion Region, int MaxRead)

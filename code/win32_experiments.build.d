@@ -10,14 +10,14 @@ mixin AddBuildRule!("win32_experiments_tests", Win32ExperimentsTests);
 void Win32Experiments(ref BuildContext Context)
 {
   Context.OutFileName = "win32_experiments.exe";
-  AddSourceFiles(Context);
+  Win32ExperimentsCommon(Context);
   Compile(Context);
 }
 
 void Win32ExperimentsTests(ref BuildContext Context)
 {
   Context.OutFileName = "win32_experiments_tests.exe";
-  AddSourceFiles(Context);
+  Win32ExperimentsCommon(Context);
   Context.BuildArgs ~= "-unittest";
   if(Compile(Context).CompilerStatus == 0)
   {
@@ -26,11 +26,12 @@ void Win32ExperimentsTests(ref BuildContext Context)
 }
 
 // Utility function to get all relevant source files.
-void AddSourceFiles(ref BuildContext Context)
+void Win32ExperimentsCommon(ref BuildContext Context)
 {
   with(Context)
   {
-    immutable DirectoriesToSearch = ["krepel", "win32_experiments"];
+    // Add source files.
+    immutable DirectoriesToSearch = ["krepel", "directx", "win32_experiments"];
     foreach(SourceDir; DirectoriesToSearch)
     {
       auto AbsoluteSourceDir = buildNormalizedPath(thisDir, SourceDir);
@@ -38,5 +39,8 @@ void AddSourceFiles(ref BuildContext Context)
                .map!(a => a.name)                                      // Use only the name of DirEntry objects.
                .array;                                                 // Convert the range to a proper array.
     }
+
+    // Additional libs
+    BuildArgs ~= "-Ldxgi.lib";
   }
 }
