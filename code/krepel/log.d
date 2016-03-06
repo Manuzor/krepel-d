@@ -11,17 +11,17 @@ LogState Log;
 
 struct LogState
 {
-  Array!char Buffer;
+  Array!char MessageBuffer;
   Array!LogSink Sinks;
 
-  void ClearBuffer()
+  void ClearMessageBuffer()
   {
-    Buffer.Clear();
+    MessageBuffer.Clear();
   }
 
   void put(in char[] Chars)
   {
-    Buffer.PushBack(Chars);
+    MessageBuffer ~= Chars;
   }
 }
 
@@ -41,9 +41,9 @@ template LogMessageDispatch(LogLevel Level)
   {
     FormattedWrite(&Log, Message, Args);
 
-    scope(exit) Log.ClearBuffer();
+    scope(exit) Log.ClearMessageBuffer();
 
-    auto Buffer = Log.Buffer[];
+    auto Buffer = Log.MessageBuffer[];
     foreach(ref Sink ; Log.Sinks[])
     {
       Sink(Level, Buffer);
@@ -74,18 +74,18 @@ unittest
   struct MyLog
   {
     char[] EntireBuffer;
-    char[] Buffer;
+    char[] MessageBuffer;
     LogSink[] Sinks;
 
-    void ClearBuffer()
+    void ClearMessageBuffer()
     {
-      Buffer = EntireBuffer;
+      MessageBuffer = EntireBuffer;
     }
 
     void put(in char[] Chars)
     {
-      Buffer[0 .. Chars.length] = Chars[];
-      Buffer = Buffer[Chars.length .. $];
+      MessageBuffer[0 .. Chars.length] = Chars[];
+      MessageBuffer = MessageBuffer[Chars.length .. $];
     }
   }
 

@@ -5,17 +5,17 @@ import krepel.math;
 nothrow:
 pure:
 
-alias KiB = (const Bytes) => Bytes * (cast(typeof(Bytes))1024);
-alias MiB = (const Bytes) => Bytes * (cast(typeof(Bytes))1024).KiB;
-alias GiB = (const Bytes) => Bytes * (cast(typeof(Bytes))1024).MiB;
-alias TiB = (const Bytes) => Bytes * (cast(typeof(Bytes))1024).GiB;
-alias PiB = (const Bytes) => Bytes * (cast(typeof(Bytes))1024).TiB;
+alias KiB = (const Bytes) => Bytes * (cast(size_t)1024);
+alias MiB = (const Bytes) => Bytes * (cast(size_t)1024).KiB;
+alias GiB = (const Bytes) => Bytes * (cast(size_t)1024).MiB;
+alias TiB = (const Bytes) => Bytes * (cast(size_t)1024).GiB;
+alias PiB = (const Bytes) => Bytes * (cast(size_t)1024).TiB;
 
-alias KB  = (const Bytes) => Bytes * (cast(typeof(Bytes))1000);
-alias MB  = (const Bytes) => Bytes * (cast(typeof(Bytes))1000).KiB;
-alias GB  = (const Bytes) => Bytes * (cast(typeof(Bytes))1000).MiB;
-alias TB  = (const Bytes) => Bytes * (cast(typeof(Bytes))1000).GiB;
-alias PB  = (const Bytes) => Bytes * (cast(typeof(Bytes))1000).TiB;
+alias KB  = (const Bytes) => Bytes * (cast(size_t)1000);
+alias MB  = (const Bytes) => Bytes * (cast(size_t)1000).KB;
+alias GB  = (const Bytes) => Bytes * (cast(size_t)1000).MB;
+alias TB  = (const Bytes) => Bytes * (cast(size_t)1000).GB;
+alias PB  = (const Bytes) => Bytes * (cast(size_t)1000).TB;
 
 alias MemoryRegion = ubyte[];
 alias StaticMemoryRegion(size_t N) = ubyte[N];
