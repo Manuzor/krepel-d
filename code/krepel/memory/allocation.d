@@ -13,7 +13,6 @@ mixin template CommonMemoryStuff()
 {
   alias ThisIsAMemoryType = typeof(this);
 
-  bool IsWrapped;
   ubyte[Meta.ClassInstanceSizeOf!MinimalMemoryClass] WrapperMemory = void;
 }
 
@@ -618,19 +617,8 @@ template Wrap(SomeMemoryType)
 
   WrapperClass Wrap(ref SomeMemoryType SomeMemory)
   {
-    WrapperClass Wrapper = void;
-    if(SomeMemory.IsWrapped)
-    {
-      Wrapper = cast(WrapperClass)SomeMemory.WrapperMemory.ptr;
-      assert(Wrapper.WrappedPtr == &SomeMemory);
-    }
-    else
-    {
-      Wrapper = Construct!WrapperClass(SomeMemory.WrapperMemory);
-      Wrapper.WrappedPtr = &SomeMemory;
-      SomeMemory.IsWrapped = true;
-    }
-
+    auto Wrapper = Construct!WrapperClass(SomeMemory.WrapperMemory);
+    Wrapper.WrappedPtr = &SomeMemory;
     return Wrapper;
   }
 }
@@ -841,9 +829,8 @@ unittest
 unittest
 {
   StaticStackMemory!128 SomeStack;
-  assert(!SomeStack.IsWrapped);
   auto SomeAllocator = Wrap(SomeStack);
-  assert(SomeStack.IsWrapped);
+  assert(cast(void*)SomeAllocator == cast(void*)SomeStack.WrapperMemory.ptr);
 
   auto Mem = SomeAllocator.Allocate(32);
   Mem[] = 42;
