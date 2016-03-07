@@ -4,7 +4,7 @@ import krepel;
 import krepel.algorithm : Min, Max;
 import Meta = krepel.meta;
 
-struct Array(T, A = typeof(null))
+struct Array(T)
 {
   @nogc:
   nothrow:
@@ -13,34 +13,29 @@ struct Array(T, A = typeof(null))
 
   alias ElementType = T;
 
-  static if(is(A == typeof(null)))
-  {
-    alias AllocatorType = typeof(GlobalAllocator);
-    AllocatorType* AllocatorPtr = &GlobalAllocator;
-  }
-  else
-  {
-    alias AllocatorType = A;
-    AllocatorType* AllocatorPtr;
-  }
+
+  IAllocator InternalAllocator;
 
   ElementType[] AvailableMemory;
 
   // Is always a subset of AvailableMemory.
   ElementType[] Data;
 
+  @property IAllocator Allocator()
+  {
+    return InternalAllocator ? InternalAllocator : GlobalAllocator;
+  }
 
-  @property auto ref Allocator() inout { return *AllocatorPtr; }
+  @property void Allocator(IAllocator NewAllocator)
+  {
+    // TODO(Manu): Move old AvailableMemory
+    InternalAllocator = NewAllocator;
+  }
 
   @property auto Capacity() const { return AvailableMemory.length; }
 
   // Note(Manu): Disable copy construction.
   @disable this(this);
-
-  this(ref AllocatorType Allocator)
-  {
-    AllocatorPtr = &Allocator;
-  }
 
   ~this()
   {
@@ -255,12 +250,9 @@ unittest
 
 unittest
 {
-  alias AllocatorType = ForwardAllocator!(StaticStackMemory!1024);
-  alias ArrayType = Array!(int, AllocatorType);
-
-  AllocatorType Allocator;
-  auto Array = ArrayType(Allocator);
-  assert(Array.AllocatorPtr);
+  StaticStackMemory!1024 Memory;
+  auto Array = Array!int(Memory.Wrap);
+  assert(Array.Allocator != GlobalAllocator);
 
   Array.PushBack(0, 1, 2, 3, 4);
 
