@@ -47,14 +47,14 @@ version(unittest)
   /// Usage: mixin(SetupGlobalAllocatorForTesting!1024);
   template SetupGlobalAllocatorForTesting(size_t N)
   {
-     import std.format;
+    import krepel : Format;
     enum SetupGlobalAllocatorForTesting = q{
-      {
-        ubyte[%s] _SetupGlobalAllocatorForTesting_Buffer;
-        GlobalAllocator.Memory.Initialize(_SetupGlobalAllocatorForTesting_Buffer);
-      }
-      scope(exit) GlobalAllocator.Memory.Deinitialize();
-    }.format(N.stringof);
+      ubyte[%s] _SetupGlobalAllocatorForTesting_Buffer;
+      auto _SetupGlobalAllocatorForTesting_Heap = HeapMemory(_SetupGlobalAllocatorForTesting_Buffer);
+      auto _SetupGlobalAllocatorForTesting_PreviousGlobalAllocator = .GlobalAllocator;
+      .GlobalAllocator = Wrap(_SetupGlobalAllocatorForTesting_Heap);
+      scope(exit) .GlobalAllocator = _SetupGlobalAllocatorForTesting_PreviousGlobalAllocator;
+    }.Format(N.stringof);
   }
 }
 

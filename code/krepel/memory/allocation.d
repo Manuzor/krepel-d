@@ -6,84 +6,14 @@ import krepel.algorithm;
 import krepel.math : IsPowerOfTwo, IsEven, IsOdd;
 import Meta = krepel.meta;
 
-/// The global default allocator.
-__gshared ForwardAllocator!HeapMemory GlobalAllocator;
-
-interface IMemory
-{
-  bool Contains(const MemoryRegion SomeRegion);
-
-  MemoryRegion Allocate(size_t RequestedBytes, size_t Alignment = 0);
-
-  bool Deallocate(MemoryRegion MemoryToDeallocate);
-}
-
-private class GenericMemory : IMemory
-{
-  void* WrappedPtr;
-  bool Contains(const MemoryRegion SomeRegion) { return false; }
-  MemoryRegion Allocate(size_t RequestedBytes, size_t Alignment = 0) { return null; }
-  bool Deallocate(MemoryRegion MemoryToDeallocate) { return false; }
-}
-
-template Wrap(SomeMemoryType)
-  if(IsSomeMemory!SomeMemoryType)
-{
-  class WrapperClass : IMemory
-  {
-    SomeMemoryType* WrappedPtr;
-
-    final override bool Contains(const MemoryRegion SomeRegion)
-    {
-      return WrappedPtr.Contains(SomeRegion);
-    }
-
-    final override MemoryRegion Allocate(size_t RequestedBytes, size_t Alignment = 0)
-    {
-      return WrappedPtr.Allocate(RequestedBytes, Alignment);
-    }
-
-    final override bool Deallocate(MemoryRegion MemoryToDeallocate)
-    {
-      return WrappedPtr.Deallocate(MemoryToDeallocate);
-    }
-  }
-
-  WrapperClass Wrap(ref SomeMemoryType SomeMemory)
-  {
-    WrapperClass Wrapper = void;
-    if(SomeMemory.IsWrapped)
-    {
-      Wrapper = cast(WrapperClass)SomeMemory.WrapperMemory.ptr;
-      assert(Wrapper.WrappedPtr == &SomeMemory);
-    }
-    else
-    {
-      Wrapper = Construct!WrapperClass(SomeMemory.WrapperMemory);
-      Wrapper.WrappedPtr = &SomeMemory;
-      SomeMemory.IsWrapped = true;
-    }
-
-    return Wrapper;
-  }
-}
-
-/// Memory Features
-enum : ubyte
-{
-  SupportsAllocationOnly  = 0,
-  SupportsReallocation    = 1 << 0,
-  SupportsDeallocation    = 1 << 1,
-}
+IAllocator GlobalAllocator;
 
 /// Common functionality for all memory types.
-mixin template MemoryMixinTemplate(size_t InFeatures)
+mixin template CommonMemoryStuff()
 {
   alias ThisIsAMemoryType = typeof(this);
-  enum size_t Features = InFeatures;
 
-  bool IsWrapped;
-  ubyte[Meta.ClassInstanceSizeOf!GenericMemory] WrapperMemory = void;
+  ubyte[Meta.ClassInstanceSizeOf!MinimalMemoryClass] WrapperMemory = void;
 }
 
 /// Adds the Contains function to a memory type so it can be asked whether a
@@ -105,62 +35,85 @@ template IsSomeMemory(M)
   else                               enum bool IsSomeMemory = false;
 }
 
-/// An allocator that wraps a given memory type used to allocate single
-/// objects or entire arrays.
-struct ForwardAllocator(M)
+
+interface IAllocator
 {
-  // TODO(Manu): Add the following once Construct and Destruct are compatible.
-  // @nogc:
-  // nothrow:
+  @nogc nothrow
+  {
+    bool Contains(const MemoryRegion SomeRegion);
 
-  alias MemoryType = M;
-  static assert(IsSomeMemory!MemoryType);
+    MemoryRegion Allocate(size_t RequestedBytes, size_t Alignment = 0);
 
-  MemoryType Memory;
+    bool Deallocate(MemoryRegion MemoryToDeallocate);
+  }
+
+  // TODO(Manu): Add @nogc and nothrow for the rest of the interface once Construct and Destruct are compatible.
 
   /// Creates a new instance of Type without constructing it.
-  Type* NewUnconstructed(Type)()
+  final Type* NewUnconstructed(Type)()
+    if(!is(Type == class))
   {
-    auto Raw = Memory.Allocate(Type.sizeof, Type.alignof);
+    auto Raw = Allocate(Type.sizeof, Type.alignof);
     if(Raw is null) return null;
     assert(Raw.length >= Type.sizeof);
     auto Instance = cast(Type*)Raw.ptr;
     return Instance;
   }
 
+  /// Ditto
+  final Type NewUnconstructed(Type)()
+    if(is(Type == class))
+  {
+    enum Size = Meta.ClassInstanceSizeOf!Type;
+    enum Alignment = Meta.ClassInstanceAlignmentOf!Type;
+    auto Raw = Allocate(Size, Alignment);
+    if(Raw is null) return null;
+    assert(Raw.length >= Type.sizeof);
+    auto Instance = cast(Type)Raw.ptr;
+    return Instance;
+  }
+
   /// Free the memory occupied by Instance without destructing it.
   /// Note: If the memory type used does not support deallocation
   ///       (e.g. StackMemory), this function does nothing.
-  void DeleteUndestructed(Type)(Type* Instance)
+  final void DeleteUndestructed(Type)(Type* Instance)
+    if(!is(Type == class))
   {
-    static if(MemoryType.Features & SupportsDeallocation)
+    if(Instance)
     {
-      if(Instance)
-      {
-        Memory.Deallocate(Instance[0 .. Type.sizeof]);
-      }
+      Deallocate((cast(ubyte*)Instance)[0 .. Type.sizeof]);
+    }
+  }
+
+  /// Ditto
+  final void DeleteUndestructed(Type)(Type Instance)
+    if(is(Type == class))
+  {
+    if(Instance)
+    {
+      Deallocate((cast(ubyte*)Instance)[0 .. Type.sizeof]);
     }
   }
 
   /// Allocate a new instance of type Type and construct it using the given Args.
-  Type* New(Type, ArgTypes...)(auto ref ArgTypes Args)
+  final Type* New(Type, ArgTypes...)(auto ref ArgTypes Args)
     if(!is(Type == class))
   {
-    return NewUnconstructed!Type().Construct(Args);
+    return .Construct(NewUnconstructed!Type(), Args);
   }
 
-  Type New(Type, ArgTypes...)(auto ref ArgTypes Args)
+  final Type New(Type, ArgTypes...)(auto ref ArgTypes Args)
     if(is(Type == class))
   {
     static assert(!__traits(isAbstractClass, Type), "Cannot instantiate abstract class.");
-    enum SizeOfT = __traits(classInstanceSize, Type);
-    enum AlignmentOfT = Meta.ClassInstanceAlignment!Type;
-    auto Raw = Memory.Allocate(SizeOfT, AlignmentOfT);
+    enum Size = Meta.ClassInstanceSizeOf!Type;
+    enum Alignment = Meta.ClassInstanceAlignmentOf!Type;
+    auto Raw = Allocate(Size, Alignment);
     if(Raw is null) return null;
     assert(Raw.length >= Type.sizeof);
     auto Instance = cast(Type)Raw.ptr;
 
-    Construct(Instance, Args);
+    .Construct(Instance, Args);
     return Instance;
   }
 
@@ -168,20 +121,32 @@ struct ForwardAllocator(M)
   /// Note: If the memory type used does not support deallocation
   ///       (e.g. StackMemory), this function only destructs Instance,
   ///       but does not free memory.
-  void Delete(Type)(Type* Instance)
+  final void Delete(Type)(Type* Instance)
+    if(!is(Type == class))
   {
     if(Instance)
     {
-      Destruct(Instance);
+      .Destruct(Instance);
+      DeleteUndestructed(Instance);
+    }
+  }
+
+  /// Ditto
+  final void Delete(Type)(Type Instance)
+    if(is(Type == class))
+  {
+    if(Instance)
+    {
+      .Destruct(Instance);
       DeleteUndestructed(Instance);
     }
   }
 
   /// Creates a new array of Type's without constructing them.
-  Type[] NewUnconstructedArray(Type)(size_t Count)
+  final Type[] NewUnconstructedArray(Type)(size_t Count)
   {
     // TODO(Manu): Implement.
-    auto RawMemory = Memory.Allocate(Count * Type.sizeof, Type.alignof);
+    auto RawMemory = Allocate(Count * Type.sizeof, Type.alignof);
 
     // Out of memory?
     if(RawMemory is null) return null;
@@ -194,20 +159,17 @@ struct ForwardAllocator(M)
   /// elements.
   /// Note: If the memory type used does not support deallocation
   ///       (e.g. StackMemory), this function does nothing.
-  void DeleteUndestructed(Type)(Type[] Array)
+  final void DeleteUndestructed(Type)(Type[] Array)
   {
-    static if(MemoryType.Features & SupportsDeallocation)
-    {
-      Memory.Deallocate(cast(ubyte[])Array);
-    }
+    Deallocate(cast(ubyte[])Array);
   }
 
   /// Creates a new array of Type's and construct each element of it with the
   /// given Args.
-  Type[] NewArray(Type, ArgTypes...)(size_t Count, auto ref ArgTypes Args)
+  final Type[] NewArray(Type, ArgTypes...)(size_t Count, auto ref ArgTypes Args)
   {
     auto Array = NewUnconstructedArray!Type(Count);
-    Construct(Array, Args);
+    .Construct(Array, Args);
     return Array;
   }
 
@@ -215,9 +177,9 @@ struct ForwardAllocator(M)
   /// Note: If the memory type used does not support deallocation
   ///       (e.g. StackMemory), this function only destructs Instance,
   ///       but does not free memory.
-  void Delete(Type)(Type[] Array)
+  final void Delete(Type)(Type[] Array)
   {
-    Destruct(Array);
+    .Destruct(Array);
     DeleteUndestructed(Array);
   }
 }
@@ -228,7 +190,7 @@ struct SystemMemory
   @nogc:
   nothrow:
 
-  mixin MemoryMixinTemplate!(SupportsReallocation | SupportsDeallocation);
+  mixin CommonMemoryStuff;
 
   private import krepel.system;
 
@@ -301,13 +263,18 @@ struct HeapMemory
   /// requests 1 byte of memory with an alignment of 1.
   enum MinimumBlockSize = BlockOverhead + 1;
 
-  mixin MemoryMixinTemplate!(SupportsDeallocation);
+  mixin CommonMemoryStuff;
   mixin MemoryContainsCheckMixin!(Memory);
 
 
   this(MemoryRegion AvailableMemory)
   {
     Initialize(AvailableMemory);
+  }
+
+  ~this()
+  {
+    Deinitialize();
   }
 
   void Initialize(MemoryRegion AvailableMemory)
@@ -344,9 +311,8 @@ struct HeapMemory
     if(Alignment == 0) Alignment = DefaultAlignment;
 
     const RequiredBytes = RequestedBytes + Alignment;
-    const PaddingToAchieveAnEvenBlockSize = RequiredBytes.IsEven ? 0 : 1;
-    debug(HeapMemory) const RequiredBlockSize = BlockOverhead + RequiredBytes + PaddingToAchieveAnEvenBlockSize + DeadBeefType.sizeof;
-    else              const RequiredBlockSize = BlockOverhead + RequiredBytes + PaddingToAchieveAnEvenBlockSize;
+    debug(HeapMemory) const RequiredBlockSize = BlockOverhead + RequiredBytes + DeadBeefType.sizeof;
+    else                   const RequiredBlockSize = BlockOverhead + RequiredBytes;
 
     auto Block = FindFreeBlockAndMergeAdjacent(FirstBlock, RequiredBlockSize);
 
@@ -543,7 +509,7 @@ struct StaticStackMemory(size_t N)
 /// Common functionality for stack memory.
 mixin template StackMemoryTemplate()
 {
-  mixin MemoryMixinTemplate!(SupportsAllocationOnly);
+  mixin CommonMemoryStuff;
 
   MemoryRegion Allocate(size_t RequestedBytes, size_t Alignment = 0)
   {
@@ -585,35 +551,75 @@ struct HybridMemory(P, S)
   PrimaryMemoryType    PrimaryMemory;
   SecondaryMemoryType  SecondaryMemory;
 
-  mixin MemoryMixinTemplate!(PrimaryMemoryType.Features | SecondaryMemoryType.Features);
+  mixin CommonMemoryStuff;
 
 
   auto Allocate(size_t RequestedBytes, size_t Alignment = 0)
   {
     auto RequestedMemory = PrimaryMemory.Allocate(RequestedBytes, Alignment);
-    if(RequestedMemory) return RequestedMemory;
+    if(RequestedMemory.length == RequestedBytes) return RequestedMemory;
     return SecondaryMemory.Allocate(RequestedBytes, Alignment);
   }
 
   bool Deallocate(MemoryRegion MemoryToDeallocate)
   {
-    static if(PrimaryMemoryType.Features & SupportsDeallocation)
+    if(PrimaryMemory.Contains(MemoryToDeallocate))
     {
-      if(PrimaryMemory.Contains(MemoryToDeallocate))
-      {
-        return PrimaryMemory.Deallocate(MemoryToDeallocate);
-      }
+      return PrimaryMemory.Deallocate(MemoryToDeallocate);
     }
-
-    static if(SecondaryMemoryType.Features & SupportsDeallocation)
-    {
-      return SecondaryMemory.Deallocate(MemoryToDeallocate);
-    }
+    return SecondaryMemory.Deallocate(MemoryToDeallocate);
   }
 
   bool Contains(SomeType)(auto ref SomeType Something)
   {
     return PrimaryMemory.Contains(Something) || SecondaryMemory.Contains(Something);
+  }
+}
+
+/// Used to get the size of a minimal IAllocator class instance.
+private class MinimalMemoryClass : IAllocator
+{
+@nogc:
+nothrow:
+
+/// The actual memory to wrap.
+  void* WrappedPtr;
+  bool Contains(const MemoryRegion SomeRegion) { return false; }
+  MemoryRegion Allocate(size_t RequestedBytes, size_t Alignment = 0) { return null; }
+  bool Deallocate(MemoryRegion MemoryToDeallocate) { return false; }
+}
+
+template Wrap(SomeMemoryType)
+  if(IsSomeMemory!SomeMemoryType)
+{
+  class WrapperClass : IAllocator
+  {
+  @nogc:
+  nothrow:
+
+    SomeMemoryType* WrappedPtr;
+
+    final override bool Contains(const MemoryRegion SomeRegion)
+    {
+      return WrappedPtr.Contains(SomeRegion);
+    }
+
+    final override MemoryRegion Allocate(size_t RequestedBytes, size_t Alignment = 0)
+    {
+      return WrappedPtr.Allocate(RequestedBytes, Alignment);
+    }
+
+    final override bool Deallocate(MemoryRegion MemoryToDeallocate)
+    {
+      return WrappedPtr.Deallocate(MemoryToDeallocate);
+    }
+  }
+
+  WrapperClass Wrap(ref SomeMemoryType SomeMemory)
+  {
+    auto Wrapper = Construct!WrapperClass(SomeMemory.WrapperMemory);
+    Wrapper.WrappedPtr = &SomeMemory;
+    return Wrapper;
   }
 }
 
@@ -762,7 +768,7 @@ unittest
   //assert(Heap.Allocate(1) is null);
 }
 
-// ForwardAllocator tests
+// IAllocator tests
 unittest
 {
   static struct TestData
@@ -776,7 +782,8 @@ unittest
     }
   }
 
-  ForwardAllocator!(StaticStackMemory!128) StackAllocator;
+  StaticStackMemory!128 Memory;
+  auto StackAllocator = Wrap(Memory);
 
   auto Data = StackAllocator.New!TestData(false, 1337);
   static assert(Meta.IsPointer!(typeof(Data)), "New!() should always return a pointer!");
@@ -798,7 +805,7 @@ unittest
   assert(Data.Integer == 42);
 }
 
-// ForwardAllocator allocating class instances.
+// IAllocator allocating class instances.
 unittest
 {
   class SuperClass
@@ -811,30 +818,38 @@ unittest
     override int Data() { return 1337; }
   }
 
-  ForwardAllocator!(StaticStackMemory!128) StackAllocator;
+  StaticStackMemory!128 Memory;
+  auto StackAllocator = Wrap(Memory);
   SuperClass Instance = StackAllocator.New!SubClass();
   assert(Instance);
   assert(Instance.Data == 1337);
 }
 
-// IMemory
+// IAllocator
 unittest
 {
-  StaticStackMemory!128 SomeStackMemory;
-  assert(!SomeStackMemory.IsWrapped);
-  auto SomeMemory = Wrap(SomeStackMemory);
-  assert(SomeStackMemory.IsWrapped);
+  StaticStackMemory!128 SomeStack;
+  auto SomeAllocator = Wrap(SomeStack);
+  assert(cast(void*)SomeAllocator == cast(void*)SomeStack.WrapperMemory.ptr);
 
-  auto Mem = SomeMemory.Allocate(32);
+  auto Mem = SomeAllocator.Allocate(32);
   Mem[] = 42;
 
-  foreach(Byte; SomeStackMemory.Memory[0 .. 32])
+  foreach(Byte; SomeStack.Memory[0 .. 32])
   {
     assert(Byte == 42);
   }
 
-  foreach(Byte; SomeStackMemory.Memory[32 .. $])
+  foreach(Byte; SomeStack.Memory[32 .. $])
   {
     assert(Byte != 42);
   }
+
+  static struct Foo
+  {
+    int Bar = 42;
+  }
+
+  assert(SomeAllocator.New!Foo().Bar == 42);
+  assert(*cast(int*)(SomeStack.Memory[32 .. 32 + int.sizeof].ptr) == 42);
 }
