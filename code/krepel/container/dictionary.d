@@ -11,6 +11,18 @@ struct Dictionary(K, V)
   @property auto Keys() inout { return KeyArray[]; }
   @property auto Values() inout { return ValueArray[]; }
 
+  @property IAllocator Allocator()
+  {
+    assert(KeyArray.Allocator is ValueArray.Allocator);
+    return KeyArray.Allocator;
+  }
+
+  @property void Allocator(IAllocator NewAllocator)
+  {
+    KeyArray.Allocator = NewAllocator;
+    ValueArray.Allocator = NewAllocator;
+  }
+
   // TODO(Manu): Collapse with the other overload and make it `inout` once the
   // compiler allows this.
   auto opIndex()

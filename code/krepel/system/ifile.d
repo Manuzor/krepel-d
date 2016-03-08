@@ -29,7 +29,7 @@ interface IFile
   }
   out(result)
   {
-    assert(MaxRead > 0);
+    assert(result > 0);
   }
 
   /// Moves the cursor relative to the current position
