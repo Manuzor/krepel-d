@@ -23,6 +23,7 @@ void CloseFile(IAllocator Allocator, IFile File)
 {
   Win32File WinFile = cast(Win32File)File;
   WinFile.CloseFile();
+  Allocator.Delete(WinFile);
 }
 
 /// Converts a long to a LARGE_INTEGER (useful for WINAPI calls, which expect 64 bit values as LARGE_INTEGER)
