@@ -19,17 +19,15 @@ interface IFile
   /// Reads data from a file
   /// Params:
   /// Region = Where the data will be written into which was red from the file
-  /// MaxRead = The Maxmimum amount of bytes to read from the file
-  /// Returns: Returns the amount of bytes written into Region. The value is >= 0 and <= MaxRead.
-  long Read(MemoryRegion Region, long MaxRead)
+  /// Returns: Returns the amount of bytes written into Region. The value is >= 0 and <= Region.length.
+  long Read(MemoryRegion Region)
   in
   {
-    assert(MaxRead > 0);
-    assert(Region.length >= MaxRead);
+    assert(Region.length > 0);
   }
   out(result)
   {
-    assert(result > 0);
+    assert(result >= 0);
   }
 
   /// Moves the cursor relative to the current position

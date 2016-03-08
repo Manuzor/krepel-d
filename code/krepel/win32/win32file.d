@@ -48,13 +48,13 @@ class Win32File : IFile
     FileHandle = INVALID_HANDLE_VALUE;
   }
 
-  override long Read(MemoryRegion Region, long MaxRead)
+  override long Read(MemoryRegion Region)
   {
     assert(FileHandle != INVALID_HANDLE_VALUE);
 
     long TotalBytesRead = 0;
 
-    for (auto BytesToRead = MaxRead; BytesToRead > 0; BytesToRead -= uint.max)
+    for (auto BytesToRead = Region.length; BytesToRead > 0; BytesToRead -= uint.max)
     {
       DWORD BytesRead = 0;
       DWORD TryAmountToRead = 0;
