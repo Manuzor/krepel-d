@@ -44,7 +44,7 @@ void Destruct(Type)(Type Instance)
   // TODO(Manu): assert(Instance)?
   if(Instance)
   {
-    static if(Meta.HasMember!("__dtor")) Instance.__dtor();
+    static if(Meta.HasMember!(Type, "__dtor")) Instance.__dtor();
     //BlitInitialData((&Instance)[0 .. 1]);
   }
 }
