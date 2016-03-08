@@ -51,4 +51,14 @@ interface IFile
     assert(Position >= 0);
   }
 
+  long Write(MemoryRegion Region)
+  in
+  {
+    assert(Region.length > 0);
+  }
+  out(result)
+  {
+    assert(result >= 0);
+  }
+
 }

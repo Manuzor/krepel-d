@@ -33,7 +33,7 @@ class Win32File : IFile
       OpenMode,
       0,
       null,
-      OPEN_EXISTING,
+      ((OpenMode & GENERIC_WRITE) != 0) ? OPEN_ALWAYS : OPEN_EXISTING,
       FILE_ATTRIBUTE_NORMAL,
       null
       );
@@ -54,7 +54,7 @@ class Win32File : IFile
 
     long TotalBytesRead = 0;
 
-    for (auto BytesToRead = Region.length; BytesToRead > 0; BytesToRead -= uint.max)
+    for (long BytesToRead = Region.length; BytesToRead > 0; BytesToRead -= uint.max)
     {
       DWORD BytesRead = 0;
       DWORD TryAmountToRead = 0;
@@ -82,6 +82,38 @@ class Win32File : IFile
       }
     }
     return TotalBytesRead;
+  }
+
+  override long Write(MemoryRegion Region)
+  {
+    assert(FileHandle != INVALID_HANDLE_VALUE);
+
+    long TotalBytesWritten = 0;
+
+    for (long BytesToWrite = Region.length; BytesToWrite > 0; BytesToWrite -= uint.max)
+    {
+      DWORD BytesWritten = 0;
+      DWORD TryAmountToWrite = 0;
+      if (BytesToWrite > uint.max)
+      {
+        TryAmountToWrite = uint.max;
+      }
+      else
+      {
+        TryAmountToWrite = cast(uint)BytesToWrite;
+      }
+      auto Result = WriteFile(
+        FileHandle,
+        (cast(void*)Region.ptr) + TotalBytesWritten,
+        TryAmountToWrite,
+        &BytesWritten,
+        null
+        );
+        import std.conv;
+      assert(Result);
+      TotalBytesWritten += BytesWritten;
+    }
+    return TotalBytesWritten;
   }
 
   override long MoveCursor(long RelativeMove)
