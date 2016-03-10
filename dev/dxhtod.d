@@ -5,6 +5,7 @@ import std.format;
 import std.range;
 import std.array;
 import std.string;
+import std.ascii : isDigit;
 import std.uni;
 import std.file : readText;
 import std.traits;
@@ -20,6 +21,7 @@ enum CodeType
   Struct,
   Interface,
   Function,
+  Alias,
 }
 
 struct BlockData
@@ -32,6 +34,7 @@ struct BlockData
     StructData Struct;
     InterfaceData Interface;
     FunctionData Function;
+    AliasData Alias;
   }
 }
 
@@ -39,7 +42,7 @@ struct HashDefineData
 {
   char[] Name;
   bool HasParens;
-  char[] Parameters;
+  char[][] Parameters;
   char[] Body;
 }
 
@@ -76,7 +79,6 @@ struct InterfaceData
   FunctionData[] Functions;
 }
 
-// HRESULT WINAPI CreateDXGIFactory1(REFIID riid, _COM_Outptr_ void **ppFactory);
 struct FunctionData
 {
   static struct Param
@@ -92,27 +94,47 @@ struct FunctionData
   Param[] Params;
 }
 
+struct AliasData
+{
+  char[] NewName;
+  char[] OldName;
+}
+
 class FormattedOutput
 {
   int IndentationLevel;
   string Newline = "\n";
+  //string Indentation;
 
-  File* OutFilePtr;
+  File OutFile;
 
-  @property auto Indentation() { return " ".repeat(IndentationLevel); }
-  void Indent(int Amount = 2) { IndentationLevel += Amount; }
-  void Outdent(int Amount = 2) { IndentationLevel -= Amount; }
+  @property auto Indentation() { return ' '.repeat(IndentationLevel); }
+  void Indent(int Amount = 2)
+  {
+    IndentationLevel += Amount;
+  }
 
-  @property ref File OutFile() { return *OutFilePtr; }
+  void Outdent(int Amount = 2)
+  {
+    IndentationLevel = max(0, IndentationLevel - Amount);
+  }
 
   void WriteIndentation()
   {
-    this.writef("%-(%s%)", Indentation);
+    this.write(Indentation);
   }
 
   alias OutFile this;
 }
 
+struct SpecialCaseData
+{
+  alias EmitterCallbackFunc = void function(ref char[] Source, FormattedOutput Output);
+
+  EmitterCallbackFunc* EmitterCallback;
+}
+
+SpecialCaseData[] SpecialCases;
 FormattedOutput Log;
 
 BlockData ParseHashDefine(ref char[] Source)
@@ -122,21 +144,23 @@ BlockData ParseHashDefine(ref char[] Source)
 
   // Skip '#define'
   auto Prefix = Source.FastForwardUntil!(Char => Char.isWhite);
-  Log.WriteIndentation();
+  Log.write(Log.Indentation);
   Log.writeln("Skipped: ", Prefix);
 
   Source.SkipWhiteSpace();
 
   char Delimiter;
   Result.HashDefine.Name = Source.FastForwardUntil!(Char => Char.IsDelimiter)(&Delimiter);
-  Log.WriteIndentation();
+  Log.write(Log.Indentation);
   Log.writeln("Name: ", Result.HashDefine.Name);
+
+  Log.Indent();
 
   if(Delimiter == '(')
   {
     Result.HashDefine.HasParens = true;
-    Log.WriteIndentation();
-    Log.writeln("Found parens. TODO: More printing in here!");
+    Log.write(Log.Indentation);
+    Log.writeln("Found parens.");
 
     char[] Param;
     do
@@ -145,17 +169,20 @@ BlockData ParseHashDefine(ref char[] Source)
       if(Param.length)
       {
         Result.HashDefine.Parameters ~= Param;
+        Log.writeln("Param: ", Param);
       }
     } while(Delimiter != ')');
   }
+
+  Log.Outdent();
 
   char LastCharOfThisLine;
   do
   {
     auto Line = Source.FastForwardUntil!(Char => Char == '\n' || Char == '\\')(&LastCharOfThisLine).strip;
-    Log.WriteIndentation();
+    Log.write(Log.Indentation);
     Log.writeln("Line: ", Line);
-    Log.WriteIndentation();
+    Log.write(Log.Indentation);
     Log.writefln("Last char of that line: '%c'", LastCharOfThisLine);
 
     if(Line.length)
@@ -165,7 +192,7 @@ BlockData ParseHashDefine(ref char[] Source)
   } while(Source.length && LastCharOfThisLine == '\\');
 
   Result.HashDefine.Body = Result.HashDefine.Body.strip();
-  Log.WriteIndentation();
+  Log.write(Log.Indentation);
   Log.writeln("Body: ", Result.HashDefine.Body);
 
   return Result;
@@ -178,19 +205,19 @@ BlockData ParseEnum(ref char[] Source)
 
   // Skip 'typedef'
   auto Prefix1 = Source.FastForwardUntil!(Char => Char.isWhite);
-  Log.WriteIndentation();
+  Log.write(Log.Indentation);
   Log.writeln("Skipped: ", Prefix1);
 
   Source.SkipWhiteSpace();
 
   // Skip 'enum'
   auto Prefix2 = Source.FastForwardUntil!(Char => Char.isWhite);
-  Log.WriteIndentation();
+  Log.write(Log.Indentation);
   Log.writeln("Skipped: ", Prefix2);
 
   // Read everything between 'enum' and '{'
   auto PseudoName = Source.FastForwardUntil!(Char => Char == '{').strip;
-  Log.WriteIndentation();
+  Log.write(Log.Indentation);
   Log.writeln("Pseudo Name: ", PseudoName);
 
   Log.Indent();
@@ -201,7 +228,7 @@ BlockData ParseEnum(ref char[] Source)
     auto Entry = &Result.Enum.Entries[$ - 1];
     scope(exit)
     {
-      Log.WriteIndentation();
+      Log.write(Log.Indentation);
       Log.writeln("Entry: ", *Entry);
     }
     char Delimiter;
@@ -219,17 +246,17 @@ BlockData ParseEnum(ref char[] Source)
 
   // Extract the actual name.
   Result.Enum.Name = Source.FastForwardUntil!(Char => Char == ';').strip;
-  Log.WriteIndentation();
+  Log.write(Log.Indentation);
   Log.writeln("Actual Name: ", Result.Enum.Name);
 
   return Result;
 }
 
-// TODO: Logging
 BlockData ParseStruct(ref char[] Source)
 {
   auto Result = BlockData(CodeType.Struct);
   Result.Struct = StructData.init;
+  scope(failure) Log.writeln("Failed struct so far: ", Result.Struct);
 
   // Skip 'typedef'
   Source.FastForwardUntil!(Char => Char.isWhite);
@@ -241,6 +268,12 @@ BlockData ParseStruct(ref char[] Source)
 
   // Read everything between 'struct' and '{'
   auto PseudoName = Source.FastForwardUntil!(Char => Char == '{').strip;
+  Log.write(Log.Indentation);
+  Log.writeln("Pseudo name: ", PseudoName);
+  Log.write(Log.Indentation);
+  Log.writeln("Struct members:");
+
+  Log.Indent();
 
   while(true)
   {
@@ -254,23 +287,33 @@ BlockData ParseStruct(ref char[] Source)
     auto Entry = &Result.Struct.Entries[$ - 1];
 
     Entry.Type = FirstToken;
+    Log.write(Log.Indentation);
+    Log.writeln("Type: ", Entry.Type);
 
     Source.SkipWhiteSpace();
 
     char LastChar;
     Entry.Name = Source.FastForwardUntil!(Char => Char == ';' || Char == '[')(&LastChar).strip;
+    Log.write(Log.Indentation);
+    Log.writeln("Name: ", Entry.Name);
     if(LastChar == '[')
     {
       // Read the number between the brackets [ 123 ]
       Entry.ArrayCount = Source.FastForwardUntil!(Char => Char == ']').strip.to!int;
+      Log.write(Log.Indentation);
+      Log.writeln("Array count: ", Entry.ArrayCount);
 
       // Skip ';'
       Source.FastForwardUntil!(Char => Char == ';');
     }
   }
 
+  Log.Outdent();
+
   // Extract the actual name.
   Result.Struct.Name = Source.FastForwardUntil!(Char => Char == ';').strip;
+  Log.write(Log.Indentation);
+  Log.writeln("Struct name: ", Result.Struct.Name);
 
   return Result;
 }
@@ -284,13 +327,13 @@ BlockData ParseInterface(ref char[] Source)
   Result.Interface.GUIDString = Source.FastForwardUntil!(Char => Char == '"');
   Source.FastForwardUntil!(Char => Char == ')');
 
-  Log.WriteIndentation();
+  Log.write(Log.Indentation);
   Log.writeln("GUID: ", Result.Interface.GUIDString);
 
   Source.SkipWhiteSpace();
 
   Result.Interface.Name = Source.FastForwardUntil!(Char => Char == ':').strip;
-  Log.WriteIndentation();
+  Log.write(Log.Indentation);
   Log.writeln("Name: ", Result.Interface.Name);
 
   Source.SkipWhiteSpace();
@@ -298,7 +341,7 @@ BlockData ParseInterface(ref char[] Source)
   assert(Source.FastForwardUntil!(Char => Char.isWhite).strip == "public");
 
   Result.Interface.ParentName = Source.FastForwardUntil!(Char => Char == '{').strip;
-  Log.WriteIndentation();
+  Log.write(Log.Indentation);
   Log.writeln("Parent Name: ", Result.Interface.ParentName);
 
   assert(Source.FastForwardUntil!(Char => Char == ':').strip == "public");
@@ -334,16 +377,16 @@ BlockData ParseFunction(ref char[] Source)
   }
 
   Result.Function.ReturnType = ReturnType;
-  Log.WriteIndentation();
+  Log.write(Log.Indentation);
   Log.writeln("Return type: ", Result.Function.ReturnType);
 
   // Skip the call type (WINAPI, STDMETHODCALL, ...)
   auto CallType = Source.FastForwardUntil!(Char => Char.isWhite);
-  Log.WriteIndentation();
+  Log.write(Log.Indentation);
   Log.writeln("Call type: ", CallType);
 
   Result.Function.Name = Source.FastForwardUntil!(Char => Char == '(');
-  Log.WriteIndentation();
+  Log.write(Log.Indentation);
   Log.writeln("Name: ", Result.Function.Name);
 
   Log.Indent();
@@ -354,7 +397,7 @@ BlockData ParseFunction(ref char[] Source)
     auto Param = &Result.Function.Params[$ - 1];
     scope(exit)
     {
-      Log.WriteIndentation();
+      Log.write(Log.Indentation);
       Log.writeln("+++ Param: ", *Param);
     }
 
@@ -367,7 +410,7 @@ BlockData ParseFunction(ref char[] Source)
 
       // Skip until trailing '/' and omit '*' at the end of the result.
       Param.Comment = Source.FastForwardUntil!(Char => Char == '/')[0 .. $-1].strip;
-      Log.WriteIndentation();
+      Log.write(Log.Indentation);
       Log.writeln("Param comment: ", Param.Comment);
 
       Source.SkipWhiteSpace();
@@ -380,7 +423,7 @@ BlockData ParseFunction(ref char[] Source)
       Source.SkipWhiteSpace();
     }
 
-    Log.WriteIndentation();
+    Log.write(Log.Indentation);
     Log.writeln("Param annotation: ", Param.Annotation);
 
     Param.Type = Source.FastForwardUntil!(Char => Char.isWhite);
@@ -412,14 +455,14 @@ BlockData ParseFunction(ref char[] Source)
       }
     }
 
-    Log.WriteIndentation();
+    Log.write(Log.Indentation);
     Log.writeln("Param type: ", Param.Type);
     assert(Param.Type.length);
 
     char Delimiter;
     Param.Name = Source.FastForwardUntil!(Char => Char == ',' || Char == ')')(&Delimiter);
 
-    Log.WriteIndentation();
+    Log.write(Log.Indentation);
     Log.writeln("Param name: ", Param.Name);
 
     if(Delimiter == ')') break;
@@ -430,6 +473,26 @@ BlockData ParseFunction(ref char[] Source)
 
   // Skip trailing ';'
   Source.FastForwardUntil!(Char => Char == ';');
+
+  return Result;
+}
+
+BlockData ParseAlias(ref char[] Source)
+{
+  auto Result = BlockData(CodeType.Alias);
+  Result.Alias = AliasData.init;
+
+  Source.SkipWhiteSpace();
+
+  Source.FastForwardUntil!(Char => Char.isWhite);
+
+  Result.Alias.OldName = Source.FastForwardUntil!(Char => Char.isWhite);
+  Log.write(Log.Indentation);
+  Log.writeln("Old name: ", Result.Alias.OldName);
+
+  Result.Alias.NewName = Source.FastForwardUntil!(Char => Char == ';');
+  Log.write(Log.Indentation);
+  Log.writeln("New name: ", Result.Alias.NewName);
 
   return Result;
 }
@@ -478,14 +541,58 @@ BlockData[] Parse(ref char[] Source)
 {
   typeof(return) Result;
 
-  char[] Token;
+  {
+    auto TempSource = Source.find("#ifndef");
+    TempSource.popFrontN("#ifndef".length);
+    TempSource.SkipWhiteSpace();
+    auto GuardID = TempSource.FastForwardUntil!(Char => Char.isWhite);
+    TempSource = TempSource.find("#define");
+    TempSource.popFrontN("#define".length);
+    TempSource.SkipWhiteSpace();
+    if(TempSource.FastForwardUntil!(Char => Char.isWhite) == GuardID)
+    {
+      Source = TempSource;
+    }
+  }
 
   while(Source.length)
   {
-    Source.SkipWhiteSpace();
+    while(true)
+    {
+      Source.SkipWhiteSpace();
+
+      if(Source.startsWith("#if"))
+      {
+        Source.popFrontN(3);
+        auto FirstEndif = Source.find("#endif");
+        auto FirstIf = Source.find("#if");
+        if(FirstIf.ptr < FirstEndif.ptr)
+        {
+          Source = FirstIf;
+          continue;
+        }
+
+        assert(FirstEndif.length);
+
+        Source = FirstEndif["#endif".length .. $];
+        Source.SkipWhiteSpace();
+      }
+      else if(Source.startsWith("#include") || Source.startsWith("//") || Source.startsWith("#endif"))
+      {
+        Source.FastForwardUntil!(Char => Char == '\n');
+      }
+      else if(Source.startsWith("/*"))
+      {
+        Source = Source.find("*/");
+      }
+      else
+      {
+        break;
+      }
+    }
 
     auto SourceCopy = Source;
-    Token = SourceCopy.FastForwardUntil!(Char => Char.IsDelimiter).strip;
+    char[] Token = SourceCopy.FastForwardUntil!(Char => Char.IsDelimiter).strip;
     if(Token.length == 0) break;
 
     Log.writeln("Token: ", Token);
@@ -504,7 +611,7 @@ BlockData[] Parse(ref char[] Source)
         {
           case "enum":   Result ~= ParseEnum(Source);   break;
           case "struct": Result ~= ParseStruct(Source); break;
-          default: assert(0);
+          default:       Result ~= ParseAlias(Source);  break;
         }
       } break;
       case "MIDL_INTERFACE": Result ~= ParseInterface(Source);  break;
@@ -523,12 +630,54 @@ void EmitHashDefine(ref HashDefineData HashDefine, FormattedOutput Output)
   if(HashDefine.HasParens)
   {
     // Emit D function
+    Output.write(Output.Indentation);
+    Output.writef("pure nothrow @nogc auto %s", HashDefine.Name);
+
+    Output.write("(");
+    foreach(Index, ref Param; HashDefine.Parameters)
+    {
+      Output.writef("%sType", Param);
+      if(Index < HashDefine.Parameters.length - 1)
+      {
+        Output.write(", ");
+      }
+    }
+    Output.write(")");
+
+    Output.write("(");
+    foreach(Index, ref Param; HashDefine.Parameters)
+    {
+      Output.writef("auto ref %sType %s", Param, Param);
+      if(Index < HashDefine.Parameters.length - 1)
+      {
+        Output.write(", ");
+      }
+    }
+    Output.write(")", Output.Newline);
+
+    Output.write(Output.Indentation);
+    Output.write("{", Output.Newline);
+    Output.Indent();
+
+    Output.write(Output.Indentation);
+    Output.writef("return %s;%s", HashDefine.Body, Output.Newline);
+
+    Output.Outdent();
+    Output.write(Output.Indentation);
+    Output.write("}", Output.Newline);
   }
   else
   {
     // Emit enum constant
-    // TODO(Manu): Clean up HashDefine.Body
-    Output.writef("%-(%s%)enum %s = %s;%s", Output.Indentation, HashDefine.Name, HashDefine.Body, Output.Newline);
+    auto Body = HashDefine.Body.strip;
+    if(Body.front == '(')
+    {
+      Body.popFront();
+      Body = Body.FastForwardUntil!(Char => Char == ')').strip;
+    }
+    if(Body.endsWith("UL")) Body = Body[0 .. $-2];
+    if(Body.endsWith("L"))  Body = Body[0 .. $-1];
+    Output.writef("%-(%s%)enum %s = %s;%s", Output.Indentation, HashDefine.Name, Body, Output.Newline);
   }
 }
 
@@ -537,13 +686,38 @@ void EmitEnum(ref EnumData Enum, FormattedOutput Output)
   Output.writef("%-(%s%)enum %s%s%-(%s%){%s", Output.Indentation, Enum.Name, Output.Newline, Output.Indentation, Output.Newline);
   Output.Indent();
 
+  auto Entries = Enum.Entries.dup;
+  auto Prefix = commonPrefix(Enum.Name, Entries[0].Key);
+
   ulong MaxLen;
-  foreach(ref Entry; Enum.Entries[])
+  foreach(ref Entry; Entries)
   {
-    MaxLen = max(MaxLen, Entry.Key.length);
+    auto Key = Entry.Key[Prefix.length .. $];
+
+    if(Key.front.isDigit)
+    {
+      // Make sure we have a leading '_' for enum keys that start with a
+      // digit.
+      if(Prefix.back == '_')
+      {
+        Key = Entry.Key[Prefix.length - 1 .. $];
+      }
+      else
+      {
+        Key = "_" ~ Key;
+      }
+      assert(Key.front == '_');
+    }
+    else if(Key.front == '_')
+    {
+      Key.popFront();
+    }
+
+    Entry.Key = Key;
+    MaxLen = max(MaxLen, Key.length);
   }
 
-  foreach(ref Entry; Enum.Entries[])
+  foreach(ref Entry; Entries)
   {
     Output.writef("%-(%s%)%s", Output.Indentation, Entry.Key);
     if(Entry.Value.length)
@@ -554,6 +728,11 @@ void EmitEnum(ref EnumData Enum, FormattedOutput Output)
   }
   Output.Outdent();
   Output.writef("%-(%s%)}%s", Output.Indentation, Output.Newline);
+
+  if(Prefix != Enum.Name)
+  {
+    Output.writef("%salias %s = %s;%s", Output.Indentation, Prefix[0 .. $-1], Enum.Name, Output.Newline);
+  }
 }
 
 void EmitStruct(ref StructData Struct, FormattedOutput Output)
@@ -590,18 +769,18 @@ void EmitInterface(ref InterfaceData Interface, FormattedOutput Output)
 
   foreach(ref Function; Interface.Functions)
   {
-    EmitFunction(Function, Output, Yes.AddPrefix, No.AddExternWindows);
+    EmitFunction(Function, Output, No.AddExternWindows);
   }
 
   Output.Outdent();
   Output.writef("%-(%s%)}%s", Output.Indentation, Output.Newline);
 }
 
-void EmitFunction(ref FunctionData Function, FormattedOutput Output, Flag!"AddPrefix" AddFrefix = Yes.AddPrefix, Flag!"AddExternWindows" AddExternWindows = Yes.AddExternWindows)
+void EmitFunction(ref FunctionData Function, FormattedOutput Output, Flag!"AddExternWindows" AddExternWindows = Yes.AddExternWindows)
 {
   scope(failure) Log.writeln("Failure emitting function: ", Function);
 
-  Output.WriteIndentation();
+  Output.write(Output.Indentation);
   if(AddExternWindows) Output.write("extern(Windows) ");
   Output.writef("%s %s(", Function.ReturnType, Function.Name);
 
@@ -610,7 +789,7 @@ void EmitFunction(ref FunctionData Function, FormattedOutput Output, Flag!"AddPr
   {
     scope(failure) Log.writeln("Failure emitting param: ", Param);
     Output.write(Output.Newline);
-    Output.WriteIndentation();
+    Output.write(Output.Indentation);
 
     auto Scan = Param.Type;
     if(Scan.startsWith("const"))
@@ -682,8 +861,32 @@ void EmitFunction(ref FunctionData Function, FormattedOutput Output, Flag!"AddPr
   Output.Outdent();
 
   Output.write(Output.Newline);
-  Output.WriteIndentation();
+  Output.write(Output.Indentation);
   Output.writef(");%s%s", Output.Newline, Output.Newline);
+}
+
+void EmitAlias(ref AliasData Alias, FormattedOutput Output)
+{
+  Output.write(Output.Indentation);
+  Output.writef("alias %s = %s;%s", Alias.NewName, Alias.OldName, Output.Newline);
+}
+
+void EmitD3DCOLORVALUE(ref AliasData Alias, FormattedOutput Output)
+{
+  assert(Alias.OldName == "D3DCOLORVALUE");
+  Output.write(Output.Indentation, "struct ", Alias.NewName, Output.Newline,
+               Output.Indentation, "{", Output.Newline);
+
+  Output.Indent();
+
+  Output.write(Output.Indentation, "float r;", Output.Newline,
+               Output.Indentation, "float g;", Output.Newline,
+               Output.Indentation, "float b;", Output.Newline,
+               Output.Indentation, "float a;", Output.Newline);
+
+  Output.Outdent();
+
+  Output.write(Output.Indentation, "}", Output.Newline);
 }
 
 void EmitBlocks(BlockData[] Blocks, FormattedOutput Output)
@@ -691,14 +894,48 @@ void EmitBlocks(BlockData[] Blocks, FormattedOutput Output)
   foreach(ref Block; Blocks)
   {
     Output.write(Output.Newline);
+
     final switch(Block.Type)
     {
-      case CodeType.HashDefine: EmitHashDefine(Block.HashDefine, Output); break;
-      case CodeType.Enum:       EmitEnum(Block.Enum, Output);             break;
-      case CodeType.Struct:     EmitStruct(Block.Struct, Output);         break;
-      case CodeType.Interface:  EmitInterface(Block.Interface, Output);   break;
-      case CodeType.Function:   EmitFunction(Block.Function, Output);     break;
-      case CodeType.INVALID: assert(0);
+      case CodeType.HashDefine:
+      {
+        EmitHashDefine(Block.HashDefine, Output);
+        break;
+      }
+      case CodeType.Enum:
+      {
+        EmitEnum(Block.Enum, Output);
+        break;
+      }
+      case CodeType.Struct:
+      {
+        EmitStruct(Block.Struct, Output);
+        break;
+      }
+      case CodeType.Interface:
+      {
+        EmitInterface(Block.Interface, Output);
+        break;
+      }
+      case CodeType.Function:
+      {
+        EmitFunction(Block.Function, Output);
+        break;
+      }
+      case CodeType.Alias:
+      {
+        if(Block.Alias.OldName == "D3DCOLORVALUE")
+        {
+          EmitD3DCOLORVALUE(Block.Alias, Output);
+        }
+        else
+        {
+          EmitAlias(Block.Alias, Output);
+        }
+
+        break;
+      }
+      case CodeType.INVALID: assert(0, Block.Type.to!string);
     }
   }
 }
@@ -708,24 +945,33 @@ void main(string[] Args)
   const Program = Args[0];
   Args = Args[1 .. $];
 
-  assert(Args.length == 1, "Need 1 argument.");
+  assert(Args.length == 2, "Need 2 arguments.");
 
   Log = new FormattedOutput();
-  Log.OutFilePtr = &stderr;
+  Log.OutFile = stderr;
 
-  auto Output = new FormattedOutput();
-  Output.OutFilePtr = &stdout;
+  auto InFilename  = Args[0];
+  auto OutFilename = Args[1];
 
-  auto Filename = Args[0];
-  char[] InputBuffer = Filename.readText!(char[]);
+  char[] InputBuffer = InFilename.readText!(char[]);
 
   auto Blocks = Parse(InputBuffer);
 
+  auto Output = new FormattedOutput();
+  if(OutFilename == "-")
+  {
+    Output.OutFile = stdout;
+  }
+  else
+  {
+    Output.OutFile.open(OutFilename, "w");
+  }
+
   Log.writefln("%-(%s%)", "=".repeat(72));
 
-  Output.write("// Original file name: ", Filename, Output.Newline);
+  Output.write("// Original file name: ", InFilename, Output.Newline);
   Output.write("// Conversion date: ", Clock.currTime, Output.Newline);
-  Output.write(Output.Newline, Output.Newline);
+  Output.write(Output.Newline);
 
   EmitBlocks(Blocks, Output);
 }
