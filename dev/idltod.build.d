@@ -1,16 +1,16 @@
-module dxhtod;
+module idltod;
 
 import build;
 
 immutable thisDir = dirName(__FILE__);
 
-mixin AddBuildRule!("dxhtod", Dxhtod);
+mixin AddBuildRule!("idltod", Idltod);
 
 // Utility function to get all relevant source files.
-void Dxhtod(ref BuildContext Context)
+void Idltod(ref BuildContext Context)
 {
-  Context.OutFileName = "dxhtod.exe";
-  Context.Files ~= buildNormalizedPath(thisDir, "dxhtod.d");
+  Context.OutFileName = "idltod.exe";
+  Context.Files ~= buildNormalizedPath(thisDir, "idltod.d");
   Context.BuildArgs = Context.BuildArgs.remove!(a => a == "-vgc");
   Compile(Context);
 }
