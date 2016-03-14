@@ -56,3 +56,34 @@ unittest
   assert(cast(char[])Region[0..BytesRead] == "Some Other Test Data");
 
 }
+
+/// File Cursor
+unittest
+{
+  import krepel.memory;
+  import krepel.system.ifile;
+  import std.conv;
+
+  StaticStackMemory!1024 SomeStack;
+  auto SomeAllocator = Wrap(SomeStack);
+
+  IFile File = OpenFile(SomeAllocator, "../unittest/FileTest.txt");
+
+  auto Region = SomeAllocator.Allocate(128);
+
+  auto Position = File.MoveCursor(0);
+  assert(Position == 0);
+  Position = File.MoveCursor(5);
+  assert(Position == 5);
+  Position = File.SetCursorPostion(false, 0);
+  assert(Position == 15);
+  Position = File.SetCursorPostion(true, 5);
+  assert(Position == 5);
+
+  long BytesRead = File.Read(Region);
+
+  CloseFile(SomeAllocator, File);
+
+  assert(BytesRead == 10, BytesRead.to!string());
+  assert(cast(char[])Region[0..BytesRead] == "Test Data\n");
+}

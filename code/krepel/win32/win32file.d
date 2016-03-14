@@ -109,7 +109,6 @@ class Win32File : IFile
         &BytesWritten,
         null
         );
-        import std.conv;
       assert(Result);
       TotalBytesWritten += BytesWritten;
     }
