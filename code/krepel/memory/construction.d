@@ -63,22 +63,24 @@ void Destruct(Type)(Type* Instance)
       // Call the destructor on the instance.
       Instance.__dtor();
 
-      // Destruct all the members of Instance.
-      foreach(MemberName; __traits(allMembers, Type))
-      {
-        alias MemberType = typeof(mixin(`Instance.` ~ MemberName));
-        static if(Meta.HasDestructor!MemberType)
-        {
-          static if(is(MemberType == class))
-          {
-            Destruct(mixin(`Instance.` ~ MemberName));
-          }
-          else
-          {
-            Destruct(mixin(`&Instance.` ~ MemberName));
-          }
-        }
-      }
+      // TODO(Marvin): Shouldn't this already do the destructor?
+      // Also this iterates over functions as well, which cannot be destructed
+      //// Destruct all the members of Instance.
+      //foreach(MemberName; __traits(allMembers, Type))
+      //{
+      //  alias MemberType = typeof(mixin(`Instance.` ~ MemberName));
+      //  static if(Meta.HasDestructor!MemberType)
+      //  {
+      //    static if(is(MemberType == class))
+      //    {
+      //      Destruct(mixin(`Instance.` ~ MemberName));
+      //    }
+      //    else
+      //    {
+      //      Destruct(mixin(`&Instance.` ~ MemberName));
+      //    }
+      //  }
+      //}
     }
 
     // TODO(Manu): Decide whether it's actually necessary to blit over the
