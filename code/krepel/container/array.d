@@ -47,8 +47,12 @@ struct Array(T)
   @property auto SlackFront() const { return Data.ptr - AvailableMemory.ptr; }
   @property auto SlackBack() const { return Capacity - Count - SlackFront; }
 
-  // Note(Manu): Disable copy construction.
-  @disable this(this);
+  this(this)
+  {
+    auto NewMemory = Allocator.NewUnconstructedArray!ElementType(Capacity);
+    NewMemory[] = Data[];
+    Data = NewMemory;
+  }
 
   ~this()
   {
@@ -166,7 +170,7 @@ struct Array(T)
     }
   }
 
-  void PushBack(ArgTypes...)(in auto ref ArgTypes Args)
+  void PushBack(ArgTypes...)(auto ref ArgTypes Args)
     if(ArgTypes.length)
   {
     auto NewData = ExpandUninitialized(ArgTypes.length);
