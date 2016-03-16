@@ -8,6 +8,7 @@ import std.string;
 import std.ascii : isDigit;
 import std.uni;
 import std.file : read;
+import std.path;
 import std.traits;
 import std.typecons;
 import std.datetime;
@@ -1224,7 +1225,7 @@ void main(string[] Args)
 
   Log.writeln('='.repeat(72));
 
-  Output.write("// Original file name: ", InFilename, Output.Newline);
+  Output.write("// Original file name: ", InFilename.baseName, Output.Newline);
   Output.write("// Conversion date: ", Clock.currTime, Output.Newline);
   Output.write(OutContentHeader);
 
