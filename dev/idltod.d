@@ -12,6 +12,11 @@ import std.traits;
 import std.typecons;
 import std.datetime;
 
+char[] View(char[] String, size_t NumToView)
+{
+  return String[0 .. min(String.length, NumToView)];
+}
+
 enum CodeType
 {
   INVALID,
@@ -64,17 +69,26 @@ struct EnumData
   Entry[] Entries;
 }
 
+struct Declaration
+{
+  AttributeData[] Attributes;
+  char[] Type;
+  Declaration[] Body; // Only valid if Type == "struct" || Type == "union"
+  char[] Name;
+  char[][] ArrayCounts; // e.g. int Foo[MAX_STUFF][3];
+}
+
 struct AggregateData
 {
-  static struct Entry
+  enum Type
   {
-    char[] Type;
-    char[] Name;
-    char[][] ArrayCounts;
+    Struct,
+    Union,
   }
 
+  Type AggregateType;
   char[] Name;
-  Entry[] Entries;
+  Declaration[] Members;
 }
 
 struct InterfaceData
@@ -87,16 +101,9 @@ struct InterfaceData
 
 struct FunctionData
 {
-  static struct Param
-  {
-    AttributeData[] Attributes;
-    char[] Type;
-    char[] Name;
-  }
-
   char[] ReturnType;
   char[] Name;
-  Param[] Params;
+  Declaration[] Params;
 }
 
 struct AliasData
@@ -198,27 +205,26 @@ void ParseCppQuote(ref char[] Source, ref BlockData[] Blocks)
 
   CppQuoteData Result;
 
-  auto CppQuoteToken = Source[0 .. "cpp_quote".length];
-  assert(CppQuoteToken == "cpp_quote");
-  Source = Source["cpp_quote".length .. $];
+  assert(Source.startsWith("cpp_quote"));
+  Source.popFrontN("cpp_quote".length);
 
   Source.SkipWhiteSpace();
 
   assert(Source.front == '(');
   Source.popFront();
 
-  auto Content = Source.ParseNestedString('(', ')');
-  Source.FastForwardUntil!(Char => Char == '\n');
+  Source.SkipWhiteSpace();
 
-  Content = Content.strip();
+  assert(Source.front == '"');
+  Source.popFront();
 
-  assert(Content.front == '"');
-  Content.popFront();
+  Result.Content = Source.ParseEscapableString('"').strip();
+  Log.writeln(Log.Indentation, "Content: ", Result.Content);
 
-  assert(Content.back == '"');
-  Content.popBack();
+  Source.SkipWhiteSpace();
 
-  Result.Content = Content;
+  assert(Source.front == ')', Source.View(100));
+  Source.popFront();
 
   auto Block = BlockData(CodeType.CppQuote);
   Block.CppQuote = Result;
@@ -320,29 +326,127 @@ void ParseEnum(ref char[] Source, ref BlockData[] Blocks)
   Blocks ~= Block;
 }
 
+/// Params:
+///   FieldDelimiter = Usually ';' for structs and unions or ',' for function parameters.
+void ParseDeclaration(ref char[] Body, ref Declaration Decl, dchar FieldDelimiter)
+{
+  Log.writeln(Log.Indentation, "=== Parsing Declaration ===");
+  Log.Indent();
+  scope(exit) Log.Outdent();
+
+  TryParseAttributes(Body, Decl.Attributes);
+
+  Body.SkipWhiteSpace();
+
+  auto TempBody = Body;
+  auto Prefix = TempBody.FastForwardUntil!isWhite;
+  if(Prefix == "struct" || Prefix == "union")
+  {
+    Log.writeln(Log.Indentation, "Declaration is an inner aggregate type.");
+
+    Decl.Type = Body.FastForwardUntil!isWhite;
+    assert(Decl.Type == Prefix);
+
+    auto InnerTagName = Body.FastForwardUntil!(Char => Char == '{').strip;
+    if(InnerTagName.length)
+    {
+      Log.writeln(Log.Indentation, "Tag Name: ", InnerTagName);
+    }
+    else
+    {
+      Log.writeln(Log.Indentation, "No tag name found.");
+    }
+
+    auto InnerBody = Body.ParseNestedString('{', '}');
+    auto InnerName = Body.FastForwardUntil!(Char => Char == FieldDelimiter).strip;
+
+    Log.writeln(Log.Indentation, "Name: ", InnerName);
+
+    while(true)
+    {
+      InnerBody.SkipWhiteSpace();
+
+      if(InnerBody.empty) break;
+
+      Declaration InnerDecl;
+      scope(failure) Log.writeln(Log.Indentation, "Inner Declaration: ", InnerDecl);
+
+      ParseDeclaration(InnerBody, InnerDecl, ';');
+      Decl.Body ~= InnerDecl;
+    }
+
+    Log.Outdent();
+  }
+  else
+  {
+    Log.writeln(Log.Indentation, "Declaration is a regular field.");
+
+    auto FieldCode = Body.FastForwardUntil!(Char => Char == FieldDelimiter);
+
+    FieldCode = FieldCode.strip();
+
+    if(FieldCode == "void")
+    {
+      Decl.Type = FieldCode;
+      return;
+    }
+
+    while(FieldCode.back == ']')
+    {
+      FieldCode.popBack();
+      auto ArrayCountLength = FieldCode.retro.countUntil('[');
+      Decl.ArrayCounts ~= FieldCode[$ - ArrayCountLength .. $].strip;
+      FieldCode.popBackN(ArrayCountLength + 1);
+    }
+
+    auto SlackUntilDelimiter = FieldCode.retro.countUntil!(Char => Char.isWhite || Char == '*');
+
+    Decl.Type = FieldCode[0                       .. $ - SlackUntilDelimiter].strip;
+    Decl.Name = FieldCode[$ - SlackUntilDelimiter .. $                      ].strip;
+
+    Log.writeln(Log.Indentation, "Type: ", Decl.Type);
+    Log.writeln(Log.Indentation, "Name: ", Decl.Name);
+  }
+}
+
 void ParseAggregate(ref char[] Source, ref BlockData[] Blocks)
 {
   Log.writeln(Log.Indentation, "=== Parsing Aggregate ===");
 
   AggregateData Result;
 
-  // Skip 'typedef'
   auto TypedefToken = Source.FastForwardUntil!isWhite;
   assert(TypedefToken == "typedef");
 
   Source.SkipWhiteSpace();
 
-  // Skip 'struct'
-  auto AggregateToken = Source.FastForwardUntil!isWhite;
-  assert(AggregateToken == "struct");
+  auto FirstToken = Source.FastForwardUntil!isWhite;
+
+  if(FirstToken == "struct")
+  {
+    Result.AggregateType = AggregateData.Type.Struct;
+  }
+  else if(FirstToken == "union")
+  {
+    Result.AggregateType = AggregateData.Type.Union;
+  }
+  else assert(0);
 
   // Read everything between 'struct' and '{'
   auto TagName = Source.FastForwardUntil!(Char => Char == '{').strip;
-  Log.writeln(Log.Indentation, "Tag Name: ", TagName);
+  if(TagName.length)
+  {
+    Log.writeln(Log.Indentation, "Tag Name: ", TagName);
+  }
+  else
+  {
+    Log.writeln(Log.Indentation, "No tag name found.");
+  }
 
-  auto Body = Source.FastForwardUntil!(Char => Char == '}');
+  auto Body = Source.ParseNestedString('{', '}');
 
   Result.Name = Source.FastForwardUntil!(Char => Char == ';').strip;
+  assert(Result.Name.length);
   Log.writeln(Log.Indentation, "Name: ", Result.Name);
 
   Log.Indent();
@@ -353,42 +457,12 @@ void ParseAggregate(ref char[] Source, ref BlockData[] Blocks)
 
     if(Body.empty) break;
 
-    Result.Entries.length++;
-    auto Entry = &Result.Entries.back;
-    scope(failure) Log.writeln(Log.Indentation, "Entry: ", *Entry);
+    Declaration Member;
+    scope(failure) Log.writeln(Log.Indentation, "Member: ", Member);
 
-    auto EntryCode = Body.FastForwardUntil!(Char => Char == ';');
-    EntryCode.SkipWhiteSpace();
+    ParseDeclaration(Body, Member, ';');
 
-    Entry.Type = EntryCode.FastForwardUntil!isWhite;
-    Log.writeln(Log.Indentation, "Type: ", Entry.Type);
-
-    EntryCode.SkipWhiteSpace();
-
-    char Delimiter;
-    Entry.Name = EntryCode.FastForwardUntil!(Char => Char == '[')(&Delimiter);
-    Log.writeln(Log.Indentation, "Name: ", Entry.Name);
-
-    if(Delimiter == '[')
-    {
-      while(true)
-      {
-        Entry.ArrayCounts ~= EntryCode.FastForwardUntil!(Char => Char == ']')(&Delimiter).strip;
-        assert(Delimiter == ']');
-        EntryCode.SkipWhiteSpace();
-        if(EntryCode.length && EntryCode.front == '[')
-        {
-          EntryCode.popFront();
-          continue;
-        }
-        else
-        {
-          break;
-        }
-      }
-    }
-
-    assert(EntryCode.empty, EntryCode);
+    Result.Members ~= Member;
   }
 
   Log.Outdent();
@@ -425,6 +499,33 @@ char[] ParseNestedString(ref char[] Source, char FrontChar, char BackChar, Flag!
 
   auto Result = Source[0 .. $ - min(Source.length, ParsedSource.length + 1)];
   Source = ParsedSource;
+  return Result;
+}
+
+char[] ParseEscapableString(ref char[] Source, char Delimiter)
+{
+  enum char Escape = '\\';
+
+  auto Target = Source;
+
+  while(true)
+  {
+    Target = Target.find(Escape, Delimiter)[0];
+
+    if(Target.empty || Target.front == Delimiter) break;
+
+    if(Target.front == Escape)
+    {
+      Target.popFront();
+      assert(Target.length, Target.View(100));
+      // Skip the escaped character.
+      Target.popFront();
+    }
+  }
+
+  auto Result = Source[0 .. $ - Target.length];
+  if(Target.length) Target.popFront();
+  Source = Target;
   return Result;
 }
 
@@ -520,8 +621,10 @@ void ParseInterface(ref char[] Source, ref BlockData[] Blocks)
   assert(Delimiter == '{');
 
   auto Body = Source.FastForwardUntil!(Char => Char == '}');
-  assert(Source.front == ';', "Ate the wrong '}' character??");
-  Source.popFront();
+
+  // d3d11.idl contains an interface without a closing ';', so we can't assert
+  // for its existance. Not sure if this is the only case.
+  while(Source.front == ';') Source.popFront();
 
   Log.writeln(Log.Indentation, "Body: ", Body);
 
@@ -563,9 +666,9 @@ void ParseFunction(ref char[] Source, ref BlockData[] Blocks)
   Log.writeln(Log.Indentation, "Name: ", Result.Name);
 
   auto ParamSource = Source.FastForwardUntil!(Char => Char == ';');
+  Log.writeln(Log.Indentation, "Param Source: ", ParamSource);
   assert(ParamSource.back == ')');
   ParamSource.popBack();
-  Log.writeln(Log.Indentation, "Param Source: ", ParamSource);
 
   Log.Indent();
 
@@ -575,18 +678,9 @@ void ParseFunction(ref char[] Source, ref BlockData[] Blocks)
 
     if(ParamSource.empty) break;
 
-    FunctionData.Param Param;
-    TryParseAttributes(ParamSource, Param.Attributes);
-    auto TypeAndName = ParamSource.FastForwardUntil!(Char => Char == ',').strip();
-
-    auto SplitIndex = TypeAndName.length - TypeAndName.retro.countUntil!(Char => Char.isWhite || Char == '*');
-
-    Param.Type = TypeAndName[0          .. SplitIndex];
-    Param.Name = TypeAndName[SplitIndex .. $         ];
-
-    Log.writeln(Log.Indentation, "Param: ", Param);
-
-    Result.Params ~= Param;
+    Declaration Param;
+    ParseDeclaration(ParamSource, Param, ',');
+    if(Param.Type != "void") Result.Params ~= Param;
   }
 
   Log.Outdent();
@@ -635,6 +729,7 @@ bool IsDelimiter(CharType)(CharType Char)
 char[] FastForwardUntil(alias Predicate)(ref char[] Source, char* LastCharOutPtr = null)
 {
   auto NewSource = Source.find!Predicate();
+
   if(NewSource.empty)
   {
     swap(NewSource, Source);
@@ -655,23 +750,7 @@ char[] FastForwardUntil(alias Predicate)(ref char[] Source, char* LastCharOutPtr
 // Skips white space and comments.
 void SkipWhiteSpace(ref char[] Source)
 {
-  while(true)
-  {
-    Source = Source.stripLeft();
-    if(Source.startsWith("//"))
-    {
-      Source = Source.find('\n');
-    }
-    else if(Source.startsWith("/*"))
-    {
-      Source = Source.find("*/");
-      if(Source.length) Source.popFrontN(2);
-    }
-    else
-    {
-      break;
-    }
-  }
+  Source = Source.stripLeft();
 }
 
 enum ContextCharCountThreshold = 60;
@@ -686,7 +765,7 @@ BlockData[] Parse(ref char[] Source, int[] Stats)
 
     if(Source.empty) break;
 
-    Log.writefln("Looking at: %s...", Source[0 .. min(ContextCharCountThreshold, Source.length)]);
+    Log.writefln("Looking at: %s...", Source.View(ContextCharCountThreshold));
     Log.Indent();
 
     if(Source.startsWith("import") || Source.startsWith("#pragma"))
@@ -783,21 +862,136 @@ void EmitEnum(ref EnumData Enum, FormattedOutput Output)
   Output.write(Output.Indentation, "}", Output.Newline);
 }
 
+void EmitDeclaration(ref Declaration Decl, FormattedOutput Output, Flag!"IsFunctionParam" IsFunctionParam)
+{
+  // Add an extra newline here in attempt to make the interface look nicer for
+  // inner aggregate types.
+  if(Decl.Body) Output.write(Output.Newline);
+
+  if(Decl.Attributes)
+  {
+    Output.writef("%s// %([%s]%)]%s", Output.Indentation, Decl.Attributes, Output.Newline);
+  }
+
+  if(Decl.Body)
+  {
+    assert(!IsFunctionParam, "Function parameters in D can't be inline aggregate type declarations (probably).");
+    assert(Decl.Type == "struct" || Decl.Type == "union", Decl.Type);
+
+    Output.write(Output.Indentation);
+
+    // Inner structs should be static.
+    if(Decl.Type == "struct") Output.write("static ");
+
+    Output.write(Decl.Type, " ", Decl.Name, Output.Newline,
+                 Output.Indentation, '{', Output.Newline);
+
+    Output.Indent();
+
+    foreach(ref Member; Decl.Body)
+    {
+      EmitDeclaration(Member, Output, No.IsFunctionParam);
+    }
+
+    Output.Outdent();
+
+    Output.write(Output.Indentation, '}');
+    if(IsFunctionParam) Output.write(',');
+  }
+  else
+  {
+    auto Type = Decl.Type;
+    const IsInterfaceType = Type.front == 'I' && Type.canFind!(Char => Char.isLower());
+    const NumPointers = Type.count('*');
+    const IsConst = Type.canFind(" const", "const ");
+
+    char[] TypeBaseName;
+    do
+    {
+      TypeBaseName = Type.FastForwardUntil!(Char => Char.isWhite || Char == '*');
+      Type.SkipWhiteSpace();
+    } while(TypeBaseName == "const");
+
+    if(IsInterfaceType) assert(NumPointers > 0);
+
+    Output.write(Output.Indentation);
+
+    if(IsConst) Output.write(IsFunctionParam ? "in " : "const ");
+
+    auto Pointers = '*'.repeat(IsInterfaceType ? NumPointers - 1 : NumPointers);
+    Output.write(TypeBaseName, Pointers);
+
+    foreach(Count; Decl.ArrayCounts)
+    {
+      Output.writef("[%s]", Count);
+    }
+
+    Output.write(" ", Decl.Name, IsFunctionParam ? ',' : ';');
+  }
+
+  Output.write(Output.Newline);
+}
+
 void EmitAggregate(ref AggregateData Aggregate, FormattedOutput Output)
 {
-  Output.write(Output.Indentation, "struct ", Aggregate.Name, Output.Newline,
+  Output.write(Output.Indentation);
+
+  final switch(Aggregate.AggregateType)
+  {
+    case AggregateData.Type.Struct: Output.write("struct "); break;
+    case AggregateData.Type.Union:  Output.write("union ");  break;
+  }
+
+  Output.write(Aggregate.Name, Output.Newline,
                Output.Indentation, "{", Output.Newline);
 
   Output.Indent();
 
-  foreach(ref Entry; Aggregate.Entries[])
+  void EmitMember(ref Declaration Member)
   {
-    Output.write(Output.Indentation, Entry.Type);
-    foreach(Count; Entry.ArrayCounts)
+    if(Member.Body)
     {
-      Output.writef("[%s]", Count);
+      assert(Member.Type == "struct" || Member.Type == "union", Member.Type);
+
+      // Note: We add an extra newline here in attempt to make the interface look nicer.
+      Output.write(Output.Newline, Output.Indentation);
+
+      // Inner structs should be static.
+      if(Member.Type == "struct") Output.write("static ");
+
+      Output.write(Member.Type, " ", Member.Name, Output.Newline,
+                   Output.Indentation, '{', Output.Newline);
+
+      Output.Indent();
+
+      foreach(ref InnerMember; Member.Body)
+      {
+        EmitMember(InnerMember);
+      }
+
+      Output.Outdent();
+
+      Output.write(Output.Indentation, '}');
     }
-    Output.writef(" %s;%s", Entry.Name, Output.Newline);
+    else
+    {
+      Output.write(Output.Indentation, Member.Type);
+
+      foreach(Count; Member.ArrayCounts)
+      {
+        Output.writef("[%s]", Count);
+      }
+
+      Output.writef(" %s;", Member.Name);
+    }
+
+    Output.write(Output.Newline);
+  }
+
+  foreach(ref Member; Aggregate.Members[])
+  {
+    //EmitMember(Member);
+    EmitDeclaration(Member, Output, No.IsFunctionParam);
   }
 
   Output.Outdent();
@@ -857,30 +1051,7 @@ void EmitFunction(ref FunctionData Function, FormattedOutput Output, Flag!"AddEx
 
     foreach(ref Param; Function.Params)
     {
-      if(Param.Attributes)
-      {
-        Output.writef("%s// %([%s]%)]%s", Output.Indentation, Param.Attributes, Output.Newline);
-      }
-
-      const IsInterfaceType = Param.Type.front == 'I' && Param.Type.canFind!(Char => Char.isLower());
-      const NumPointers = Param.Type.count('*');
-      const IsConst = Param.Type.canFind(" const", "const ");
-
-      char[] TypeBaseName;
-      do
-      {
-        TypeBaseName = Param.Type.FastForwardUntil!(Char => Char.isWhite || Char == '*');
-        Param.Type.SkipWhiteSpace();
-      } while(TypeBaseName == "const");
-
-      if(IsInterfaceType) assert(NumPointers > 0);
-
-      Output.write(Output.Indentation);
-
-      if(IsConst) Output.write("in ");
-
-      auto Pointers = '*'.repeat(IsInterfaceType ? NumPointers - 1 : NumPointers);
-      Output.writef("%s%s %s,%s", TypeBaseName, Pointers, Param.Name, Output.Newline);
+      EmitDeclaration(Param, Output, Yes.IsFunctionParam);
     }
 
     Output.Outdent();
@@ -993,6 +1164,43 @@ char[] ReadTextAsUTF8(in string Filename)
   return Filename.read().to!(char[]);
 }
 
+// Replaces all comments with spaces.
+char[] Preprocess(char[] Source)
+{
+  auto Search = Source;
+  while(Search.length)
+  {
+    Search = Search.find("//", "/*", "cpp_quote")[0];
+
+    if(Search.startsWith("//"))
+    {
+      auto Garbage = Search.FastForwardUntil!(Char => Char == '\n');
+      Garbage[] = ' ';
+    }
+    else if(Search.startsWith("/*"))
+    {
+      auto ContinueHere = Search.find("*/");
+      if(ContinueHere.length) ContinueHere.popFrontN(2);
+      auto Garbage = Search[0 .. $ - ContinueHere.length];
+      Search = ContinueHere;
+      Garbage[] = ' ';
+    }
+    else if(Search.startsWith("cpp_quote"))
+    {
+      Search.popFrontN("cpp_quote".length);
+      Search.SkipWhiteSpace();
+      assert(Search.front == '(');
+      Search.popFront();
+      Search.SkipWhiteSpace();
+      assert(Search.front == '"');
+      Search.popFront();
+      Search.ParseEscapableString('"');
+    }
+  }
+
+  return Source;
+}
+
 void main(string[] Args)
 {
   const Program = Args[0];
@@ -1007,6 +1215,8 @@ void main(string[] Args)
   auto OutFilename = Args[1];
 
   char[] InputBuffer = ReadTextAsUTF8(InFilename);
+
+  InputBuffer = InputBuffer.Preprocess();
 
   int[CodeType.max + 1] Stats;
   auto Blocks = Parse(InputBuffer, Stats);
