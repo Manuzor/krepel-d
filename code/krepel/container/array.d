@@ -476,3 +476,53 @@ unittest
   static assert(!__traits(compiles, Array.PushBack(1.0)),
                 "A double is not implicitly convertible to an int.");
 }
+
+unittest
+{
+  StaticStackMemory!1024 Memory;
+  auto Array = Array!int(Memory.Wrap);
+
+  Array.PushBack(0, 1, 2, 3, 4);
+  assert(Array.length == 5);
+  assert(Array[0] == 0);
+  Array.Insert(0, [10]);
+  assert(Array.length == 6);
+  assert(Array[0] == 10);
+  assert(Array[1] == 0);
+  assert(Array[2] == 1);
+  assert(Array[3] == 2);
+  assert(Array[4] == 3);
+  assert(Array[5] == 4);
+  Array.Insert(2, [5]);
+  assert(Array.length == 7);
+  assert(Array[0] == 10);
+  assert(Array[1] == 0);
+  assert(Array[2] == 5);
+  assert(Array[3] == 1);
+  assert(Array[4] == 2);
+  assert(Array[5] == 3);
+  assert(Array[6] == 4);
+  Array.Insert(7, [200]);
+  assert(Array.length == 8);
+  assert(Array[0] == 10);
+  assert(Array[1] == 0);
+  assert(Array[2] == 5);
+  assert(Array[3] == 1);
+  assert(Array[4] == 2);
+  assert(Array[5] == 3);
+  assert(Array[6] == 4);
+  assert(Array[7] == 200);
+  Array.Insert(4, [500,600,700]);
+  assert(Array.length == 11);
+  assert(Array[0] == 10);
+  assert(Array[1] == 0);
+  assert(Array[2] == 5);
+  assert(Array[3] == 1);
+  assert(Array[4] == 500);
+  assert(Array[5] == 600);
+  assert(Array[6] == 700);
+  assert(Array[7] == 2);
+  assert(Array[8] == 3);
+  assert(Array[9] == 4);
+  assert(Array[10] == 200);
+}
