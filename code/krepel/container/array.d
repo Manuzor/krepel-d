@@ -214,7 +214,7 @@ struct Array(T)
   }
 
   @property ref auto Front() inout { return Data[0]; }
-  @property ref auto Back() inout { return Data[0]; }
+  @property ref auto Back() inout { return Data[$-1]; }
 
   void RemoveAt(IndexType, CountType)(IndexType Index, CountType CountToRemove = 1)
   {
