@@ -166,7 +166,6 @@ class FormattedOutput
 {
   int IndentationLevel;
   string Newline = "\n";
-  //string Indentation;
 
   File OutFile;
 
@@ -189,14 +188,6 @@ class FormattedOutput
   alias OutFile this;
 }
 
-struct SpecialCaseData
-{
-  alias EmitterCallbackFunc = void function(ref char[] Source, FormattedOutput Output);
-
-  EmitterCallbackFunc* EmitterCallback;
-}
-
-SpecialCaseData[] SpecialCases;
 FormattedOutput Log;
 
 void ParseCppQuote(ref char[] Source, ref BlockData[] Blocks)
@@ -815,7 +806,7 @@ BlockData[] Parse(ref char[] Source, int[] Stats)
     }
 
     Log.Outdent();
-    Log.writefln("%-(%s%)", "-".repeat(10));
+    Log.writeln('-'.repeat(10));
   }
 
   return Result;
@@ -1231,7 +1222,7 @@ void main(string[] Args)
     Output.OutFile.open(OutFilename, "w");
   }
 
-  Log.writefln("%-(%s%)", "=".repeat(72));
+  Log.writeln('='.repeat(72));
 
   Output.write("// Original file name: ", InFilename, Output.Newline);
   Output.write("// Conversion date: ", Clock.currTime, Output.Newline);
