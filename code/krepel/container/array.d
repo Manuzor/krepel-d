@@ -432,8 +432,13 @@ unittest
   Arr.PushBack(4, 5, 9);
   assert(Arr.Count == 3);
   assert(Arr[0] == 4);
+  assert(Arr.Front == 4);
   assert(Arr[1] == 5);
   assert(Arr[2] == 9);
+  assert(Arr.Back == 9);
+
+  Arr.RemoveAt(1, 2);
+  assert(Arr.Count == 1);
 }
 
 unittest
