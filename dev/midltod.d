@@ -14,7 +14,7 @@ import std.datetime;
 
 char[] View(char[] String, size_t NumToView)
 {
-  return String[0 .. min(String.length, NumToView)];
+  return String[0 .. min($, NumToView)];
 }
 
 enum CodeType
