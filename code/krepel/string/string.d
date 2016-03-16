@@ -3,6 +3,7 @@ module krepel.string.string;
 import krepel.memory;
 import krepel.container;
 
+
 struct StringBase(CharType)
 {
   @nogc:
@@ -22,6 +23,17 @@ struct StringBase(CharType)
     Data.Allocator = Allocator;
   }
 
+  this(const CharType[] String, IAllocator Allocator = GlobalAllocator)
+  {
+    this(Allocator);
+    Data.PushBack(String);
+  }
+
+  this(this)
+  {
+    (*RefCount)++;
+  }
+
   ~this()
   {
     if (*RefCount == 1)
@@ -37,11 +49,6 @@ struct StringBase(CharType)
     }
   }
 
-  this(this)
-  {
-    (*RefCount)++;
-  }
-
   void EnsureSingleCopy()
   {
     if (*RefCount != 1)
@@ -55,12 +62,52 @@ struct StringBase(CharType)
     }
   }
 
+  bool StartsWith(const CharType[] SearchString)
+  {
+    if (Count < SearchString.length)
+    {
+      return false;
+    }
+    else
+    {
+      return this[0 .. SearchString.length] == SearchString;
+    }
+  }
+
+  bool EndsWith(const CharType[] SearchString)
+  {
+    if (Count < SearchString.length)
+    {
+      return false;
+    }
+    else
+    {
+      return this[$ - SearchString.length .. $] == SearchString;
+    }
+  }
+
   const(CharType[]) opIndex() const
   {
     return Data.Data;
   }
 
-  const(CharType[]) opSlice(size_t LeftIndex, size_t RightIndex) const
+  CharType opIndex(int Index) const
+  {
+    return Data.Data[Index];
+  }
+
+  void opIndexAssign(CharType Value, uint Index)
+  {
+    EnsureSingleCopy();
+    Data.Data[Index] = Value;
+  }
+
+  ulong opDollar() const
+  {
+    return Count;
+  }
+
+  const(CharType[]) opSlice(ulong LeftIndex, ulong RightIndex) const
   {
     return Data.Data[LeftIndex .. RightIndex];
   }
@@ -70,7 +117,39 @@ struct StringBase(CharType)
     return Data.Count;
   }
 
+  bool opEquals(const CharType[] String) const
+  {
+    return Data.Data[] == String;
+  }
+
+  bool opEquals(ref StringBase!CharType String) const
+  {
+    return Data.Data[] == String[];
+  }
+
   uint* RefCount = null;
 }
 
 alias String = StringBase!wchar;
+
+unittest
+{
+  StaticStackMemory!1024 StackMemory;
+  GlobalAllocator = Wrap(StackMemory);
+
+  String TestString = String("This is a Test");
+
+  assert(TestString == "This is a Test");
+  assert(TestString == TestString);
+  assert(TestString != "Another String");
+
+  auto AnotherString = TestString;
+
+  AnotherString[2] = 'b';
+
+  assert(TestString == "This is a Test");
+  assert(AnotherString == "Thbs is a Test");
+
+  assert(TestString.StartsWith("This"));
+  assert(TestString.EndsWith("Test"));
+}
