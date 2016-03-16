@@ -228,6 +228,25 @@ struct Array(T)
     Data = Data[0 .. $ - CountToRemove];
   }
 
+  void Insert(IndexType)(IndexType Where, const(ElementType[]) ToInsert)
+  {
+    assert(Where >= 0 && Where <= Count);
+    auto DataToMove = Data[Where .. $];
+    auto ExpandedArea = ExpandUninitialized(ToInsert.length);
+    if (Where == Count)
+    {
+      ExpandedArea[] = ToInsert[];
+    }
+    else
+    {
+      for(long Index = Count - 1; Index >= Where + ToInsert.length; Index--)
+      {
+        Data[Index] = Data[Index - ToInsert.length];
+      }
+      Data[Where .. Where + ToInsert.length] = ToInsert[];
+    }
+  }
+
   void RemoveAtSwap(IndexType, CountType)(IndexType Index, CountType CountToRemove = 1)
   {
     auto Hole = Data[Index .. Index + CountToRemove];
