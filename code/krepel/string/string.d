@@ -27,6 +27,7 @@ struct StringBase(CharType)
   {
     this(Allocator);
     Data.PushBack(String);
+    Data.PushBack('\0');
   }
 
   this(this)
@@ -88,7 +89,7 @@ struct StringBase(CharType)
 
   const(CharType[]) opIndex() const
   {
-    return Data.Data;
+    return Data.Data[0..Count];
   }
 
   CharType opIndex(int Index) const
@@ -114,18 +115,25 @@ struct StringBase(CharType)
 
   @property auto Count() const
   {
-    return Data.Count;
+    return Data.Count - 1;
   }
 
   bool opEquals(const CharType[] String) const
   {
-    return Data.Data[] == String;
+    return this[] == String;
   }
 
   bool opEquals(ref StringBase!CharType String) const
   {
-    return Data.Data[] == String[];
+    return this[] == String[];
   }
+
+  const(CharType[]) ToChar() const
+  {
+    return this[];
+  }
+
+  alias ToChar this;
 
   uint* RefCount = null;
 }
