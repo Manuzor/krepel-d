@@ -37,6 +37,8 @@ struct StringBase(CharType)
 
   ~this()
   {
+    if(RefCount != null)
+    {
     if (*RefCount == 1)
     {
       Allocator.Delete(RefCount);
@@ -48,6 +50,7 @@ struct StringBase(CharType)
     {
       (*RefCount)--;
     }
+  }
   }
 
   void EnsureSingleCopy()
