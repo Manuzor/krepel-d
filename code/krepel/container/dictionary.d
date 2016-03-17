@@ -61,6 +61,16 @@ struct Dictionary(K, V)
     }
   }
 
+  bool TryGet(InKeyType, OutValueType)(auto ref InKeyType Key, out OutValueType Value)
+  {
+    if(Contains(Key))
+    {
+      Value = this[Key];
+      return true;
+    }
+    return false;
+  }
+
   bool Contains(InKeyType)(auto ref InKeyType Key) const
   {
     return Keys.CountUntil(Key) >= 0;
