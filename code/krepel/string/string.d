@@ -39,18 +39,18 @@ struct StringBase(CharType)
   {
     if(RefCount != null)
     {
-    if (*RefCount == 1)
-    {
-      Allocator.Delete(RefCount);
-      RefCount = null;
-      Allocator.Delete!(Array!CharType)(Data);
-      Data = null;
+      if (*RefCount == 1)
+      {
+        Allocator.Delete(RefCount);
+        RefCount = null;
+        Allocator.Delete!(Array!CharType)(Data);
+        Data = null;
+      }
+      else
+      {
+        (*RefCount)--;
+      }
     }
-    else
-    {
-      (*RefCount)--;
-    }
-  }
   }
 
   void EnsureSingleCopy()
@@ -137,6 +137,27 @@ struct StringBase(CharType)
     return ReplaceCount;
   }
 
+  long Concat(const(CharType[]) OtherString)
+  {
+    EnsureSingleCopy();
+    Data.PopBack(); // Remove \0 from End of first string.
+    Data.PushBack(OtherString);
+    Data.PushBack('\0');
+    return Count;
+  }
+
+  StringBase!CharType ConcatCopy(const(CharType[]) OtherString) const
+  {
+    StringBase!CharType Result = StringBase!CharType(this);
+    Result.Concat(OtherString);
+    return Result;
+  }
+
+  StringBase!CharType opBinary(string Operator : "+")(const(CharType[]) OtherString)
+  {
+    return ConcatCopy(OtherString);
+  }
+
   const(CharType[]) opIndex() const
   {
     return Data.Data[0..Count];
@@ -208,7 +229,7 @@ alias String = StringBase!wchar;
 
 unittest
 {
-  StaticStackMemory!1024 StackMemory;
+  StaticStackMemory!2048 StackMemory;
   GlobalAllocator = Wrap(StackMemory);
 
   String TestString = String("This is a Test");
@@ -242,4 +263,19 @@ unittest
   assert(TestString == "TESTESTEST");
   assert(TestString.ReplaceAll("TEST", "FOO") == 2);
   assert(TestString == "FOOESFOO");
+
+  TestString = String("Conc").ConcatCopy("atenation");
+
+  assert(TestString == "Concatenation");
+
+  TestString = String("Another ") + "Test" + " for" + " concatenation";
+
+  assert(TestString == "Another Test for concatenation");
+
+  AnotherString = TestString;
+
+  assert(AnotherString.Concat(". And again.") == 42);
+
+  assert(TestString == "Another Test for concatenation");
+  assert(AnotherString == "Another Test for concatenation. And again.");
 }
