@@ -87,3 +87,34 @@ unittest
   assert(BytesRead == 10, BytesRead.to!string());
   assert(cast(char[])Region[0..BytesRead] == "Test Data\n");
 }
+
+/// Read Line
+unittest
+{
+  import krepel.container;
+  import krepel.memory;
+  import krepel.system.ifile;
+
+  StaticStackMemory!1024 SomeStack;
+  auto SomeAllocator = Wrap(SomeStack);
+
+  IFile File = OpenFile(SomeAllocator, "../unittest/ReadLineTest.txt");
+  Array!ubyte Data = Array!ubyte(SomeAllocator);
+
+  File.ReadLine(Data);
+  assert(Data.Count == 10);
+  assert(Data.Data[] == "First line");
+  Data.Clear();
+  assert(Data.Count == 0);
+  File.ReadLine(Data);
+  assert(Data.Count == 11);
+  assert(Data.Data[] == "Second line");
+  Data.Clear();
+  assert(Data.Count == 0);
+  File.ReadLine(Data);
+  assert(Data.Count == 10);
+  assert(Data.Data[] == "Third line");
+
+  CloseFile(SomeAllocator, File);
+
+}

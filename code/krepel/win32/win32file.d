@@ -4,6 +4,7 @@ import core.sys.windows.windows;
 import krepel.system.ifile;
 import krepel.memory;
 import krepel.win32;
+import krepel.container;
 
 version(Windows):
 
@@ -82,6 +83,35 @@ class Win32File : IFile
       }
     }
     return TotalBytesRead;
+  }
+
+  override long ReadLine(ref Array!ubyte Array)
+  {
+    ubyte[10] Buffer;
+    while(true)
+    {
+      auto ReadCount = Read(Buffer);
+      foreach(Index; 0 .. ReadCount)
+      {
+        //Reached newline
+        if(Buffer[Index] == '\r' || Buffer[Index] == '\n')
+        {
+          Array.PushBack(Buffer[0..Index]);
+          MoveCursor(-(10-Index) + 1);
+          return Array.Count;
+        }
+      }
+      //Reached EOF
+      if (ReadCount < 10)
+      {
+        Array.PushBack(Buffer[0..ReadCount]);
+        return Array.Count;
+      }
+      else
+      {
+        Array.PushBack(Buffer);
+      }
+    }
   }
 
   override long Write(MemoryRegion Region)
