@@ -22,6 +22,7 @@ enum CodeType
 {
   INVALID,
 
+  Import,
   CppQuote,
   Constant,
   Enum,
@@ -36,6 +37,7 @@ struct BlockData
   CodeType Type;
   union
   {
+    ImportData Import;
     CppQuoteData CppQuote;
     ConstantData Constant;
     EnumData Enum;
@@ -44,6 +46,11 @@ struct BlockData
     FunctionData Function;
     AliasData Alias;
   }
+}
+
+struct ImportData
+{
+  char[] Filename;
 }
 
 struct CppQuoteData
@@ -190,6 +197,34 @@ class FormattedOutput
 }
 
 FormattedOutput Log;
+
+void ParseImport(ref char[] Source, ref BlockData[] Blocks)
+{
+  Log.writeln(Log.Indentation, "=== Parsing Import ===");
+
+  assert(Source.startsWith("import"), Source.View(100));
+  Source.popFrontN("import".length);
+  assert(Source.front.isWhite, Source.View(100));
+
+  Source.SkipWhiteSpace();
+
+  assert(Source.front == '"');
+  Source.popFront();
+
+  ImportData Result;
+  Result.Filename = Source.ParseEscapableString('"');
+  Log.writeln(Log.Indentation, "Filename: ", Result.Filename);
+
+  Source.SkipWhiteSpace();
+
+  assert(Source.front == ';');
+
+  Source.popFront();
+
+  auto Block = BlockData(CodeType.Import);
+  Block.Import = Result;
+  Blocks ~= Block;
+}
 
 void ParseCppQuote(ref char[] Source, ref BlockData[] Blocks)
 {
@@ -760,9 +795,14 @@ BlockData[] Parse(ref char[] Source, int[] Stats)
     Log.writefln("Looking at: %s...", Source.View(ContextCharCountThreshold));
     Log.Indent();
 
-    if(Source.startsWith("import") || Source.startsWith("#pragma"))
+    if(Source.startsWith("#pragma"))
     {
       Source.FastForwardUntil!(Char => Char == '\n');
+    }
+    else if(Source.startsWith("import"))
+    {
+      ParseImport(Source, Result);
+      Stats[CodeType.Import]++;
     }
     else if(Source.startsWith("const") || Source.startsWith("#define"))
     {
@@ -1058,6 +1098,11 @@ void EmitAlias(ref AliasData Alias, FormattedOutput Output)
   Output.writef("alias %s = %s;%s", Alias.NewName, Alias.OldName, Output.Newline);
 }
 
+void EmitImport(ref ImportData Import, FormattedOutput Output)
+{
+  Output.write(Output.Indentation, "import ", Import.Filename.stripExtension, ';', Output.Newline);
+}
+
 void EmitCppQuote(ref CppQuoteData CppQuote, FormattedOutput Output)
 {
   Output.write(Output.Indentation, CppQuote.Content, Output.Newline);
@@ -1086,12 +1131,17 @@ void EmitBlocks(BlockData[] Blocks, FormattedOutput Output, int CppQuoteBatchId 
   while(Blocks.length)
   {
     auto Block = &Blocks.front;
-    Blocks.popFront();
+    scope(success) if(Blocks.length) Blocks.popFront();
 
     Output.write(Output.Newline);
 
     final switch(Block.Type)
     {
+      case CodeType.Import:
+      {
+        EmitImport(Block.Import, Output);
+        break;
+      }
       case CodeType.Constant:
       {
         EmitConstant(Block.Constant, Output);
@@ -1133,17 +1183,23 @@ void EmitBlocks(BlockData[] Blocks, FormattedOutput Output, int CppQuoteBatchId 
       case CodeType.CppQuote:
       {
         // cpp_quotes are emitted in batches.
-        scope(success) CppQuoteBatchId++;
-        Output.write(Output.Indentation, `// Begin cpp_quote #`, CppQuoteBatchId, Output.Newline);
+        const NumConsecutiveCppQuotes = Blocks.countUntil!(Block => Block.Type != CodeType.CppQuote);
+        scope(exit) CppQuoteBatchId += NumConsecutiveCppQuotes;
+
+        Output.write(Output.Indentation, "// Begin cpp_quote #", CppQuoteBatchId);
+        if(NumConsecutiveCppQuotes > 1) Output.write("-", CppQuoteBatchId + NumConsecutiveCppQuotes - 1);
+        Output.write(Output.Newline);
 
         do
         {
-          EmitCppQuote(Block.CppQuote, Output);
-          Block = &Blocks.front;
+          EmitCppQuote(Blocks.front.CppQuote, Output);
           Blocks.popFront();
-        } while(Blocks.length && Block.Type == CodeType.CppQuote);
+        } while(Blocks.length && Blocks.front.Type == CodeType.CppQuote);
 
-        Output.write(Output.Indentation, `// End cpp_quote #`, CppQuoteBatchId, Output.Newline);
+        Output.write(Output.Indentation, "// End cpp_quote #", CppQuoteBatchId);
+        if(NumConsecutiveCppQuotes > 1) Output.write("-", CppQuoteBatchId + NumConsecutiveCppQuotes - 1);
+        Output.write(Output.Newline);
+
         break;
       }
       case CodeType.INVALID: assert(0, Block.Type.to!string);
@@ -1231,7 +1287,7 @@ void main(string[] Args)
 
   if(Stats[CodeType.CppQuote])
   {
-    Output.writef(`static assert(0, "There are %s cpp_quotes that need to be converted manually. Look for: // Begin cpp_quote #.");`,
+    Output.writef(`static assert(0, "There are %s lines of cpp_quotes batched into several regions that need to be converted manually. Every batch is enclosed by // Begin/End cpp_quote #X.");`,
                   Stats[CodeType.CppQuote]);
     Output.write(Output.Newline, Output.Newline);
   }
