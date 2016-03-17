@@ -392,7 +392,16 @@ void Win32Build(ref BuildContext Context, ref BuildRuleData BuildRule)
       auto VsToolsDir = environment.get(EnvVarName);
       if(VsToolsDir)
       {
+        if(Context.Verbosity > 2)
+        {
+          logf(`Found VS Tools dir in environment variable "%s": %s`, EnvVarName, VsToolsDir);
+        }
+
         return buildNormalizedPath(VsToolsDir, "..", "..");
+      }
+      if(Context.Verbosity > 1)
+      {
+        logf(`No environment variable "%s" found.`, EnvVarName);
       }
     }
 
@@ -400,7 +409,14 @@ void Win32Build(ref BuildContext Context, ref BuildRuleData BuildRule)
   }
 
   auto VisualStudioDir = FindVisualStudioDir();
-  assert(VisualStudioDir);
+  assert(VisualStudioDir, "Unable to find Visual Studio directory. "
+                          "Make sure it's installed and the VSxxCOMNTOOLS "
+                          "environment variable is set (xx == a number).");
+
+  if(Context.Verbosity > 3)
+  {
+    log("Visual Studio Directory: ", VisualStudioDir);
+  }
 
   string WindowsKitsLibSubfolder;
   final switch(Context.Architecture)
