@@ -1,9 +1,10 @@
-module krepel.resources.loader;
+module krepel.resources.resource_loader;
 
-import krepel.resources.manager;
+import krepel.resources.resource_manager;
+import krepel.system;
 import krepel.memory;
 
 interface IResourceLoader
 {
-  IResource Load(MemoryRegion Data);
+  IResource Load(IAllocator Allocator, IFile Data);
 }
