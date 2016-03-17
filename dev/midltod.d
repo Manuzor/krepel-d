@@ -46,6 +46,22 @@ struct BlockData
     FunctionData Function;
     AliasData Alias;
   }
+
+  string toString() const
+  {
+    final switch(Type)
+    {
+      case CodeType.Import:    return "BlockData(%s)".format(Import);
+      case CodeType.CppQuote:  return "BlockData(%s)".format(CppQuote);
+      case CodeType.Constant:  return "BlockData(%s)".format(Constant);
+      case CodeType.Enum:      return "BlockData(%s)".format(Enum);
+      case CodeType.Aggregate: return "BlockData(%s)".format(Aggregate);
+      case CodeType.Interface: return "BlockData(%s)".format(Interface);
+      case CodeType.Function:  return "BlockData(%s)".format(Function);
+      case CodeType.Alias:     return "BlockData(%s)".format(Alias);
+      case CodeType.INVALID: assert(0);
+    }
+  }
 }
 
 struct ImportData
@@ -497,6 +513,8 @@ void ParseAggregate(ref char[] Source, ref BlockData[] Blocks)
   auto Block = BlockData(CodeType.Aggregate);
   Block.Aggregate = Result;
   Blocks ~= Block;
+
+  Log.writeln(Log.Indentation, "New Block: ", Blocks.back);
 }
 
 char[] ParseNestedString(ref char[] Source, char FrontChar, char BackChar, Flag!"CanExhaustSource" CanExhaustSource = Yes.CanExhaustSource)
@@ -928,7 +946,6 @@ void EmitDeclaration(ref Declaration Decl, FormattedOutput Output, Flag!"IsFunct
     Output.Outdent();
 
     Output.write(Output.Indentation, '}');
-    if(IsFunctionParam) Output.write(',');
   }
   else
   {
@@ -966,6 +983,8 @@ void EmitDeclaration(ref Declaration Decl, FormattedOutput Output, Flag!"IsFunct
 
 void EmitAggregate(ref AggregateData Aggregate, FormattedOutput Output)
 {
+  Log.writeln(Log.Indentation, "Emitting aggregate: ", Aggregate);
+
   Output.write(Output.Indentation);
 
   final switch(Aggregate.AggregateType)
@@ -979,50 +998,8 @@ void EmitAggregate(ref AggregateData Aggregate, FormattedOutput Output)
 
   Output.Indent();
 
-  void EmitMember(ref Declaration Member)
-  {
-    if(Member.Body)
-    {
-      assert(Member.Type == "struct" || Member.Type == "union", Member.Type);
-
-      // Note: We add an extra newline here in attempt to make the interface look nicer.
-      Output.write(Output.Newline, Output.Indentation);
-
-      // Inner structs should be static.
-      if(Member.Type == "struct") Output.write("static ");
-
-      Output.write(Member.Type, " ", Member.Name, Output.Newline,
-                   Output.Indentation, '{', Output.Newline);
-
-      Output.Indent();
-
-      foreach(ref InnerMember; Member.Body)
-      {
-        EmitMember(InnerMember);
-      }
-
-      Output.Outdent();
-
-      Output.write(Output.Indentation, '}');
-    }
-    else
-    {
-      Output.write(Output.Indentation, Member.Type);
-
-      foreach(Count; Member.ArrayCounts)
-      {
-        Output.writef("[%s]", Count);
-      }
-
-      Output.writef(" %s;", Member.Name);
-    }
-
-    Output.write(Output.Newline);
-  }
-
   foreach(ref Member; Aggregate.Members[])
   {
-    //EmitMember(Member);
     EmitDeclaration(Member, Output, No.IsFunctionParam);
   }
 
@@ -1131,7 +1108,7 @@ void EmitBlocks(BlockData[] Blocks, FormattedOutput Output, int CppQuoteBatchId 
   while(Blocks.length)
   {
     auto Block = &Blocks.front;
-    scope(success) if(Blocks.length) Blocks.popFront();
+    Blocks.popFront();
 
     Output.write(Output.Newline);
 
@@ -1190,11 +1167,14 @@ void EmitBlocks(BlockData[] Blocks, FormattedOutput Output, int CppQuoteBatchId 
         if(NumConsecutiveCppQuotes > 1) Output.write("-", CppQuoteBatchId + NumConsecutiveCppQuotes - 1);
         Output.write(Output.Newline);
 
-        do
+        while(true)
         {
-          EmitCppQuote(Blocks.front.CppQuote, Output);
+          EmitCppQuote(Block.CppQuote, Output);
+          if(Blocks.empty) break;
+          Block = &Blocks.front;
+          if(Block.Type != CodeType.CppQuote) break;
           Blocks.popFront();
-        } while(Blocks.length && Blocks.front.Type == CodeType.CppQuote);
+        }
 
         Output.write(Output.Indentation, "// End cpp_quote #", CppQuoteBatchId);
         if(NumConsecutiveCppQuotes > 1) Output.write("-", CppQuoteBatchId + NumConsecutiveCppQuotes - 1);
