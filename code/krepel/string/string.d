@@ -104,6 +104,20 @@ struct StringBase(CharType)
     return -1;
   }
 
+  ulong FindLast(const(CharType[]) SearchString) const
+  {
+    long SearchIndex = Count - SearchString.length;
+    while(SearchIndex >= 0)
+    {
+      if (this[SearchIndex .. SearchIndex + SearchString.length] == SearchString)
+      {
+        return SearchIndex;
+      }
+      SearchIndex--;
+    }
+    return -1;
+  }
+
   bool ReplaceFirst(const(CharType[]) SearchString, const(CharType[]) ReplaceString)
   {
     long SearchIndex = Find(SearchString);
@@ -278,4 +292,6 @@ unittest
 
   assert(TestString == "Another Test for concatenation");
   assert(AnotherString == "Another Test for concatenation. And again.");
+  assert(AnotherString.FindLast(".") == 41);
+  assert(AnotherString.Find(".") == 30);
 }
