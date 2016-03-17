@@ -1,262 +1,13 @@
-module dxgi;
+// Original file name: dxgi.idl
+// Conversion date: 2016-Mar-17 18:37:50.2459586
+
+module directx.dxgi;
+
 version(Windows):
 
 import core.sys.windows.windows;
-public import dxgiformat;
 
-private import std.format : format;
-
-private enum _FACDXGI = 0x87a;
-auto MAKE_DXGI_HRESULT(uint Code)
-{
-  return MAKE_HRESULT(1, _FACDXGI, Code);
-}
-
-auto MAKE_DXGI_STATUS(uint Code)
-{
-  return MAKE_HRESULT(0, _FACDXGI, Code);
-}
-
-
-struct DXGI_RGB
-{
-  float Red;
-  float Green;
-  float Blue;
-}
-
-struct DXGI_RGBA
-{
-  float r;
-  float g;
-  float b;
-  float a;
-}
-
-struct DXGI_GAMMA_CONTROL
-{
-  DXGI_RGB        Scale;
-  DXGI_RGB        Offset;
-  DXGI_RGB[1025]  GammaCurve;
-}
-
-struct DXGI_GAMMA_CONTROL_CAPABILITIES
-{
-  BOOL         ScaleAndOffsetSupported;
-  float        MaxConvertedValue;
-  float        MinConvertedValue;
-  UINT         NumGammaControlPoints;
-  float[1025]  ControlPointPositions;
-}
-
-struct DXGI_RATIONAL
-{
-  UINT  Numerator;
-  UINT  Denominator;
-}
-
-enum DXGI_MODE_SCANLINE_ORDER
-{
-  UNSPECIFIED       = 0,
-  PROGRESSIVE       = 1,
-  UPPER_FIELD_FIRST = 2,
-  LOWER_FIELD_FIRST = 3,
-}
-
-enum DXGI_MODE_SCALING
-{
-  UNSPECIFIED = 0,
-  CENTERED    = 1,
-  STRETCHED   = 2,
-}
-
-enum DXGI_MODE_ROTATION
-{
-  UNSPECIFIED = 0,
-  IDENTITY    = 1,
-  ROTATE90    = 2,
-  ROTATE180   = 3,
-  ROTATE270   = 4,
-}
-
-struct DXGI_MODE_DESC
-{
-  UINT Width;
-  UINT Height;
-  DXGI_RATIONAL RefreshRate;
-  DXGI_FORMAT Format;
-  DXGI_MODE_SCANLINE_ORDER ScanlineOrdering;
-  DXGI_MODE_SCALING Scaling;
-}
-
-// The following values are used with DXGI_SAMPLE_DESC.Quality:
-enum DXGI_STANDARD_MULTISAMPLE_QUALITY_PATTERN = 0xffffffff;
-enum DXGI_CENTER_MULTISAMPLE_QUALITY_PATTERN = 0xfffffffe;
-
-struct DXGI_SAMPLE_DESC
-{
-  UINT Count;
-  UINT Quality;
-}
-
-enum DXGI_COLOR_SPACE_TYPE
-{
-  RGB_FULL_G22_NONE_P709        = 0,
-  RGB_FULL_G10_NONE_P709        = 1,
-  RGB_STUDIO_G22_NONE_P709      = 2,
-  RGB_STUDIO_G22_NONE_P2020     = 3,
-  RESERVED                      = 4,
-  YCBCR_FULL_G22_NONE_P709_X601 = 5,
-  YCBCR_STUDIO_G22_LEFT_P601    = 6,
-  YCBCR_FULL_G22_LEFT_P601      = 7,
-  YCBCR_STUDIO_G22_LEFT_P709    = 8,
-  YCBCR_FULL_G22_LEFT_P709      = 9,
-  YCBCR_STUDIO_G22_LEFT_P2020   = 10,
-  YCBCR_FULL_G22_LEFT_P2020     = 11,
-  CUSTOM                        = 0xFFFFFFFF,
-}
-alias DXGI_COLOR_SPACE = DXGI_COLOR_SPACE_TYPE;
-
-struct DXGI_JPEG_DC_HUFFMAN_TABLE
-{
-  BYTE[12]  CodeCounts;
-  BYTE[12]  CodeValues;
-}
-
-struct DXGI_JPEG_AC_HUFFMAN_TABLE
-{
-  BYTE[16]   CodeCounts;
-  BYTE[162]  CodeValues;
-}
-
-struct DXGI_JPEG_QUANTIZATION_TABLE
-{
-  BYTE[64]  Elements;
-}
-
-enum DXGI_CPU_ACCESS
-{
-  NONE       = 0,
-  DYNAMIC    = 1,
-  READ_WRITE = 2,
-  SCRATCH    = 3,
-  FIELD      = 15,
-}
-
-enum DXGI_USAGE : uint
-{
-  SHADER_INPUT         = 0x00000010,
-  RENDER_TARGET_OUTPUT = 0x00000020,
-  BACK_BUFFER          = 0x00000040,
-  SHARED               = 0x00000080,
-  READ_ONLY            = 0x00000100,
-  DISCARD_ON_PRESENT   = 0x00000200,
-  UNORDERED_ACCESS     = 0x00000400,
-}
-
-struct DXGI_FRAME_STATISTICS
-{
-  UINT           PresentCount;
-  UINT           PresentRefreshCount;
-  UINT           SyncRefreshCount;
-  LARGE_INTEGER  SyncQPCTime;
-  LARGE_INTEGER  SyncGPUTime;
-}
-
-struct DXGI_MAPPED_RECT
-{
-  INT    Pitch;
-  BYTE*  pBits;
-}
-
-struct DXGI_ADAPTER_DESC
-{
-  WCHAR[128]  Description;
-  UINT        VendorId;
-  UINT        DeviceId;
-  UINT        SubSysId;
-  UINT        Revision;
-  SIZE_T      DedicatedVideoMemory;
-  SIZE_T      DedicatedSystemMemory;
-  SIZE_T      SharedSystemMemory;
-  LUID        AdapterLuid;
-}
-
-struct DXGI_OUTPUT_DESC
-{
-  WCHAR[32]           DeviceName;
-  RECT                DesktopCoordinates;
-  BOOL                AttachedToDesktop;
-  DXGI_MODE_ROTATION  Rotation;
-  HMONITOR            Monitor;
-}
-
-struct DXGI_SHARED_RESOURCE
-{
-  HANDLE  Handle;
-}
-
-enum DXGI_RESOURCE_PRIORITY
-{
-  MINIMUM = 0x28000000,
-  LOW     = 0x50000000,
-  NORMAL  = 0x78000000,
-  HIGH    = 0xa0000000,
-  MAXIMUM = 0xc8000000,
-}
-
-enum DXGI_RESIDENCY
-{
-  FULLY_RESIDENT            = 1,
-  RESIDENT_IN_SHARED_MEMORY = 2,
-  EVICTED_TO_DISK           = 3,
-}
-
-struct DXGI_SURFACE_DESC
-{
-  UINT              Width;
-  UINT              Height;
-  DXGI_FORMAT       Format;
-  DXGI_SAMPLE_DESC  SampleDesc;
-}
-
-enum DXGI_SWAP_EFFECT
-{
-  DISCARD         = 0,
-  SEQUENTIAL      = 1,
-  FLIP_SEQUENTIAL = 3,
-  FLIP_DISCARD    = 4,
-}
-
-enum DXGI_SWAP_CHAIN_FLAG
-{
-  NONPREROTATED                   = 1,
-  ALLOW_MODE_SWITCH               = 2,
-  GDI_COMPATIBLE                  = 4,
-  RESTRICTED_CONTENT              = 8,
-  RESTRICT_SHARED_RESOURCE_DRIVER = 16,
-  DISPLAY_ONLY                    = 32,
-  FRAME_LATENCY_WAITABLE_OBJECT   = 64,
-  FOREGROUND_LAYER                = 128,
-  FULLSCREEN_VIDEO                = 256,
-  YUV_VIDEO                       = 512,
-  HW_PROTECTED                    = 1024,
-}
-
-struct DXGI_SWAP_CHAIN_DESC
-{
-  DXGI_MODE_DESC    BufferDesc;
-  DXGI_SAMPLE_DESC  SampleDesc;
-  DXGI_USAGE        BufferUsage;
-  UINT              BufferCount;
-  HWND              OutputWindow;
-  BOOL              Windowed;
-  DXGI_SWAP_EFFECT  SwapEffect;
-  UINT              Flags;
-}
-
-
-mixin template DeclareIID(ComType, alias IIDString)
+private mixin template DEFINE_GUID(ComType, alias IIDString)
 {
   static if(!is(ComType : IUnknown))
   {
@@ -271,6 +22,8 @@ mixin template DeclareIID(ComType, alias IIDString)
   static assert(IIDString[13] == '-',   "Malformed UUID string:\nGot:             %-36s\nExpected format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx".Format(IIDString));
   static assert(IIDString[18] == '-',   "Malformed UUID string:\nGot:             %-36s\nExpected format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx".Format(IIDString));
   static assert(IIDString[23] == '-',   "Malformed UUID string:\nGot:             %-36s\nExpected format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx".Format(IIDString));
+
+  private import std.format : format;
 
   mixin(format("immutable IID IID_%s "
                "= { 0x%s, 0x%s, 0x%s, [0x%s, 0x%s, 0x%s, 0x%s, 0x%s, 0x%s, 0x%s, 0x%s] };",
@@ -294,308 +47,645 @@ mixin template DeclareIID(ComType, alias IIDString)
   /// Example:
   ///   IDXGIObject Object = /* ... */;
   ///   auto Foo = Object.uuidof;
-  ref auto uuidof(T)(auto ref T) if(is(T == ComType)) { return uuidof!ComType; }
+  ref auto uuidof(T)(auto ref in T) if(is(T == ComType)) { return uuidof!ComType; }
 }
 
-mixin DeclareIID!(IDXGIObject, "aec22fb8-76f3-4639-9be0-28eb43a67a2e");
+// Note: Everything below this line is automatically converted and likely to
+// contain errors. You should manually check it for validity, if you care
+// enough.
+
+
+public import directx.dxgiformat;
+public import directx.dxgitype;
+
+enum DXGI_CPU_ACCESS_NONE            = 0;
+enum DXGI_CPU_ACCESS_DYNAMIC         = 1;
+enum DXGI_CPU_ACCESS_READ_WRITE      = 2;
+enum DXGI_CPU_ACCESS_SCRATCH         = 3;
+enum DXGI_CPU_ACCESS_FIELD           = 15;
+enum DXGI_USAGE_SHADER_INPUT         = 0x00000010;
+enum DXGI_USAGE_RENDER_TARGET_OUTPUT = 0x00000020;
+enum DXGI_USAGE_BACK_BUFFER          = 0x00000040;
+enum DXGI_USAGE_SHARED               = 0x00000080;
+enum DXGI_USAGE_READ_ONLY            = 0x00000100;
+enum DXGI_USAGE_DISCARD_ON_PRESENT   = 0x00000200;
+enum DXGI_USAGE_UNORDERED_ACCESS     = 0x00000400;
+
+alias DXGI_USAGE = UINT;
+
+struct DXGI_FRAME_STATISTICS
+{
+  UINT PresentCount;
+  UINT PresentRefreshCount;
+  UINT SyncRefreshCount;
+  LARGE_INTEGER SyncQPCTime;
+  LARGE_INTEGER SyncGPUTime;
+}
+
+struct DXGI_MAPPED_RECT
+{
+  INT Pitch;
+  BYTE* pBits;
+}
+
+struct DXGI_ADAPTER_DESC
+{
+  WCHAR[128] Description;
+  UINT VendorId;
+  UINT DeviceId;
+  UINT SubSysId;
+  UINT Revision;
+  SIZE_T DedicatedVideoMemory;
+  SIZE_T DedicatedSystemMemory;
+  SIZE_T SharedSystemMemory;
+  LUID AdapterLuid;
+}
+
+struct DXGI_OUTPUT_DESC
+{
+  WCHAR[32] DeviceName;
+  RECT DesktopCoordinates;
+  BOOL AttachedToDesktop;
+  DXGI_MODE_ROTATION Rotation;
+  HMONITOR Monitor;
+}
+
+struct DXGI_SHARED_RESOURCE
+{
+  HANDLE Handle;
+}
+
+enum UINT DXGI_RESOURCE_PRIORITY_MINIMUM = 0x28000000;
+
+enum UINT DXGI_RESOURCE_PRIORITY_LOW = 0x50000000;
+
+enum UINT DXGI_RESOURCE_PRIORITY_NORMAL = 0x78000000;
+
+enum UINT DXGI_RESOURCE_PRIORITY_HIGH = 0xa0000000;
+
+enum UINT DXGI_RESOURCE_PRIORITY_MAXIMUM = 0xc8000000;
+
+alias DXGI_RESIDENCY = int;
+enum : DXGI_RESIDENCY
+{
+  DXGI_RESIDENCY_FULLY_RESIDENT            = 1,
+  DXGI_RESIDENCY_RESIDENT_IN_SHARED_MEMORY = 2,
+  DXGI_RESIDENCY_EVICTED_TO_DISK           = 3,
+}
+
+struct DXGI_SURFACE_DESC
+{
+  UINT Width;
+  UINT Height;
+  DXGI_FORMAT Format;
+  DXGI_SAMPLE_DESC SampleDesc;
+}
+
+alias DXGI_SWAP_EFFECT = int;
+enum : DXGI_SWAP_EFFECT
+{
+  DXGI_SWAP_EFFECT_DISCARD         = 0,
+  DXGI_SWAP_EFFECT_SEQUENTIAL      = 1,
+  DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL = 3,
+  DXGI_SWAP_EFFECT_FLIP_DISCARD    = 4,
+}
+
+alias DXGI_SWAP_CHAIN_FLAG = int;
+enum : DXGI_SWAP_CHAIN_FLAG
+{
+  DXGI_SWAP_CHAIN_FLAG_NONPREROTATED                   = 1,
+  DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH               = 2,
+  DXGI_SWAP_CHAIN_FLAG_GDI_COMPATIBLE                  = 4,
+  DXGI_SWAP_CHAIN_FLAG_RESTRICTED_CONTENT              = 8,
+  DXGI_SWAP_CHAIN_FLAG_RESTRICT_SHARED_RESOURCE_DRIVER = 16,
+  DXGI_SWAP_CHAIN_FLAG_DISPLAY_ONLY                    = 32,
+  DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT   = 64,
+  DXGI_SWAP_CHAIN_FLAG_FOREGROUND_LAYER                = 128,
+  DXGI_SWAP_CHAIN_FLAG_FULLSCREEN_VIDEO                = 256,
+  DXGI_SWAP_CHAIN_FLAG_YUV_VIDEO                       = 512,
+  DXGI_SWAP_CHAIN_FLAG_HW_PROTECTED                    = 1024,
+}
+
+struct DXGI_SWAP_CHAIN_DESC
+{
+  DXGI_MODE_DESC BufferDesc;
+  DXGI_SAMPLE_DESC SampleDesc;
+  DXGI_USAGE BufferUsage;
+  UINT BufferCount;
+  HWND OutputWindow;
+  BOOL Windowed;
+  DXGI_SWAP_EFFECT SwapEffect;
+  UINT Flags;
+}
+
+mixin DEFINE_GUID!(IDXGIObject, "aec22fb8-76f3-4639-9be0-28eb43a67a2e");
+// [object][uuid("aec22fb8-76f3-4639-9be0-28eb43a67a2e")][local][pointer_default("unique")]
 interface IDXGIObject : IUnknown
 {
 extern(Windows):
-  HRESULT SetPrivateData(REFGUID Name,
-                         UINT DataSize,
-                         in void* pData);
 
-  HRESULT SetPrivateDataInterface(REFGUID Name,
-                                  in IUnknown pUnknown);
+  HRESULT SetPrivateData(
+    // [in][annotation("_In_")]
+    REFGUID Name,
+    // [in]
+    UINT DataSize,
+    // [in][annotation("_In_reads_bytes_(DataSize)")]
+    in void* pData,
+  );
 
-  HRESULT GetPrivateData(REFGUID Name,
-                         ref UINT pDataSize,
-                         void* pData);
+  HRESULT SetPrivateDataInterface(
+    // [in][annotation("_In_")]
+    REFGUID Name,
+    // [in][annotation("_In_")]
+    in IUnknown* pUnknown,
+  );
 
-  HRESULT GetParent(REFIID riid,
-                    void** ppParent);
+  HRESULT GetPrivateData(
+    // [in][annotation("_In_")]
+    REFGUID Name,
+    // [in][out][annotation("_Inout_")]
+    UINT* pDataSize,
+    // [out][annotation("_Out_writes_bytes_(*pDataSize)")]
+    void* pData,
+  );
+
+  HRESULT GetParent(
+    // [in][annotation("_In_")]
+    REFIID riid,
+    // [out][retval][annotation("_COM_Outptr_")]
+    void** ppParent,
+  );
+
 }
 
-
-mixin DeclareIID!(IDXGIDeviceSubObject, "3d3e0379-f9de-4d58-bb6c-18d62992f1a6");
+mixin DEFINE_GUID!(IDXGIDeviceSubObject, "3d3e0379-f9de-4d58-bb6c-18d62992f1a6");
+// [object][uuid("3d3e0379-f9de-4d58-bb6c-18d62992f1a6")][local][pointer_default("unique")]
 interface IDXGIDeviceSubObject : IDXGIObject
 {
 extern(Windows):
-  HRESULT GetDevice(REFIID riid,
-                    void** ppDevice);
+
+  HRESULT GetDevice(
+    // [in][annotation("_In_")]
+    REFIID riid,
+    // [out][retval][annotation("_COM_Outptr_")]
+    void** ppDevice,
+  );
+
 }
 
-
-mixin DeclareIID!(IDXGIResource, "035f3ab4-482e-4e50-b41f-8a7f8bd8960b");
+mixin DEFINE_GUID!(IDXGIResource, "035f3ab4-482e-4e50-b41f-8a7f8bd8960b");
+// [object][uuid("035f3ab4-482e-4e50-b41f-8a7f8bd8960b")][local][pointer_default("unique")]
 interface IDXGIResource : IDXGIDeviceSubObject
 {
 extern(Windows):
-  HRESULT GetSharedHandle(ref HANDLE pSharedHandle);
 
-  HRESULT GetUsage(ref DXGI_USAGE pUsage);
+  HRESULT GetSharedHandle(
+    // [out][annotation("_Out_")]
+    HANDLE* pSharedHandle,
+  );
 
-  HRESULT SetEvictionPriority(UINT EvictionPriority);
+  HRESULT GetUsage(
+    // [out]
+    DXGI_USAGE* pUsage,
+  );
 
-  HRESULT GetEvictionPriority(ref UINT pEvictionPriority);
+  HRESULT SetEvictionPriority(
+    // [in]
+    UINT EvictionPriority,
+  );
+
+  HRESULT GetEvictionPriority(
+    // [out][retval][annotation("_Out_")]
+    UINT* pEvictionPriority,
+  );
+
 }
 
-
-mixin DeclareIID!(IDXGIKeyedMutex, "9d8e1289-d7b3-465f-8126-250e349af85d");
+mixin DEFINE_GUID!(IDXGIKeyedMutex, "9d8e1289-d7b3-465f-8126-250e349af85d");
+// [object][uuid("9d8e1289-d7b3-465f-8126-250e349af85d")][local][pointer_default("unique")]
 interface IDXGIKeyedMutex : IDXGIDeviceSubObject
 {
 extern(Windows):
-  HRESULT AcquireSync(UINT64 Key,
-                      DWORD dwMilliseconds);
 
-  HRESULT ReleaseSync(UINT64 Key);
+  HRESULT AcquireSync(
+    // [in]
+    UINT64 Key,
+    // [in]
+    DWORD dwMilliseconds,
+  );
+
+  HRESULT ReleaseSync(
+    // [in]
+    UINT64 Key,
+  );
+
 }
 
-enum DXGI_MAP : uint
-{
-  DXGI_MAP_READ    = 1,
-  DXGI_MAP_WRITE   = 2,
-  DXGI_MAP_DISCARD = 4,
-}
+enum UINT DXGI_MAP_READ = 1;
 
+enum UINT DXGI_MAP_WRITE = 2;
 
-mixin DeclareIID!(IDXGISurface, "cafcb56c-6ac3-4889-bf47-9e23bbd260ec");
+enum UINT DXGI_MAP_DISCARD = 4;
+
+mixin DEFINE_GUID!(IDXGISurface, "cafcb56c-6ac3-4889-bf47-9e23bbd260ec");
+// [object][uuid("cafcb56c-6ac3-4889-bf47-9e23bbd260ec")][local][pointer_default("unique")]
 interface IDXGISurface : IDXGIDeviceSubObject
 {
 extern(Windows):
-  HRESULT GetDesc(ref DXGI_SURFACE_DESC pDesc);
 
-  HRESULT Map(ref DXGI_MAPPED_RECT pLockedRect,
-              UINT MapFlags);
+  HRESULT GetDesc(
+    // [out][annotation("_Out_")]
+    DXGI_SURFACE_DESC* pDesc,
+  );
 
-  HRESULT Unmap();
+  HRESULT Map(
+    // [out][annotation("_Out_")]
+    DXGI_MAPPED_RECT* pLockedRect,
+    // [in]
+    UINT MapFlags,
+  );
+
+  HRESULT Unmap(  );
+
 }
 
-
-mixin DeclareIID!(IDXGISurface1, "4AE63092-6327-4c1b-80AE-BFE12EA32B86");
+mixin DEFINE_GUID!(IDXGISurface1, "4AE63092-6327-4c1b-80AE-BFE12EA32B86");
+// [object][uuid("4AE63092-6327-4c1b-80AE-BFE12EA32B86")][local][pointer_default("unique")]
 interface IDXGISurface1 : IDXGISurface
 {
 extern(Windows):
-  HRESULT GetDC(BOOL Discard,
-                ref HDC phdc);
 
-  HRESULT ReleaseDC(RECT* pDirtyRect = null);
+  HRESULT GetDC(
+    // [in]
+    BOOL Discard,
+    // [out][annotation("_Out_")]
+    HDC* phdc,
+  );
+
+  HRESULT ReleaseDC(
+    // [in][annotation("_In_opt_")]
+    RECT* pDirtyRect,
+  );
+
 }
 
-
-mixin DeclareIID!(IDXGIAdapter, "2411e7e1-12ac-4ccf-bd14-9798e8534dc0");
+mixin DEFINE_GUID!(IDXGIAdapter, "2411e7e1-12ac-4ccf-bd14-9798e8534dc0");
+// [object][uuid("2411e7e1-12ac-4ccf-bd14-9798e8534dc0")][local][pointer_default("unique")]
 interface IDXGIAdapter : IDXGIObject
 {
 extern(Windows):
-  HRESULT EnumOutputs(UINT Output,
-                      ref IDXGIOutput ppOutput);
 
-  HRESULT GetDesc(ref DXGI_ADAPTER_DESC pDesc);
+  HRESULT EnumOutputs(
+    // [in]
+    UINT Output,
+    // [in][out][annotation("_COM_Outptr_")]
+    IDXGIOutput* ppOutput,
+  );
 
-  HRESULT CheckInterfaceSupport(REFGUID InterfaceName,
-                                ref LARGE_INTEGER pUMDVersion);
+  HRESULT GetDesc(
+    // [out][annotation("_Out_")]
+    DXGI_ADAPTER_DESC* pDesc,
+  );
+
+  HRESULT CheckInterfaceSupport(
+    // [in][annotation("_In_")]
+    REFGUID InterfaceName,
+    // [out][annotation("_Out_")]
+    LARGE_INTEGER* pUMDVersion,
+  );
+
 }
 
-enum DXGI_ENUM_MODES : uint
-{
-  INTERLACED = 1,
-  SCALING    = 2,
-}
+enum UINT DXGI_ENUM_MODES_INTERLACED = 1;
 
+enum UINT DXGI_ENUM_MODES_SCALING = 2;
 
-mixin DeclareIID!(IDXGIOutput, "ae02eedb-c735-4690-8d52-5a8dc20213aa");
+mixin DEFINE_GUID!(IDXGIOutput, "ae02eedb-c735-4690-8d52-5a8dc20213aa");
+// [object][uuid("ae02eedb-c735-4690-8d52-5a8dc20213aa")][local][pointer_default("unique")]
 interface IDXGIOutput : IDXGIObject
 {
 extern(Windows):
-  HRESULT GetDesc(ref DXGI_OUTPUT_DESC pDesc);
 
-  HRESULT GetDisplayModeList(DXGI_FORMAT EnumFormat,
-                             UINT Flags,
-                             ref UINT pNumModes,
-                             DXGI_MODE_DESC* pDesc = null);
+  HRESULT GetDesc(
+    // [out][annotation("_Out_")]
+    DXGI_OUTPUT_DESC* pDesc,
+  );
 
-  HRESULT FindClosestMatchingMode(ref in DXGI_MODE_DESC pModeToMatch,
-                                  ref DXGI_MODE_DESC pClosestMatch,
-                                  IUnknown pConcernedDevice = null);
+  HRESULT GetDisplayModeList(
+    // [in]
+    DXGI_FORMAT EnumFormat,
+    // [in]
+    UINT Flags,
+    // [in][out][annotation("_Inout_")]
+    UINT* pNumModes,
+    // [out][annotation("_Out_writes_to_opt_(*pNumModes,*pNumModes)")]
+    DXGI_MODE_DESC* pDesc,
+  );
 
-  HRESULT WaitForVBlank();
-  HRESULT TakeOwnership(IUnknown pDevice,
-                        BOOL Exclusive);
+  HRESULT FindClosestMatchingMode(
+    // [in][annotation("_In_")]
+    in DXGI_MODE_DESC* pModeToMatch,
+    // [out][annotation("_Out_")]
+    DXGI_MODE_DESC* pClosestMatch,
+    // [in][annotation("_In_opt_")]
+    IUnknown pConcernedDevice,
+  );
 
-  void ReleaseOwnership();
+  HRESULT WaitForVBlank(  );
 
-  HRESULT GetGammaControlCapabilities(ref DXGI_GAMMA_CONTROL_CAPABILITIES pGammaCaps);
+  HRESULT TakeOwnership(
+    // [in][annotation("_In_")]
+    IUnknown pDevice,
+    BOOL Exclusive,
+  );
 
-  HRESULT SetGammaControl(ref in DXGI_GAMMA_CONTROL pArray);
+  void ReleaseOwnership(  );
 
-  HRESULT GetGammaControl(DXGI_GAMMA_CONTROL* pArray);
+  HRESULT GetGammaControlCapabilities(
+    // [out][annotation("_Out_")]
+    DXGI_GAMMA_CONTROL_CAPABILITIES* pGammaCaps,
+  );
 
-  HRESULT SetDisplaySurface(IDXGISurface pScanOutSurface);
+  HRESULT SetGammaControl(
+    // [in][annotation("_In_")]
+    in DXGI_GAMMA_CONTROL* pArray,
+  );
 
-  HRESULT GetDisplaySurfaceData(IDXGISurface pDestination);
+  HRESULT GetGammaControl(
+    // [out][annotation("_Out_")]
+    DXGI_GAMMA_CONTROL* pArray,
+  );
 
-  HRESULT GetFrameStatistics(ref DXGI_FRAME_STATISTICS pStats);
+  HRESULT SetDisplaySurface(
+    // [in][annotation("_In_")]
+    IDXGISurface pScanoutSurface,
+  );
+
+  HRESULT GetDisplaySurfaceData(
+    // [in][annotation("_In_")]
+    IDXGISurface pDestination,
+  );
+
+  HRESULT GetFrameStatistics(
+    // [out][annotation("_Out_")]
+    DXGI_FRAME_STATISTICS* pStats,
+  );
+
 }
 
+enum DXGI_MAX_SWAP_CHAIN_BUFFERS        = 16;
+enum DXGI_PRESENT_TEST                  = 0x00000001;
+enum DXGI_PRESENT_DO_NOT_SEQUENCE       = 0x00000002;
+enum DXGI_PRESENT_RESTART               = 0x00000004;
+enum DXGI_PRESENT_DO_NOT_WAIT           = 0x00000008;
+enum DXGI_PRESENT_STEREO_PREFER_RIGHT   = 0x00000010;
+enum DXGI_PRESENT_STEREO_TEMPORARY_MONO = 0x00000020;
+enum DXGI_PRESENT_RESTRICT_TO_OUTPUT    = 0x00000040;
+enum DXGI_PRESENT_USE_DURATION          = 0x00000100;
 
-enum DXGI_MAX_SWAP_CHAIN_BUFFERS = 16;
-
-enum DXGI_PRESENT
-{
-  TEST                  = 0x00000001,
-  DO_NOT_SEQUENCE       = 0x00000002,
-  RESTART               = 0x00000004,
-  DO_NOT_WAIT           = 0x00000008,
-  STEREO_PREFER_RIGHT   = 0x00000010,
-  STEREO_TEMPORARY_MONO = 0x00000020,
-  RESTRICT_TO_OUTPUT    = 0x00000040,
-  USE_DURATION          = 0x00000100,
-}
-
-
-mixin DeclareIID!(IDXGISwapChain, "310d36a0-d2e7-4c0a-aa04-6a9d23b8886a");
+mixin DEFINE_GUID!(IDXGISwapChain, "310d36a0-d2e7-4c0a-aa04-6a9d23b8886a");
+// [object][uuid("310d36a0-d2e7-4c0a-aa04-6a9d23b8886a")][local][pointer_default("unique")]
 interface IDXGISwapChain : IDXGIDeviceSubObject
 {
 extern(Windows):
-  HRESULT Present(UINT SyncInterval,
-                  UINT Flags);
 
-  HRESULT GetBuffer(UINT Buffer,
-                    REFIID riid,
-                    void** ppSurface);
+  HRESULT Present(
+    // [in]
+    UINT SyncInterval,
+    // [in]
+    UINT Flags,
+  );
 
-  HRESULT SetFullscreenState(BOOL Fullscreen,
-                             IDXGIOutput pTarget);
+  HRESULT GetBuffer(
+    // [in]
+    UINT Buffer,
+    // [in][annotation("_In_")]
+    REFIID riid,
+    // [in][out][annotation("_COM_Outptr_")]
+    void** ppSurface,
+  );
 
-  HRESULT GetFullscreenState(BOOL* pFullscreen,
-                             ref IDXGIOutput ppTarget);
+  HRESULT SetFullscreenState(
+    // [in]
+    BOOL Fullscreen,
+    // [in][annotation("_In_opt_")]
+    IDXGIOutput pTarget,
+  );
 
-  HRESULT GetDesc(ref DXGI_SWAP_CHAIN_DESC pDesc);
+  HRESULT GetFullscreenState(
+    // [out][annotation("_Out_opt_")]
+    BOOL* pFullscreen,
+    // [out][annotation("_COM_Outptr_opt_result_maybenull_")]
+    IDXGIOutput* ppTarget,
+  );
 
-  HRESULT ResizeBuffers(UINT BufferCount,
-                        UINT Width,
-                        UINT Height,
-                        DXGI_FORMAT NewFormat,
-                        UINT SwapChainFlags);
+  HRESULT GetDesc(
+    // [out][annotation("_Out_")]
+    DXGI_SWAP_CHAIN_DESC* pDesc,
+  );
 
-  HRESULT ResizeTarget(in ref DXGI_MODE_DESC pNewTargetParameters);
+  HRESULT ResizeBuffers(
+    // [in]
+    UINT BufferCount,
+    // [in]
+    UINT Width,
+    // [in]
+    UINT Height,
+    // [in]
+    DXGI_FORMAT NewFormat,
+    // [in]
+    UINT SwapChainFlags,
+  );
 
-  HRESULT GetContainingOutput(ref IDXGIOutput ppOutput);
+  HRESULT ResizeTarget(
+    // [in][annotation("_In_")]
+    in DXGI_MODE_DESC* pNewTargetParameters,
+  );
 
-  HRESULT GetFrameStatistics(ref DXGI_FRAME_STATISTICS pStats);
+  HRESULT GetContainingOutput(
+    // [out][annotation("_COM_Outptr_")]
+    IDXGIOutput* ppOutput,
+  );
 
-  HRESULT GetLastPresentCount(ref UINT pLastPresentCount);
+  HRESULT GetFrameStatistics(
+    // [out][annotation("_Out_")]
+    DXGI_FRAME_STATISTICS* pStats,
+  );
+
+  HRESULT GetLastPresentCount(
+    // [out][annotation("_Out_")]
+    UINT* pLastPresentCount,
+  );
 
 }
 
-enum DXGI_MWA
-{
-  NO_WINDOW_CHANGES = 1 << 0,
-  NO_ALT_ENTER      = 1 << 1,
-  NO_PRINT_SCREEN   = 1 << 2,
-  VALID             = 0x7,
-}
+enum DXGI_MWA_NO_WINDOW_CHANGES = 1 << 0;
+enum DXGI_MWA_NO_ALT_ENTER      = 1 << 1;
+enum DXGI_MWA_NO_PRINT_SCREEN   = 1 << 2;
+enum DXGI_MWA_VALID             = 0x7;
 
-
-mixin DeclareIID!(IDXGIFactory, "7b7166ec-21c7-44ae-b21a-c9ae321ae369");
+mixin DEFINE_GUID!(IDXGIFactory, "7b7166ec-21c7-44ae-b21a-c9ae321ae369");
+// [object][uuid("7b7166ec-21c7-44ae-b21a-c9ae321ae369")][local][pointer_default("unique")]
 interface IDXGIFactory : IDXGIObject
 {
 extern(Windows):
-  HRESULT EnumAdapters(UINT Adapter,
-                       ref IDXGIAdapter ppAdapter);
 
-  HRESULT MakeWindowAssociation(HWND WindowHandle,
-                                UINT Flags);
+  HRESULT EnumAdapters(
+    // [in]
+    UINT Adapter,
+    // [out][annotation("_COM_Outptr_")]
+    IDXGIAdapter* ppAdapter,
+  );
 
-  HRESULT GetWindowAssociation(ref HWND pWindowHandle);
+  HRESULT MakeWindowAssociation(
+    HWND WindowHandle,
+    UINT Flags,
+  );
 
-  HRESULT CreateSwapChain(IUnknown pDevice,
-                          ref DXGI_SWAP_CHAIN_DESC pDesc,
-                          ref IDXGISwapChain ppSwapChain);
+  HRESULT GetWindowAssociation(
+    // [out][annotation("_Out_")]
+    HWND* pWindowHandle,
+  );
 
-  HRESULT CreateSoftwareAdapter(HMODULE Module,
-                                ref IDXGIAdapter ppAdapter);
+  HRESULT CreateSwapChain(
+    // [in][annotation("_In_")]
+    IUnknown pDevice,
+    // [in][annotation("_In_")]
+    DXGI_SWAP_CHAIN_DESC* pDesc,
+    // [out][annotation("_COM_Outptr_")]
+    IDXGISwapChain* ppSwapChain,
+  );
+
+  HRESULT CreateSoftwareAdapter(
+    // [in]
+    HMODULE Module,
+    // [out][annotation("_COM_Outptr_")]
+    IDXGIAdapter* ppAdapter,
+  );
 
 }
 
+extern(Windows) HRESULT CreateDXGIFactory(REFIID riid, void **ppFactory);
+extern(Windows) HRESULT CreateDXGIFactory1(REFIID riid, void **ppFactory);
 
-extern(Windows) HRESULT CreateDXGIFactory(REFIID riid, void** ppFactory);
-extern(Windows) HRESULT CreateDXGIFactory1(REFIID riid, void** ppFactory);
-
-
-mixin DeclareIID!(IDXGIDevice, "54ec77fa-1377-44e6-8c32-88fd5f44c84c");
+mixin DEFINE_GUID!(IDXGIDevice, "54ec77fa-1377-44e6-8c32-88fd5f44c84c");
+// [object][uuid("54ec77fa-1377-44e6-8c32-88fd5f44c84c")][local][pointer_default("unique")]
 interface IDXGIDevice : IDXGIObject
 {
 extern(Windows):
-  HRESULT GetAdapter(ref IDXGIAdapter pAdapter);
 
-  HRESULT CreateSurface(in ref DXGI_SURFACE_DESC pDesc,
-                        UINT NumSurfaces,
-                        DXGI_USAGE Usage,
-                        in ref DXGI_SHARED_RESOURCE pSharedResource,
-                        ref IDXGISurface ppSurface);
+  HRESULT GetAdapter(
+    // [out][annotation("_COM_Outptr_")]
+    IDXGIAdapter* pAdapter,
+  );
 
-  HRESULT QueryResourceResidency(IUnknown* ppResources,
-                                 DXGI_RESIDENCY* pResidencyStatus,
-                                 UINT NumResources);
+  HRESULT CreateSurface(
+    // [in][annotation("_In_")]
+    in DXGI_SURFACE_DESC* pDesc,
+    // [in]
+    UINT NumSurfaces,
+    // [in]
+    DXGI_USAGE Usage,
+    // [in][annotation("_In_opt_")]
+    in DXGI_SHARED_RESOURCE* pSharedResource,
+    // [out][annotation("_COM_Outptr_")]
+    IDXGISurface* ppSurface,
+  );
 
-  HRESULT SetGPUThreadPriority(INT Priority);
+  HRESULT QueryResourceResidency(
+    // [in][size_is("NumResources")][annotation("_In_reads_(NumResources)")]
+    in IUnknown* ppResources,
+    // [out][size_is("NumResources")][annotation("_Out_writes_(NumResources)")]
+    DXGI_RESIDENCY* pResidencyStatus,
+    // [in]
+    UINT NumResources,
+  );
 
-  HRESULT GetGPUThreadPriority(ref INT pPriority);
+  HRESULT SetGPUThreadPriority(
+    // [in]
+    INT Priority,
+  );
+
+  HRESULT GetGPUThreadPriority(
+    // [out][retval][annotation("_Out_")]
+    INT* pPriority,
+  );
+
 }
 
-enum DXGI_ADAPTER_FLAG
+alias DXGI_ADAPTER_FLAG = int;
+enum : DXGI_ADAPTER_FLAG
 {
-  NONE ,
-  REMOTE  = 1,
-  SOFTWARE  = 2,
-  FORCE_DWORDxffffffff,
+  DXGI_ADAPTER_FLAG_NONE        = 0,
+  DXGI_ADAPTER_FLAG_REMOTE      = 1,
+  DXGI_ADAPTER_FLAG_SOFTWARE    = 2,
+  DXGI_ADAPTER_FLAG_FORCE_DWORD = 0xFFFFFFFF,
 }
 
 struct DXGI_ADAPTER_DESC1
 {
-  WCHAR[128]  Description;
-  UINT        VendorId;
-  UINT        DeviceId;
-  UINT        SubSysId;
-  UINT        Revision;
-  SIZE_T      DedicatedVideoMemory;
-  SIZE_T      DedicatedSystemMemory;
-  SIZE_T      SharedSystemMemory;
-  LUID        AdapterLuid;
-  UINT        Flags;
+  WCHAR[128] Description;
+  UINT VendorId;
+  UINT DeviceId;
+  UINT SubSysId;
+  UINT Revision;
+  SIZE_T DedicatedVideoMemory;
+  SIZE_T DedicatedSystemMemory;
+  SIZE_T SharedSystemMemory;
+  LUID AdapterLuid;
+  UINT Flags;
 }
 
 struct DXGI_DISPLAY_COLOR_SPACE
 {
-  FLOAT[8][2]   PrimaryCoordinates;
-  FLOAT[16][2]  WhitePoints;
+  FLOAT[2][8] PrimaryCoordinates;
+  FLOAT[2][16] WhitePoints;
 }
 
-
-mixin DeclareIID!(IDXGIFactory1, "770aae78-f26f-4dba-a829-253c83d1b387");
+mixin DEFINE_GUID!(IDXGIFactory1, "770aae78-f26f-4dba-a829-253c83d1b387");
+// [object][uuid("770aae78-f26f-4dba-a829-253c83d1b387")][local][pointer_default("unique")]
 interface IDXGIFactory1 : IDXGIFactory
 {
 extern(Windows):
-  HRESULT EnumAdapters1(UINT Adapter,
-                        ref IDXGIAdapter1 ppAdapter);
 
-  BOOL IsCurrent();
+  HRESULT EnumAdapters1(
+    // [in]
+    UINT Adapter,
+    // [out][annotation("_COM_Outptr_")]
+    IDXGIAdapter1* ppAdapter,
+  );
+
+  BOOL IsCurrent(  );
+
 }
 
-
-mixin DeclareIID!(IDXGIAdapter1, "29038f61-3839-4626-91fd-086879011a05");
+mixin DEFINE_GUID!(IDXGIAdapter1, "29038f61-3839-4626-91fd-086879011a05");
+// [object][uuid("29038f61-3839-4626-91fd-086879011a05")][local][pointer_default("unique")]
 interface IDXGIAdapter1 : IDXGIAdapter
 {
 extern(Windows):
-  HRESULT GetDesc1(ref DXGI_ADAPTER_DESC1 pDesc);
+
+  HRESULT GetDesc1(
+    // [out][annotation("_Out_")]
+    DXGI_ADAPTER_DESC1* pDesc,
+  );
+
 }
 
-
-mixin DeclareIID!(IDXGIDevice1, "77db970f-6276-48ba-ba28-070143b4392c");
+mixin DEFINE_GUID!(IDXGIDevice1, "77db970f-6276-48ba-ba28-070143b4392c");
+// [object][uuid("77db970f-6276-48ba-ba28-070143b4392c")][local][pointer_default("unique")]
 interface IDXGIDevice1 : IDXGIDevice
 {
 extern(Windows):
-  HRESULT SetMaximumFrameLatency(UINT MaxLatency);
 
-  HRESULT GetMaximumFrameLatency(ref UINT pMaxLatency);
+  HRESULT SetMaximumFrameLatency(
+    // [in]
+    UINT MaxLatency,
+  );
+
+  HRESULT GetMaximumFrameLatency(
+    // [out][annotation("_Out_")]
+    UINT* pMaxLatency,
+  );
+
 }
