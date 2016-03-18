@@ -31,13 +31,19 @@ void Win32ExperimentsCommon(ref BuildContext Context)
   with(Context)
   {
     // Add source files.
-    immutable DirectoriesToSearch = ["krepel", "directx", "win32_experiments"];
+    immutable DirectoriesToSearch = ["krepel", "win32_experiments"];
     foreach(SourceDir; DirectoriesToSearch)
     {
       auto AbsoluteSourceDir = buildNormalizedPath(thisDir, SourceDir);
       Files ~= dirEntries(AbsoluteSourceDir, "*.d", SpanMode.breadth)  // Gather all *.d files
                .map!(a => a.name)                                      // Use only the name of DirEntry objects.
                .array;                                                 // Convert the range to a proper array.
+    }
+
+    // DirectX files.
+    foreach(FileName; only("dxgiformat.d", "dxgitype.d", "dxgi.d"))
+    {
+      Files ~= buildNormalizedPath(thisDir, "directx", FileName);
     }
 
     // Additional libs

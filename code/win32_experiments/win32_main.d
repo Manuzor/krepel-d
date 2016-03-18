@@ -35,7 +35,7 @@ int WinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
     Result = 0;
   }
 
-  return 0;
+  return Result;
 }
 
 __gshared bool GlobalRunning;
@@ -50,8 +50,14 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
                                 MemorySize,
                                 MEM_RESERVE | MEM_COMMIT,
                                 PAGE_READWRITE);
+  if(RawMemory is null)
+  {
+    return 1;
+  }
   assert(RawMemory);
-  GlobalAllocator.Memory.Initialize((cast(ubyte*)RawMemory)[0 .. MemorySize]);
+  auto Heap = HeapMemory((cast(ubyte*)RawMemory)[0 .. MemorySize]);
+  GlobalAllocator = Heap.Wrap();
+  scope(exit) GlobalAllocator = null;
 
   // Note(Manu): There's no point to add the stdout log sink since stdout
   // isn't attached to anything in a windows application. We add the VS log
@@ -90,7 +96,7 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
 
     if(Window)
     {
-      import dxgi;
+      import directx.dxgi;
 
       IDXGIFactory1 DXGIFactory;
       if(SUCCEEDED(CreateDXGIFactory1(&DXGIFactory.uuidof, cast(void**)&DXGIFactory)))
@@ -99,11 +105,11 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
 
         UINT CurrentAdapterIndex;
         IDXGIAdapter1 DXGIAdapter;
-        while(SUCCEEDED(DXGIFactory.EnumAdapters1(CurrentAdapterIndex, DXGIAdapter)))
+        while(SUCCEEDED(DXGIFactory.EnumAdapters1(CurrentAdapterIndex, &DXGIAdapter)))
         {
           scope(exit) CurrentAdapterIndex++;
           DXGI_ADAPTER_DESC AdapterDesc = void;
-          if(SUCCEEDED(DXGIAdapter.GetDesc(AdapterDesc)))
+          if(SUCCEEDED(DXGIAdapter.GetDesc(&AdapterDesc)))
           {
             Log.Info("Adapter[%d]: %s", CurrentAdapterIndex, AdapterDesc.Description[].ByUTF!char);
           }
