@@ -324,14 +324,15 @@ struct StringBase(CharType)
   uint* RefCount = null;
 }
 
-alias String = StringBase!wchar;
+alias WString = StringBase!wchar;
+alias UString = StringBase!char;
 
 unittest
 {
   StaticStackMemory!2048 StackMemory;
   GlobalAllocator = Wrap(StackMemory);
 
-  String TestString = String("This is a Test");
+  WString TestString = WString("This is a Test");
 
   assert(TestString == "This is a Test");
   assert(TestString == TestString);
@@ -363,11 +364,11 @@ unittest
   assert(TestString.ReplaceAll("TEST", "FOO") == 2);
   assert(TestString == "FOOESFOO");
 
-  TestString = String("Conc").ConcatCopy("atenation");
+  TestString = WString("Conc").ConcatCopy("atenation");
 
   assert(TestString == "Concatenation");
 
-  TestString = String("Another ") + "Test" + " for" + " concatenation";
+  TestString = WString("Another ") + "Test" + " for" + " concatenation";
 
   assert(TestString == "Another Test for concatenation");
 
