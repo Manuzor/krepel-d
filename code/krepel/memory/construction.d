@@ -66,16 +66,19 @@ void Destruct(Type)(Type* Instance)
       // Destruct all the members of Instance.
       foreach(MemberName; __traits(allMembers, Type))
       {
-        alias MemberType = typeof(mixin(`Instance.` ~ MemberName));
-        static if(Meta.HasDestructor!MemberType)
+        static if(__traits(compiles, typeof(mixin(`Instance.` ~ MemberName))))
         {
-          static if(is(MemberType == class))
+          alias MemberType = typeof(mixin(`Instance.` ~ MemberName));
+          static if(Meta.HasDestructor!MemberType)
           {
-            Destruct(mixin(`Instance.` ~ MemberName));
-          }
-          else
-          {
-            Destruct(mixin(`&Instance.` ~ MemberName));
+            static if(is(MemberType == class))
+            {
+              Destruct(mixin(`Instance.` ~ MemberName));
+            }
+            else
+            {
+              Destruct(mixin(`&Instance.` ~ MemberName));
+            }
           }
         }
       }

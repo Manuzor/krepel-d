@@ -1,4 +1,4 @@
-module krepel.memory.memory;
+module krepel.memory.common;
 import krepel.math;
 
 @nogc:
