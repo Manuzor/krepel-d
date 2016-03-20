@@ -2,6 +2,7 @@ module krepel.system.ifile;
 
 import krepel.memory;
 import krepel.container;
+import krepel.meta;
 
 @nogc:
 nothrow:
@@ -35,10 +36,39 @@ interface IFile
   /// Params:
   /// Array = Where the data will be written into which was red from the file
   /// Returns: Returns the amount of bytes written into Region. The value is >= 0 and <= Region.length.
-  long ReadLine(ref Array!ubyte Array)
+  long ReadLine(CharType)(ref Array!CharType Array)
+    if(IsSomeChar!CharType)
   out(result)
   {
     assert(result >= 0);
+  }
+  body
+  {
+    CharType[10] Buffer;
+    while(true)
+    {
+      auto ReadCount = Read(cast(ubyte[])Buffer);
+      foreach(Index; 0 .. ReadCount)
+      {
+        //Reached newline
+        if(Buffer[Index] == '\r' || Buffer[Index] == '\n')
+        {
+          Array.PushBack(Buffer[0..Index]);
+          MoveCursor(-(10-Index) + 1);
+          return Array.Count;
+        }
+      }
+      //Reached EOF
+      if (ReadCount < 10)
+      {
+        Array.PushBack(Buffer[0..ReadCount]);
+        return Array.Count;
+      }
+      else
+      {
+        Array.PushBack(Buffer);
+      }
+    }
   }
 
   /// Moves the cursor relative to the current position

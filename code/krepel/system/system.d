@@ -99,9 +99,9 @@ unittest
   auto SomeAllocator = Wrap(SomeStack);
 
   IFile File = OpenFile(SomeAllocator, "../unittest/ReadLineTest.txt");
-  Array!ubyte Data = Array!ubyte(SomeAllocator);
+  Array!char Data = Array!char(SomeAllocator);
 
-  File.ReadLine(Data);
+  File.ReadLine!char(Data);
   assert(Data.Count == 10);
   assert(Data.Data[] == "First line");
   Data.Clear();
