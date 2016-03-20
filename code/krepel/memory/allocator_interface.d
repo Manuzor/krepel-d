@@ -1,3 +1,7 @@
+/// The general-purpose allocator interface.
+///
+/// This package provides the common allocator interface and functionality
+/// based on it (such as the New!() function).
 module krepel.memory.allocator_interface;
 
 import krepel.memory.common;

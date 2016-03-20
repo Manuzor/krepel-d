@@ -1,4 +1,9 @@
-/// Higher-level memory management strategies that makes use of krepel.memory.allocator_primitives.
+/// Higher-level memory management strategies that makes use of allocator
+/// primitives found in krepel.memory.allocator_primitives.
+///
+/// Strategy implementations should be named something with "Allocator", such
+/// as "HybridAllocator". This will distringuish the higher level constructs
+/// from allocator primitives, even though they share the same interface.
 module krepel.memory.allocator_strategies;
 
 import krepel.memory.common;
@@ -9,7 +14,7 @@ import krepel.memory.allocator_interface;
 /// Wraps two other memory types.
 ///
 /// When allocating from the first memory fails, it tries the second one.
-struct HybridMemory(P, S)
+struct HybridAllocator(P, S)
 {
   alias PrimaryMemoryType = P;
   alias SecondaryMemoryType = S;
@@ -48,13 +53,13 @@ struct HybridMemory(P, S)
 // Unit Tests
 //
 
-// HybridMemory tests
+// HybridAllocator tests
 unittest
 {
   ubyte[256] HeapBuffer;
   auto Stack  = StaticStackMemory!32();
   auto Heap   = HeapMemory(HeapBuffer[]);
-  auto Hybrid = HybridMemory!(typeof(Stack)*, typeof(Heap)*)(&Stack, &Heap);
+  auto Hybrid = HybridAllocator!(typeof(Stack)*, typeof(Heap)*)(&Stack, &Heap);
 
   auto Block1 = Hybrid.Allocate(16, 1);
   assert(Block1);

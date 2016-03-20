@@ -1,4 +1,7 @@
 /// Primitives for low-level memory management.
+///
+/// Naming convention for these primitives is to let their name contain
+/// "Memory", such as "HeapMemory".
 module krepel.memory.allocator_primitives;
 
 import krepel;
@@ -371,12 +374,15 @@ mixin template CommonStackMemoryImplementation()
 
 
 /// Common functionality for all memory types.
+///
+/// You should probably place this mixin last in your struct because it adds
+/// data members to it and will mess up implicit member initialization.
 mixin template CommonMemoryImplementation()
 {
   alias ThisIsAMemoryType = typeof(this);
 
   private import krepel.memory.allocator_interface : MinimalAllocatorWrapper;
-  ubyte[Meta.ClassInstanceSizeOf!MinimalAllocatorWrapper] WrapperMemory = void;
+  package ubyte[Meta.ClassInstanceSizeOf!MinimalAllocatorWrapper] WrapperMemory = void;
 }
 
 /// Adds the Contains() function to a memory type so it can be asked whether a
