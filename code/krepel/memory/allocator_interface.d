@@ -4,156 +4,156 @@ import krepel.memory.common;
 import krepel.memory.construction;
 import krepel.memory.allocator_primitives : IsSomeMemory;
 
+// TODO(Manu): Add @nogc and friends.
+
 /// Global allocator instance.
 IAllocator GlobalAllocator;
 
 /// General allocator interface.
 interface IAllocator
 {
-  @nogc nothrow
+@nogc:
+nothrow:
+
+  bool Contains(in MemoryRegion SomeRegion);
+
+  MemoryRegion Allocate(size_t RequestedBytes, size_t Alignment = 0);
+
+  bool Deallocate(MemoryRegion MemoryToDeallocate);
+}
+
+/// Creates a new instance of Type without constructing it.
+Type* NewUnconstructed(Type)(IAllocator Allocator)
+  if(!is(Type == class))
+{
+  auto Raw = Allocator.Allocate(Type.sizeof, Type.alignof);
+  if(Raw is null) return null;
+  assert(Raw.length >= Type.sizeof);
+  auto Instance = cast(Type*)Raw.ptr;
+  return Instance;
+}
+
+/// Ditto
+Type NewUnconstructed(Type)(IAllocator Allocator)
+  if(is(Type == class))
+{
+  enum Size = Meta.ClassInstanceSizeOf!Type;
+  enum Alignment = Meta.ClassInstanceAlignmentOf!Type;
+  auto Raw = Allocator.Allocate(Size, Alignment);
+  if(Raw is null) return null;
+  assert(Raw.length >= Type.sizeof);
+  auto Instance = cast(Type)Raw.ptr;
+  return Instance;
+}
+
+/// Free the memory occupied by Instance without destructing it.
+/// Note: If the memory type used does not support deallocation
+///       (e.g. StackMemory), this function does nothing.
+void DeleteUndestructed(Type)(IAllocator Allocator, Type* Instance)
+  if(!is(Type == class))
+{
+  if(Instance)
   {
-    bool Contains(in MemoryRegion SomeRegion);
-
-    MemoryRegion Allocate(size_t RequestedBytes, size_t Alignment = 0);
-
-    bool Deallocate(MemoryRegion MemoryToDeallocate);
+    Allocator.Deallocate((cast(ubyte*)Instance)[0 .. Type.sizeof]);
   }
+}
 
-  // TODO(Manu): Add @nogc and nothrow for the rest of the interface once Construct and Destruct are compatible.
-
-  /// Creates a new instance of Type without constructing it.
-  final Type* NewUnconstructed(Type)()
-    if(!is(Type == class))
+/// Ditto
+void DeleteUndestructed(Type)(IAllocator Allocator, Type Instance)
+  if(is(Type == class))
+{
+  if(Instance)
   {
-    auto Raw = Allocate(Type.sizeof, Type.alignof);
-    if(Raw is null) return null;
-    assert(Raw.length >= Type.sizeof);
-    auto Instance = cast(Type*)Raw.ptr;
-    return Instance;
+    Allocator.Deallocate((cast(ubyte*)Instance)[0 .. Type.sizeof]);
   }
+}
 
-  /// Ditto
-  final Type NewUnconstructed(Type)()
-    if(is(Type == class))
+/// Allocate a new instance of type Type and construct it using the given Args.
+Type* New(Type, ArgTypes...)(IAllocator Allocator, auto ref ArgTypes Args)
+  if(!is(Type == class))
+{
+  return .Construct(Allocator.NewUnconstructed!Type(), Args);
+}
+
+Type New(Type, ArgTypes...)(IAllocator Allocator, auto ref ArgTypes Args)
+  if(is(Type == class))
+{
+  static assert(!__traits(isAbstractClass, Type), "Cannot instantiate abstract class.");
+  enum Size = Meta.ClassInstanceSizeOf!Type;
+  enum Alignment = Meta.ClassInstanceAlignmentOf!Type;
+  auto Raw = Allocator.Allocate(Size, Alignment);
+  if(Raw is null) return null;
+  assert(Raw.length >= Type.sizeof);
+  auto Instance = cast(Type)Raw.ptr;
+
+  .Construct(Instance, Args);
+  return Instance;
+}
+
+/// Destruct the given Instance and free the memory occupied by it.
+/// Note: If the memory type used does not support deallocation
+///       (e.g. StackMemory), this function only destructs Instance,
+///       but does not free memory.
+void Delete(Type)(IAllocator Allocator, Type* Instance)
+  if(!is(Type == class))
+{
+  if(Instance)
   {
-    enum Size = Meta.ClassInstanceSizeOf!Type;
-    enum Alignment = Meta.ClassInstanceAlignmentOf!Type;
-    auto Raw = Allocate(Size, Alignment);
-    if(Raw is null) return null;
-    assert(Raw.length >= Type.sizeof);
-    auto Instance = cast(Type)Raw.ptr;
-    return Instance;
+    Destruct(Instance);
+    Allocator.DeleteUndestructed(Instance);
   }
+}
 
-  /// Free the memory occupied by Instance without destructing it.
-  /// Note: If the memory type used does not support deallocation
-  ///       (e.g. StackMemory), this function does nothing.
-  final void DeleteUndestructed(Type)(Type* Instance)
-    if(!is(Type == class))
+/// Ditto
+void Delete(Type)(IAllocator Allocator, Type Instance)
+  if(is(Type == class))
+{
+  if(Instance)
   {
-    if(Instance)
-    {
-      Deallocate((cast(ubyte*)Instance)[0 .. Type.sizeof]);
-    }
+    Destruct(Instance);
+    Allocator.DeleteUndestructed(Instance);
   }
+}
 
-  /// Ditto
-  final void DeleteUndestructed(Type)(Type Instance)
-    if(is(Type == class))
-  {
-    if(Instance)
-    {
-      Deallocate((cast(ubyte*)Instance)[0 .. Type.sizeof]);
-    }
-  }
+/// Creates a new array of Type's without constructing them.
+Type[] NewUnconstructedArray(Type)(IAllocator Allocator, size_t Count)
+{
+  // TODO(Manu): Implement.
+  auto RawMemory = Allocator.Allocate(Count * Type.sizeof, Type.alignof);
 
-  /// Allocate a new instance of type Type and construct it using the given Args.
-  final Type* New(Type, ArgTypes...)(auto ref ArgTypes Args)
-    if(!is(Type == class))
-  {
-    return .Construct(NewUnconstructed!Type(), Args);
-  }
+  // Out of memory?
+  if(RawMemory is null) return null;
 
-  final Type New(Type, ArgTypes...)(auto ref ArgTypes Args)
-    if(is(Type == class))
-  {
-    static assert(!__traits(isAbstractClass, Type), "Cannot instantiate abstract class.");
-    enum Size = Meta.ClassInstanceSizeOf!Type;
-    enum Alignment = Meta.ClassInstanceAlignmentOf!Type;
-    auto Raw = Allocate(Size, Alignment);
-    if(Raw is null) return null;
-    assert(Raw.length >= Type.sizeof);
-    auto Instance = cast(Type)Raw.ptr;
+  auto Array = cast(Type[])RawMemory[0 .. Count * Type.sizeof];
+  return Array;
+}
 
-    .Construct(Instance, Args);
-    return Instance;
-  }
+/// Free the memory occupied by the given Array without destructing its
+/// elements.
+/// Note: If the memory type used does not support deallocation
+///       (e.g. StackMemory), this function does nothing.
+void DeleteUndestructed(Type)(IAllocator Allocator, Type[] Array)
+{
+  Allocator.Deallocate(cast(ubyte[])Array);
+}
 
-  /// Destruct the given Instance and free the memory occupied by it.
-  /// Note: If the memory type used does not support deallocation
-  ///       (e.g. StackMemory), this function only destructs Instance,
-  ///       but does not free memory.
-  final void Delete(Type)(Type* Instance)
-    if(!is(Type == class))
-  {
-    if(Instance)
-    {
-      .Destruct(Instance);
-      DeleteUndestructed(Instance);
-    }
-  }
+/// Creates a new array of Type's and construct each element of it with the
+/// given Args.
+Type[] NewArray(Type, ArgTypes...)(IAllocator Allocator, size_t Count, auto ref ArgTypes Args)
+{
+  auto Array = Allocator.NewUnconstructedArray!Type(Count);
+  .Construct(Array, Args);
+  return Array;
+}
 
-  /// Ditto
-  final void Delete(Type)(Type Instance)
-    if(is(Type == class))
-  {
-    if(Instance)
-    {
-      .Destruct(Instance);
-      DeleteUndestructed(Instance);
-    }
-  }
-
-  /// Creates a new array of Type's without constructing them.
-  final Type[] NewUnconstructedArray(Type)(size_t Count)
-  {
-    // TODO(Manu): Implement.
-    auto RawMemory = Allocate(Count * Type.sizeof, Type.alignof);
-
-    // Out of memory?
-    if(RawMemory is null) return null;
-
-    auto Array = cast(Type[])RawMemory[0 .. Count * Type.sizeof];
-    return Array;
-  }
-
-  /// Free the memory occupied by the given Array without destructing its
-  /// elements.
-  /// Note: If the memory type used does not support deallocation
-  ///       (e.g. StackMemory), this function does nothing.
-  final void DeleteUndestructed(Type)(Type[] Array)
-  {
-    Deallocate(cast(ubyte[])Array);
-  }
-
-  /// Creates a new array of Type's and construct each element of it with the
-  /// given Args.
-  final Type[] NewArray(Type, ArgTypes...)(size_t Count, auto ref ArgTypes Args)
-  {
-    auto Array = NewUnconstructedArray!Type(Count);
-    .Construct(Array, Args);
-    return Array;
-  }
-
-  /// Destructs all elements of Array and frees the memory occupied by it.
-  /// Note: If the memory type used does not support deallocation
-  ///       (e.g. StackMemory), this function only destructs Instance,
-  ///       but does not free memory.
-  final void Delete(Type)(Type[] Array)
-  {
-    .Destruct(Array);
-    DeleteUndestructed(Array);
-  }
+/// Destructs all elements of Array and frees the memory occupied by it.
+/// Note: If the memory type used does not support deallocation
+///       (e.g. StackMemory), this function only destructs Instance,
+///       but does not free memory.
+void Delete(Type)(IAllocator Allocator, Type[] Array)
+{
+  Destruct(Array);
+  Allocator.DeleteUndestructed(Array);
 }
 
 /// Used to get the size of a minimal IAllocator class instance.
