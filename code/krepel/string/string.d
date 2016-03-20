@@ -3,6 +3,91 @@ module krepel.string.string;
 import krepel.memory;
 import krepel.container;
 
+bool StartsWith(CharType)(const CharType[] String, const CharType[] SearchString)
+{
+  if (String.length < SearchString.length)
+  {
+    return false;
+  }
+  else
+  {
+    return String[0 .. SearchString.length] == SearchString;
+  }
+}
+
+bool EndsWith(CharType)(const CharType[] String, const CharType[] SearchString)
+{
+  if (String.length < SearchString.length)
+  {
+    return false;
+  }
+  else
+  {
+    return String[$ - SearchString.length .. $] == SearchString;
+  }
+}
+
+ulong Find(CharType)(const CharType[] String, const(CharType[]) SearchString, ulong SearchStardIndex = 0)
+{
+  long SearchIndex = SearchStardIndex;
+  while(SearchString.length + SearchIndex <= String.length)
+  {
+    if (String[SearchIndex .. SearchIndex + SearchString.length] == SearchString)
+    {
+      return SearchIndex;
+    }
+    SearchIndex++;
+  }
+  return -1;
+}
+
+ulong FindLast(CharType)(const CharType[] String, const(CharType[]) SearchString)
+{
+  long SearchIndex = String.length - SearchString.length;
+  while(SearchIndex >= 0)
+  {
+    if (String[SearchIndex .. SearchIndex + SearchString.length] == SearchString)
+    {
+      return SearchIndex;
+    }
+    SearchIndex--;
+  }
+  return -1;
+}
+
+inout (CharType[]) TrimStart(CharType)(inout(CharType[]) String)
+{
+  ulong Index = 0;
+  while(Index < String.length)
+  {
+    if(String[Index] != ' ' && String[Index] != '\t' && String[Index] != '\n' && String[Index] != '\r')
+    {
+      return String[Index .. $];
+    }
+    Index++;
+  }
+  return String[$..$];
+}
+
+inout (CharType[]) TrimEnd(CharType)(inout(CharType[]) String)
+{
+  ulong Index = String.length - 1;
+  while(Index >= 0)
+  {
+    if(String[Index] != ' ' && String[Index] != '\t' && String[Index] != '\n' && String[Index] != '\r')
+    {
+      return String[0 .. Index];
+    }
+    Index--;
+  }
+  return String[0..0];
+}
+
+inout (CharType[]) Trim(CharType)(inout(CharType[]) String)
+{
+  return TrimStart(TrimEnd(String));
+}
+
 
 struct StringBase(CharType)
 {
