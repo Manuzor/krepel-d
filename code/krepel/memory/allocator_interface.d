@@ -19,11 +19,11 @@ interface IAllocator
 @nogc:
 nothrow:
 
-  bool Contains(in MemoryRegion SomeRegion);
+  bool Contains(in void[] SomeRegion);
 
-  MemoryRegion Allocate(size_t RequestedBytes, size_t Alignment = 0);
+  void[] Allocate(size_t RequestedBytes, size_t Alignment = 0);
 
-  bool Deallocate(MemoryRegion MemoryToDeallocate);
+  bool Deallocate(void[] MemoryToDeallocate);
 }
 
 /// Creates a new instance of Type without constructing it.
@@ -169,9 +169,9 @@ nothrow:
   /// The actual memory to wrap.
   void* WrappedPtr;
 
-  bool Contains(in MemoryRegion SomeRegion) { return false; }
-  MemoryRegion Allocate(size_t RequestedBytes, size_t Alignment = 0) { return null; }
-  bool Deallocate(MemoryRegion MemoryToDeallocate) { return false; }
+  bool Contains(in void[] SomeRegion) { return false; }
+  void[] Allocate(size_t RequestedBytes, size_t Alignment = 0) { return null; }
+  bool Deallocate(void[] MemoryToDeallocate) { return false; }
 }
 
 template Wrap(SomeMemoryType)
@@ -184,19 +184,19 @@ template Wrap(SomeMemoryType)
 
     SomeMemoryType* WrappedPtr;
 
-    final override bool Contains(in MemoryRegion SomeRegion)
+    final override bool Contains(in void[] SomeRegion)
     {
       assert(WrappedPtr);
       return WrappedPtr.Contains(SomeRegion);
     }
 
-    final override MemoryRegion Allocate(size_t RequestedBytes, size_t Alignment = 0)
+    final override void[] Allocate(size_t RequestedBytes, size_t Alignment = 0)
     {
       assert(WrappedPtr);
       return WrappedPtr.Allocate(RequestedBytes, Alignment);
     }
 
-    final override bool Deallocate(MemoryRegion MemoryToDeallocate)
+    final override bool Deallocate(void[] MemoryToDeallocate)
     {
       assert(WrappedPtr);
       return WrappedPtr.Deallocate(MemoryToDeallocate);
@@ -285,14 +285,14 @@ unittest
   assert(cast(void*)SomeAllocator == cast(void*)SomeStack.WrapperMemory.ptr);
 
   auto Mem = SomeAllocator.Allocate(32);
-  Mem[] = 42;
+  (cast(ubyte[])Mem)[] = 42;
 
-  foreach(Byte; SomeStack.Memory[0 .. 32])
+  foreach(Byte; cast(ubyte[])SomeStack.Memory[0 .. 32])
   {
     assert(Byte == 42);
   }
 
-  foreach(Byte; SomeStack.Memory[32 .. $])
+  foreach(Byte; cast(ubyte[])SomeStack.Memory[32 .. $])
   {
     assert(Byte != 42);
   }

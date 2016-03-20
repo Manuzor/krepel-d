@@ -34,7 +34,7 @@ struct HybridAllocator(P, S)
     return SecondaryMemory.Allocate(RequestedBytes, Alignment);
   }
 
-  bool Deallocate(MemoryRegion MemoryToDeallocate)
+  bool Deallocate(void[] MemoryToDeallocate)
   {
     if(PrimaryMemory.Contains(MemoryToDeallocate))
     {

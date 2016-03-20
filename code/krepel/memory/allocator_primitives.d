@@ -29,7 +29,7 @@ struct SystemMemory
   }
 
   /// See_Also: krepel.system.SystemMemoryReallocation
-  auto Reallocate(MemoryRegion Memory, size_t RequestedBytes, size_t Alignment = 0)
+  auto Reallocate(void[] Memory, size_t RequestedBytes, size_t Alignment = 0)
   {
     return SystemMemoryReallocation(Memory,
                                     RequestedBytes,
@@ -37,12 +37,12 @@ struct SystemMemory
   }
 
   /// See_Also: krepel.system.Deallocate
-  bool Deallocate(MemoryRegion MemoryToDeallocate)
+  bool Deallocate(void[] MemoryToDeallocate)
   {
     return SystemMemoryDeallocation(MemoryToDeallocate);
   }
 
-  bool Contains(MemoryRegion SomeRegion)
+  bool Contains(void[] SomeRegion)
   {
     /// TODO(Manu): Support this somehow?
     return false;
@@ -84,7 +84,7 @@ struct HeapMemory
   @nogc:
   nothrow:
 
-  MemoryRegion Memory;
+  void[] Memory;
   size_t DefaultAlignment = GlobalDefaultAlignment;
 
   debug(HeapMemory) @property bool IsInitialized() const { return cast(bool)FirstBlock; }
@@ -100,7 +100,7 @@ struct HeapMemory
   mixin Contains_DefaultImplementation!Memory;
 
 
-  this(MemoryRegion AvailableMemory)
+  this(void[] AvailableMemory)
   {
     Initialize(AvailableMemory);
   }
@@ -110,7 +110,7 @@ struct HeapMemory
     Deinitialize();
   }
 
-  void Initialize(MemoryRegion AvailableMemory)
+  void Initialize(void[] AvailableMemory)
   {
     debug(HeapMemory)
     {
@@ -190,11 +190,11 @@ struct HeapMemory
     return UserPointer[0 .. RequestedBytes];
   }
 
-  bool Deallocate(MemoryRegion MemoryToDeallocate)
+  bool Deallocate(void[] MemoryToDeallocate)
   {
     if(!MemoryToDeallocate) return false;
 
-    ubyte PaddingSize = *(MemoryToDeallocate.ptr - 1);
+    ubyte PaddingSize = *cast(ubyte*)(MemoryToDeallocate.ptr - 1);
     auto Block = cast(BlockData*)(MemoryToDeallocate.ptr - PaddingSize - BlockData.sizeof);
 
     if(!IsValidBlockPointer(Block)) return false;
@@ -298,19 +298,19 @@ struct StackMemory
   @nogc:
   nothrow:
 
-  MemoryRegion Memory;
+  void[] Memory;
   size_t AllocationMark;
 
   size_t DefaultAlignment = GlobalDefaultAlignment;
 
   bool IsInitialized;
 
-  this(MemoryRegion AvailableMemory)
+  this(void[] AvailableMemory)
   {
     Initialize(AvailableMemory);
   }
 
-  void Initialize(MemoryRegion AvailableMemory)
+  void Initialize(void[] AvailableMemory)
   {
     debug assert(!IsInitialized);
 
@@ -329,7 +329,7 @@ struct StaticStackMemory(size_t N)
 
   static assert(N > 0, "Need at least one byte of static memory.");
 
-  StaticMemoryRegion!N Memory;
+  void[N] Memory;
   size_t AllocationMark;
 
   size_t DefaultAlignment = GlobalDefaultAlignment;
@@ -345,7 +345,7 @@ mixin template CommonStackMemoryImplementation()
 {
   mixin CommonMemoryImplementation;
 
-  MemoryRegion Allocate(size_t RequestedBytes, size_t Alignment = 0)
+  void[] Allocate(size_t RequestedBytes, size_t Alignment = 0)
   {
     debug assert(IsInitialized, "This stack memory is not initialized.");
 
@@ -366,7 +366,7 @@ mixin template CommonStackMemoryImplementation()
     return RequestedMemory;
   }
 
-  bool Deallocate(MemoryRegion Memory)
+  bool Deallocate(void[] Memory)
   {
     return false;
   }
@@ -389,7 +389,7 @@ mixin template CommonMemoryImplementation()
 /// given memory region belongs to them.
 mixin template Contains_DefaultImplementation(alias Member)
 {
-  bool Contains(const MemoryRegion SomeRegion) const
+  bool Contains(const void[] SomeRegion) const
   {
     bool IsWithinLeftBound  = SomeRegion.ptr >= Member.ptr;
     bool IsWithinRightBound = SomeRegion.ptr + SomeRegion.length <= Member.ptr + Member.length;
@@ -413,11 +413,11 @@ unittest
 {
   SystemMemory SystemHeap;
 
-  auto Block1 = SystemHeap.Allocate(32);
+  auto Block1 = cast(ubyte[])SystemHeap.Allocate(32);
   assert(Block1);
   Block1[$-1] = cast(ubyte)123;
 
-  auto Block2 = SystemHeap.Allocate(8);
+  auto Block2 = cast(ubyte[])SystemHeap.Allocate(8);
   assert(Block2);
   Block2[] = 0xFU;
   foreach(ref Byte; Block2)
@@ -434,7 +434,7 @@ unittest
   assert(SystemHeap.Deallocate(Block2));
   //debug {} else assert(!SystemHeap.Deallocate(Block2));
 
-  auto Block3 = SystemHeap.Allocate(9, 16);
+  auto Block3 = cast(ubyte[])SystemHeap.Allocate(9, 16);
   assert(Block3);
   assert(Block3.ptr == AlignedPointer(Block3.ptr, 16));
 }
@@ -481,7 +481,7 @@ unittest
   assert(Stack.AllocationMark == 32);
   for(size_t Index = 0; Index < Block1.length; Index++)
   {
-    assert(Block1[Index] == Buffer[Index]);
+    assert((cast(ubyte[])Block1)[Index] == Buffer[Index]);
   }
 
   auto Block2 = Stack.Allocate(64);
@@ -490,7 +490,7 @@ unittest
   assert(Stack.AllocationMark == 32 + 64);
   for(size_t Index = 0; Index < Block2.length; Index++)
   {
-    assert(Block2[Index] == Buffer[Block1.length + Index]);
+    assert((cast(ubyte[])Block2)[Index] == Buffer[Block1.length + Index]);
   }
 
   // There's still room for a bit more, but 512 will not fit.

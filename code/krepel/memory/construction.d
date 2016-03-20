@@ -13,22 +13,22 @@ private static import std.conv;
 // pure:
 
 
-Type Construct(Type, ArgTypes...)(MemoryRegion RawMemory, auto ref ArgTypes Args)
+Type Construct(Type, ArgTypes...)(void[] RawMemory, auto ref ArgTypes Args)
   if(is(Type == class))
 {
-  return std.conv.emplace!Type(cast(void[])RawMemory, Args);
+  return std.conv.emplace!Type(RawMemory, Args);
 }
 
-Type* Construct(Type, ArgTypes...)(MemoryRegion RawMemory, auto ref ArgTypes Args)
+Type* Construct(Type, ArgTypes...)(void[] RawMemory, auto ref ArgTypes Args)
   if(!is(Type == class))
 {
-  return std.conv.emplace!Type(cast(void[])RawMemory, Args);
+  return std.conv.emplace!Type(RawMemory, Args);
 }
 
 Type Construct(Type, ArgTypes...)(Type Instance, auto ref ArgTypes Args)
   if(is(Type == class))
 {
-  MemoryRegion RawMemory = (cast(ubyte*)Instance)[0 .. Meta.ClassInstanceSizeOf!Type];
+  void[] RawMemory = (cast(void*)Instance)[0 .. Meta.ClassInstanceSizeOf!Type];
   return Construct!Type(RawMemory, Args);
 }
 
