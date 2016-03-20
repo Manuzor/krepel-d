@@ -1,11 +1,8 @@
 module krepel.conversion.parse_float;
 
 import krepel.string;
+import krepel.conversion.conversion;
 
-bool IsDigit(CharType)(CharType Char)
-{
-  return Char - '0' >= 0 && Char - '0' < 10;
-}
 
 float ParseFloat(Source)(ref Source String, float ValueOnError = float.nan)
 {

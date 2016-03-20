@@ -113,8 +113,8 @@ struct WavefrontLexer
     import std.conv;
     assert(CurrentLineType == WavefrontLineType.TextureCoordinate);
     auto ToParse = Buffer[3..$];
-    Vector.X = ParseFloat(ToParse);
-    Vector.Y = ParseFloat(ToParse);
+    TextureCoordinate.X = ParseFloat(ToParse);
+    TextureCoordinate.Y = ParseFloat(ToParse);
     return true;
   }
 
