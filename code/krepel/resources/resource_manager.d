@@ -21,15 +21,15 @@ class ResourceManager
   }
 
 
-  Dictionary!(String, IResourceLoader) ResourceLoader;
+  Dictionary!(WString, IResourceLoader) ResourceLoader;
 
-  void RegisterLoader(IResourceLoader Loader, String FileExtension)
+  void RegisterLoader(IResourceLoader Loader, WString FileExtension)
   {
     assert(!ResourceLoader.Contains(FileExtension));
     ResourceLoader[FileExtension] = Loader;
   }
 
-  IResource LoadResource(String FileName)
+  IResource LoadResource(WString FileName)
   {
     auto FileExtensionIndex = FileName.FindLast(".");
     if (FileExtensionIndex >= 0)
