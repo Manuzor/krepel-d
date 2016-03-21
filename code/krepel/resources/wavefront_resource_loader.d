@@ -9,19 +9,19 @@ import krepel.conversion;
 import krepel.string;
 import krepel.log;
 
-enum WavefrontLineType : string
+enum WavefrontLineType
 {
-  Unknown = "Unknown",
-  Empty = "Empty",
-  Comment = "Comment",
-  Vertex = "Vertex",
-  TextureCoordinate = "TextureCoordinate",
-  Normal = "Normal",
-  Face = "Face",
-  ParameterSpace = "ParameterSpace",
-  Object = "Object",
-  SmoothingGroup = "SmoothingGroup",
-  EOF = "EOF",
+  Unknown,
+  Empty,
+  Comment,
+  Vertex,
+  TextureCoordinate,
+  Normal,
+  Face,
+  ParameterSpace,
+  Object,
+  SmoothingGroup,
+  EOF,
 }
 
 struct WaveFrontMesh
@@ -39,6 +39,14 @@ struct WaveFrontMesh
     TextureCoordinates = Array!Vector2(Allocator);
     Faces = Array!WaveFrontFaceDefinition(Allocator);
   }
+
+  void Clear()
+  {
+    Vertices.Clear();
+    Normals.Clear();
+    TextureCoordinates.Clear();
+    Faces.Clear();
+  }
 }
 
 struct WaveFrontVertexDefinition
@@ -46,6 +54,13 @@ struct WaveFrontVertexDefinition
   long VertexIndex = -1;
   long NormalIndex = -1;
   long TextureIndex = -1;
+
+  bool opEqual(WaveFrontVertexDefinition VertexDefinition)
+  {
+    return VertexIndex == VertexDefinition.VertexIndex &&
+      NormalIndex == VertexDefinition.NormalIndex &&
+      TextureIndex == VertexDefinition.TextureIndex;
+  }
 }
 
 struct WaveFrontFaceDefinition
@@ -123,28 +138,35 @@ struct WavefrontLexer
   bool ParseVertexDefinition(out WaveFrontVertexDefinition VertexDefinition, ref char[] Range)
   {
     assert(CurrentLineType == WavefrontLineType.Face);
-    VertexDefinition.VertexIndex = ParseLong(Range, 0);
+    VertexDefinition.VertexIndex = ParseLong(Range, 0) - 1;
     if (Find(Range, "/") == 0)
     {
       auto FindResult = Find(Range, "/", 1);
       if (FindResult != 1)
       {
         Range = Range[1..$];
-        VertexDefinition.NormalIndex = ParseLong(Range, 0);
+        VertexDefinition.TextureIndex = ParseLong(Range, 0) - 1;
 
         FindResult = Find(Range, "/", 0);
         if (FindResult == 0)
         {
           Range = Range[1..$];
-          VertexDefinition.TextureIndex = ParseLong(Range, 0);
+          VertexDefinition.NormalIndex = ParseLong(Range, 0) - 1;
         }
       }
       else if(FindResult == 1)
       {
         Range = Range[2..$];
-        VertexDefinition.TextureIndex = ParseLong(Range, 0);
+        VertexDefinition.NormalIndex = ParseLong(Range, 0) - 1;
       }
     }
+    return true;
+  }
+
+  bool ParseString(ref UString String)
+  {
+    assert(CurrentLineType == WavefrontLineType.Object);
+    String = TrimStart(Buffer[2..$]);
     return true;
   }
 
@@ -193,10 +215,11 @@ class WavefrontResourceLoader : IResourceLoader
     TempMesh = WaveFrontMesh(Allocator);
 
     Lexer.Initialize(Allocator, File);
+    UString PendingMeshName = UString(Allocator);
 
     while(Lexer.ProcessLine())
     {
-      Log.Info(UString("Line: ") + Lexer.CurrentLineType);
+      Log.Info("Line: %s", Lexer.CurrentLineType);
       final switch(Lexer.CurrentLineType)
       {
       case WavefrontLineType.Unknown:
@@ -227,11 +250,55 @@ class WavefrontResourceLoader : IResourceLoader
         TempMesh.Normals.PushBack(Normal);
         break;
       case WavefrontLineType.Object:
+        FinishUpObject(Allocator, Mesh, PendingMeshName);
+        Lexer.ParseString(PendingMeshName);
         break;
       }
     }
 
+    FinishUpObject(Allocator, Mesh, PendingMeshName);
+
     return Mesh;
+  }
+
+  void FinishUpObject(IAllocator Allocator, MeshResource Mesh, UString MeshName)
+  {
+    if (TempMesh.Vertices.Count > 0)
+    {
+      SubMesh NewSubMesh = Allocator.New!SubMesh(Allocator);
+      auto DefinedVertices = Dictionary!(WaveFrontVertexDefinition, int)();
+      DefinedVertices.Allocator = Allocator;
+      foreach(FaceDefinition; TempMesh.Faces)
+      {
+        int VertexIndex;
+        foreach(Index, VertexDefinition; FaceDefinition.Vertices)
+        {
+          if (DefinedVertices.TryGet(FaceDefinition.Vertices[Index], VertexIndex))
+          {
+            NewSubMesh.Indices.PushBack(VertexIndex);
+          }
+          else
+          {
+            Vertex NewVertex = void;
+            NewVertex.Position = TempMesh.Vertices[VertexDefinition.VertexIndex];
+            if(VertexDefinition.NormalIndex != -1)
+            {
+              NewVertex.Normal = TempMesh.Normals[VertexDefinition.NormalIndex];
+            }
+            if(VertexDefinition.TextureIndex != -1)
+            {
+              NewVertex.TextureCoordinate = TempMesh.TextureCoordinates[VertexDefinition.TextureIndex];
+            }
+            NewSubMesh.Indices.PushBack(cast(int)NewSubMesh.Vertices.Count);
+            DefinedVertices[VertexDefinition] = cast(int)NewSubMesh.Vertices.Count;
+            NewSubMesh.Vertices.PushBack(NewVertex);
+          }
+        }
+      }
+      NewSubMesh.Name = MeshName;
+      Mesh.Meshes.PushBack(NewSubMesh);
+      TempMesh.Clear();
+    }
   }
 
   WavefrontLexer Lexer;
@@ -254,4 +321,5 @@ unittest
   Manager.RegisterLoader(WaveFrontLoader, WString(".obj"));
 
   auto Result = Manager.LoadResource(WString("../unittest/Cube.obj"));
+  Result = Manager.LoadResource(WString("../unittest/CubeOnlyIndex.obj"));
 }

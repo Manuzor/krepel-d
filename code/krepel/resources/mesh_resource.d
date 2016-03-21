@@ -4,6 +4,7 @@ import krepel.resources;
 import krepel.container;
 import krepel.math;
 import krepel.memory;
+import krepel.string;
 
 struct Vertex
 {
@@ -14,10 +15,17 @@ struct Vertex
   Vector3 Binormal;
 }
 
-struct SubMesh
+class SubMesh
 {
   Array!Vertex Vertices;
   Array!int Indices;
+  UString Name;
+
+  this(IAllocator Allocator)
+  {
+    Vertices = Array!Vertex(Allocator);
+    Indices = Array!int(Allocator);
+  }
 }
 
 class MeshResource : IResource
