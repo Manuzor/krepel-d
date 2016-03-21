@@ -8,7 +8,6 @@ import krepel.math : IsPowerOfTwo;
 import krepel.log;
 
 @nogc:
-nothrow:
 
 /// Dynamically allocates memory from standard system procedures.
 /// Params:

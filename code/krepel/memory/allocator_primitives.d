@@ -15,7 +15,6 @@ import Meta = krepel.meta;
 struct SystemMemory
 {
   @nogc:
-  nothrow:
 
   mixin CommonMemoryImplementation;
 
@@ -82,7 +81,6 @@ debug = HeapMemory;
 struct HeapMemory
 {
   @nogc:
-  nothrow:
 
   void[] Memory;
   size_t DefaultAlignment = GlobalDefaultAlignment;
@@ -214,7 +212,6 @@ private:
   static struct BlockData
   {
     @nogc:
-    nothrow:
 
     size_t HeaderData;
 
@@ -296,7 +293,6 @@ private:
 struct StackMemory
 {
   @nogc:
-  nothrow:
 
   void[] Memory;
   size_t AllocationMark;
@@ -325,7 +321,6 @@ struct StackMemory
 struct StaticStackMemory(size_t N)
 {
   @nogc:
-  nothrow:
 
   static assert(N > 0, "Need at least one byte of static memory.");
 

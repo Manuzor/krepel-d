@@ -12,7 +12,6 @@ import Meta = krepel.meta;
 struct Array(T)
 {
   @nogc:
-  nothrow:
 
   enum size_t MinimumElementAllocationCount = 16;
 

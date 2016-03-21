@@ -6,7 +6,6 @@ import Meta = krepel.meta;
 
 @safe:
 @nogc:
-nothrow:
 
 enum PI = 3.14159265359;
 

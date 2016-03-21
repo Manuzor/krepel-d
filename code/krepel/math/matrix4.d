@@ -6,7 +6,6 @@ import krepel.math.math;
 
 @nogc:
 @safe:
-nothrow:
 
 Matrix4 GetTransposed(Matrix4 Mat)
 {
@@ -296,7 +295,6 @@ align(16) struct Matrix4
 {
   @nogc:
   @safe:
-  nothrow:
 
   float[4][4] M;
 

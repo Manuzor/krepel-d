@@ -17,7 +17,6 @@ IAllocator GlobalAllocator;
 interface IAllocator
 {
 @nogc:
-nothrow:
 
   bool Contains(in void[] SomeRegion);
 
@@ -164,7 +163,6 @@ void Delete(Type)(IAllocator Allocator, Type[] Array)
 package class MinimalAllocatorWrapper : IAllocator
 {
 @nogc:
-nothrow:
 
   /// The actual memory to wrap.
   void* WrappedPtr;
@@ -180,7 +178,6 @@ template Wrap(SomeMemoryType)
   class WrapperClass : IAllocator
   {
   @nogc:
-  nothrow:
 
     SomeMemoryType* WrappedPtr;
 

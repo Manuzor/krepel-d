@@ -8,7 +8,6 @@ import std.conv;
 
 @nogc:
 @safe:
-nothrow:
 
 /// Calculates the Dot Product of the two Vectors
 /// Input Vectors will not be modified
@@ -152,7 +151,6 @@ struct Vector3
 {
   @safe:
   @nogc:
-  nothrow:
   union
   {
     struct

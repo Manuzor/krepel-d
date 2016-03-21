@@ -9,12 +9,10 @@ import krepel.container;
 version(Windows):
 
 @nogc:
-nothrow:
 
 class Win32File : IFile
 {
   @nogc:
-  nothrow:
 
   HANDLE FileHandle = INVALID_HANDLE_VALUE;
 

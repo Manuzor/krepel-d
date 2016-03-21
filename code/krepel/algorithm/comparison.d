@@ -1,7 +1,6 @@
 module krepel.algorithm.comparison;
 
 
-nothrow:
 @nogc:
 
 auto ref Min(ArgTypes...)(ArgTypes Args) @safe

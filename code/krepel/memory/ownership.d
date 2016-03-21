@@ -1,7 +1,6 @@
 deprecated("This module is not ready for use yet.")
 module krepel.memory.ownership;
 
-nothrow:
 @nogc:
 
 struct Owned(T)

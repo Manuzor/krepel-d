@@ -14,7 +14,6 @@ import krepel.memory.allocator_interface;
 struct AutoHeapAllocator
 {
   @nogc:
-  nothrow:
 
   import krepel.container.array;
 

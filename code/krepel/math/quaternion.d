@@ -7,7 +7,6 @@ import krepel.math.matrix4;
 
 @nogc:
 @safe:
-nothrow:
 
 Quaternion ConcatenateQuaternion(Quaternion Quat1, Quaternion Quat2)
 {
@@ -160,7 +159,6 @@ struct Quaternion
 {
   @nogc:
   @safe:
-  nothrow:
 
   union
   {

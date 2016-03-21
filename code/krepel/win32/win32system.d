@@ -5,7 +5,6 @@ import krepel.memory;
 
 version(Windows):
 @nogc:
-nothrow:
 
 /// Creates and opens a file at the given path
 IFile OpenFile(IAllocator Allocator, const wchar[] Path, FileOpenMode Mode = FileOpenMode.Read)

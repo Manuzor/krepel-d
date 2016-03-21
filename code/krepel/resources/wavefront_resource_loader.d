@@ -71,7 +71,6 @@ struct WaveFrontFaceDefinition
 struct WavefrontLexer
 {
   @nogc:
-  nothrow:
 
   void Initialize(IAllocator Allocator, IFile File)
   {

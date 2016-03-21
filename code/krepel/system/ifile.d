@@ -5,7 +5,6 @@ import krepel.container;
 import krepel.meta;
 
 @nogc:
-nothrow:
 
 enum FileOpenMode
 {
@@ -16,7 +15,6 @@ enum FileOpenMode
 interface IFile
 {
   @nogc:
-  nothrow:
 
   /// Reads data from a file
   /// Params:
