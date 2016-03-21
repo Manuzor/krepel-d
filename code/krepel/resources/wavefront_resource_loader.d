@@ -218,7 +218,6 @@ class WavefrontResourceLoader : IResourceLoader
 
     while(Lexer.ProcessLine())
     {
-      Log.Info("Line: %s", Lexer.CurrentLineType);
       final switch(Lexer.CurrentLineType)
       {
       case WavefrontLineType.Unknown:
