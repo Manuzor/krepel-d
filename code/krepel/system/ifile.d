@@ -47,6 +47,7 @@ interface IFile
     CharType[10] Buffer;
     while(true)
     {
+      auto CurPosition = MoveCursor(0);
       auto ReadCount = Read(cast(ubyte[])Buffer);
       foreach(Index; 0 .. ReadCount)
       {
@@ -54,7 +55,7 @@ interface IFile
         if(Buffer[Index] == '\r' || Buffer[Index] == '\n')
         {
           Array.PushBack(Buffer[0..Index]);
-          MoveCursor(-(10-Index) + 1);
+          SetCursorPosition(true, CurPosition + Index + 1);
           return Array.Count;
         }
       }
@@ -86,7 +87,7 @@ interface IFile
   ///             If false, the Position will be subtracted from the end of the file,
   ///             e.g. a Value of 1 will Point at the last Character of the file
   /// Position = The Position to set according to the FromStart value.
-  long SetCursorPostion(bool FromStart, long Position)
+  long SetCursorPosition(bool FromStart, long Position)
   in
   {
     assert(Position >= 0);

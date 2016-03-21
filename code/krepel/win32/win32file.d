@@ -133,7 +133,7 @@ class Win32File : IFile
     return NewPosition.QuadPart;
   }
 
-  override long SetCursorPostion(bool FromStart, long Position)
+  override long SetCursorPosition(bool FromStart, long Position)
   {
     assert(FileHandle != INVALID_HANDLE_VALUE);
 

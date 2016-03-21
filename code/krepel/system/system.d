@@ -75,9 +75,9 @@ unittest
   assert(Position == 0);
   Position = File.MoveCursor(5);
   assert(Position == 5);
-  Position = File.SetCursorPostion(false, 0);
+  Position = File.SetCursorPosition(false, 0);
   assert(Position == 15);
-  Position = File.SetCursorPostion(true, 5);
+  Position = File.SetCursorPosition(true, 5);
   assert(Position == 5);
 
   long BytesRead = File.Read(Region);
