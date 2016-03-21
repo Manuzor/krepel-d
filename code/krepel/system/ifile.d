@@ -20,7 +20,7 @@ interface IFile
   /// Params:
   /// Region = Where the data will be written into which was red from the file
   /// Returns: Returns the amount of bytes written into Region. The value is >= 0 and <= Region.length.
-  long Read(MemoryRegion Region)
+  long Read(void[] Region)
   in
   {
     assert(Region.length > 0);
@@ -91,7 +91,7 @@ interface IFile
     assert(Position >= 0);
   }
 
-  long Write(MemoryRegion Region)
+  long Write(void[] Region)
   in
   {
     assert(Region.length > 0);

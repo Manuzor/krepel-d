@@ -47,7 +47,7 @@ class Win32File : IFile
     FileHandle = INVALID_HANDLE_VALUE;
   }
 
-  override long Read(MemoryRegion Region)
+  override long Read(void[] Region)
   {
     assert(FileHandle != INVALID_HANDLE_VALUE);
 
@@ -83,7 +83,7 @@ class Win32File : IFile
     return TotalBytesRead;
   }
 
-  override long Write(MemoryRegion Region)
+  override long Write(void[] Region)
   {
     assert(FileHandle != INVALID_HANDLE_VALUE);
 
