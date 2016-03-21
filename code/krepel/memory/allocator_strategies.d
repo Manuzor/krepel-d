@@ -30,9 +30,42 @@ struct AutoHeapAllocator
   mixin CommonMemoryImplementation;
 
 
+  this(size_t HeapSize, IAllocator Allocator)
+  {
+    this.HeapSize = HeapSize;
+    this.Allocator = Allocator;
+  }
+
+  this(IAllocator Allocator)
+  {
+    this.Allocator = Allocator;
+  }
+
+  this(IAllocator Allocator, size_t HeapSize)
+  {
+    this.Allocator = Allocator;
+    this.HeapSize = HeapSize;
+  }
+
+  ~this()
+  {
+    Clear();
+  }
+
+  void Clear()
+  {
+    if(Allocator is null) return;
+
+    foreach(ref Heap; Heaps)
+    {
+      Allocator.Deallocate(Heap.Memory);
+    }
+    Heaps.Clear();
+  }
+
   bool Contains(in void[] SomeRegion)
   {
-    foreach(ref Heap ; Heaps[])
+    foreach(ref Heap ; Heaps)
     {
       if(Heap.Contains(SomeRegion)) return true;
     }
@@ -78,7 +111,7 @@ struct AutoHeapAllocator
 private:
   void EnsureValidState()
   {
-    if(Allocator is null) Allocator = GlobalAllocator;
+    assert(Allocator, "No allocator was set.");
 
     if(HeapSize == 0)
     {
@@ -130,6 +163,30 @@ struct HybridAllocator(P, S)
   }
 }
 
+version(unittest)
+{
+  /// Returns a struct that wraps a AutoHeapAllocator that automatically uses SystemMemory.
+  auto CreateTestAllocator(size_t HeapSize = 4.KiB)
+  {
+    static struct TestAllocatorData
+    {
+      SystemMemory _Sys;
+      AutoHeapAllocator _AutoHeap;
+
+      @property IAllocator _Allocator() { return Wrap(_AutoHeap); }
+
+      mixin CommonMemoryImplementation;
+
+      alias _Allocator this;
+    }
+
+    TestAllocatorData Result;
+    Result._AutoHeap.HeapSize = HeapSize;
+    Result._AutoHeap.Allocator = Wrap(Result._Sys);
+    return Result;
+  }
+}
+
 //
 // Unit Tests
 //
@@ -145,10 +202,10 @@ unittest
   }
   static assert(S.sizeof == 32);
 
-  mixin(SetupGlobalAllocatorForTesting!2048);
+  StaticStackMemory!2048 Stack;
 
   // Auto heap allocator using 64 bytes as heap size and the global allocator.
-  auto AutoHeap = AutoHeapAllocator(64);
+  auto AutoHeap = AutoHeapAllocator(64, Stack.Wrap());
   auto Allocator = Wrap(AutoHeap);
 
   auto A = Allocator.New!S;

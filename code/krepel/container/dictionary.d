@@ -8,6 +8,11 @@ struct Dictionary(K, V)
   alias KeyType = K;
   alias ValueType = V;
 
+  this(IAllocator Allocator)
+  {
+    this.Allocator = Allocator;
+  }
+
   @property auto Keys() inout { return KeyArray[]; }
   @property auto Values() inout { return ValueArray[]; }
 
@@ -108,9 +113,9 @@ unittest
   import std.exception;
   import core.exception : AssertError;
 
-  mixin(SetupGlobalAllocatorForTesting!(400));
+  auto TestAllocator = CreateTestAllocator();
 
-  Dictionary!(int, int) Dict;
+  auto Dict = Dictionary!(int, int)(TestAllocator);
 
   Dict[3] = 42;
   Dict[4] = 1337;
@@ -159,7 +164,7 @@ unittest
 
 unittest
 {
-  mixin(SetupGlobalAllocatorForTesting!(1024));
+  auto TestAllocator = CreateTestAllocator();
 
   static struct MyKey
   {
@@ -179,7 +184,7 @@ unittest
     float SomethingElse;
   }
 
-  Dictionary!(MyKey, MyValue) Dict;
+  auto Dict = Dictionary!(MyKey, MyValue)(TestAllocator);
   Dict[MyKey("this")] = MyValue("that", 3.1415f);
 
   assert(Dict[MyKey("this")].Data == "that");

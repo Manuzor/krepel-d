@@ -214,9 +214,6 @@ version(unittest) int BarDataDestructionCount;
 version(unittest) int FooDataDestructionCount;
 unittest
 {
-  import krepel.memory.common : SetupGlobalAllocatorForTesting;
-  mixin(SetupGlobalAllocatorForTesting!256);
-
   static struct BazData
   {
     int Data = 179;

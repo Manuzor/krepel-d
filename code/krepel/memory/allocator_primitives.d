@@ -42,7 +42,7 @@ struct SystemMemory
     return SystemMemoryDeallocation(MemoryToDeallocate);
   }
 
-  bool Contains(void[] SomeRegion)
+  bool Contains(in void[] SomeRegion)
   {
     /// TODO(Manu): Support this somehow?
     return false;

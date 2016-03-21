@@ -41,22 +41,6 @@ alias SetBit    = (const Bits, const Position) => Bits |  (1 << Position);
 alias RemoveBit = (const Bits, const Position) => Bits & ~(1 << Position);
 alias HasBit    = (const Bits, const Position) => cast(bool)(Bits &  (1 << Position));
 
-version(unittest)
-{
-  /// Usage: mixin(SetupGlobalAllocatorForTesting!1024);
-  template SetupGlobalAllocatorForTesting(size_t N)
-  {
-    import krepel : Format;
-    enum SetupGlobalAllocatorForTesting = q{
-      ubyte[%s] _SetupGlobalAllocatorForTesting_Buffer;
-      auto _SetupGlobalAllocatorForTesting_Heap = HeapMemory(_SetupGlobalAllocatorForTesting_Buffer);
-      auto _SetupGlobalAllocatorForTesting_PreviousGlobalAllocator = .GlobalAllocator;
-      .GlobalAllocator = Wrap(_SetupGlobalAllocatorForTesting_Heap);
-      scope(exit) .GlobalAllocator = _SetupGlobalAllocatorForTesting_PreviousGlobalAllocator;
-    }.Format(N.stringof);
-  }
-}
-
 //
 // Unit Tests
 //
