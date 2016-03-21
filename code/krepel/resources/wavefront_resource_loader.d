@@ -6,28 +6,46 @@ import krepel.memory;
 import krepel.math;
 import krepel.container;
 import krepel.conversion;
+import krepel.string;
+import krepel.log;
 
-@nogc:
-nothrow:
-
-enum WavefrontLineType
+enum WavefrontLineType : string
 {
-  Unknown,
-  Empty,
-  Comment,
-  Vertex,
-  TextureCoordinate,
-  Normal,
-  Face,
-  ParameterSpace,
-  EOF,
+  Unknown = "Unknown",
+  Empty = "Empty",
+  Comment = "Comment",
+  Vertex = "Vertex",
+  TextureCoordinate = "TextureCoordinate",
+  Normal = "Normal",
+  Face = "Face",
+  ParameterSpace = "ParameterSpace",
+  Object = "Object",
+  SmoothingGroup = "SmoothingGroup",
+  EOF = "EOF",
+}
+
+struct WaveFrontMesh
+{
+
+  Array!Vector3 Vertices;
+  Array!Vector3 Normals;
+  Array!Vector2 TextureCoordinates;
+  Array!WaveFrontFaceDefinition Faces;
+
+  this(IAllocator Allocator)
+  {
+    Vertices = Array!Vector3(Allocator);
+    Normals = Array!Vector3(Allocator);
+    TextureCoordinates = Array!Vector2(Allocator);
+    Faces = Array!WaveFrontFaceDefinition(Allocator);
+  }
 }
 
 struct WaveFrontVertexDefinition
 {
-  int VertexIndex = -1;
-  int NormalIndex = -1;
-  int TextureIndex = -1;
+  long VertexIndex = -1;
+  long NormalIndex = -1;
+  long TextureIndex = -1;
 }
 
 struct WaveFrontFaceDefinition
@@ -79,6 +97,10 @@ struct WavefrontLexer
         return WavefrontLineType.Face;
       case '#':
         return WavefrontLineType.Comment;
+      case 'o':
+        return WavefrontLineType.Object;
+      case 's':
+        return WavefrontLineType.SmoothingGroup;
       default:
         return WavefrontLineType.Unknown;
       }
@@ -97,10 +119,48 @@ struct WavefrontLexer
     return Buffer.Count > 0;
   }
 
+
+  bool ParseVertexDefinition(out WaveFrontVertexDefinition VertexDefinition, ref char[] Range)
+  {
+    assert(CurrentLineType == WavefrontLineType.Face);
+    VertexDefinition.VertexIndex = ParseLong(Range, 0);
+    if (Find(Range, "/") == 0)
+    {
+      auto FindResult = Find(Range, "/", 1);
+      if (FindResult != 1)
+      {
+        Range = Range[1..$];
+        VertexDefinition.NormalIndex = ParseLong(Range, 0);
+
+        FindResult = Find(Range, "/", 0);
+        if (FindResult == 0)
+        {
+          Range = Range[1..$];
+          VertexDefinition.TextureIndex = ParseLong(Range, 0);
+        }
+      }
+      else if(FindResult == 1)
+      {
+        Range = Range[2..$];
+        VertexDefinition.TextureIndex = ParseLong(Range, 0);
+      }
+    }
+    return true;
+  }
+
+  bool ParseFace(out WaveFrontFaceDefinition Face)
+  {
+    assert(CurrentLineType == WavefrontLineType.Face);
+    auto ToParse = Buffer[2..$];
+    ParseVertexDefinition(Face.Vertices[0], ToParse);
+    ParseVertexDefinition(Face.Vertices[1], ToParse);
+    ParseVertexDefinition(Face.Vertices[2], ToParse);
+    return true;
+  }
+
   bool ParseVector3(out Vector3 Vector)
   {
-    import std.conv;
-    assert(CurrentLineType == WavefrontLineType.Vertex);
+    assert(CurrentLineType == WavefrontLineType.Vertex || CurrentLineType == WavefrontLineType.Normal);
     auto ToParse = Buffer[2..$];
     Vector.X = ParseFloat(ToParse);
     Vector.Y = ParseFloat(ToParse);
@@ -110,7 +170,6 @@ struct WavefrontLexer
 
   bool ParseVector2(out Vector2 TextureCoordinate)
   {
-    import std.conv;
     assert(CurrentLineType == WavefrontLineType.TextureCoordinate);
     auto ToParse = Buffer[3..$];
     TextureCoordinate.X = ParseFloat(ToParse);
@@ -126,10 +185,73 @@ struct WavefrontLexer
 
 class WavefrontResourceLoader : IResourceLoader
 {
+  WaveFrontMesh TempMesh;
+
   override IResource Load(IAllocator Allocator, IFile File)
   {
     MeshResource Mesh = Allocator.New!(MeshResource,IAllocator)(Allocator);
+    TempMesh = WaveFrontMesh(Allocator);
+
+    Lexer.Initialize(Allocator, File);
+
+    while(Lexer.ProcessLine())
+    {
+      Log.Info(UString("Line: ") + Lexer.CurrentLineType);
+      final switch(Lexer.CurrentLineType)
+      {
+      case WavefrontLineType.Unknown:
+      case WavefrontLineType.Comment:
+      case WavefrontLineType.Empty:
+      case WavefrontLineType.SmoothingGroup:
+      case WavefrontLineType.EOF:
+      case WavefrontLineType.ParameterSpace:
+        break;
+      case WavefrontLineType.Vertex:
+        Vector3 Vertex;
+        Lexer.ParseVector3(Vertex);
+        TempMesh.Vertices.PushBack(Vertex);
+        break;
+      case WavefrontLineType.TextureCoordinate:
+        Vector2 Coordinate;
+        Lexer.ParseVector2(Coordinate);
+        TempMesh.TextureCoordinates.PushBack(Coordinate);
+        break;
+      case WavefrontLineType.Face:
+        WaveFrontFaceDefinition Face;
+        Lexer.ParseFace(Face);
+        TempMesh.Faces.PushBack(Face);
+        break;
+      case WavefrontLineType.Normal:
+        Vector3 Normal;
+        Lexer.ParseVector3(Normal);
+        TempMesh.Normals.PushBack(Normal);
+        break;
+      case WavefrontLineType.Object:
+        break;
+      }
+    }
 
     return Mesh;
   }
+
+  WavefrontLexer Lexer;
+}
+
+unittest
+{
+  import krepel.log;
+  import krepel;
+  import krepel.memory;
+  import krepel.string;
+
+  StaticStackMemory!50000 StackMemory;
+  GlobalAllocator = StackMemory.Wrap;
+
+  Log.Sinks.PushBack(ToDelegate(&StdoutLogSink));
+
+  auto Manager = GlobalAllocator.New!ResourceManager(GlobalAllocator);
+  auto WaveFrontLoader = GlobalAllocator.New!WavefrontResourceLoader();
+  Manager.RegisterLoader(WaveFrontLoader, WString(".obj"));
+
+  auto Result = Manager.LoadResource(WString("../unittest/Cube.obj"));
 }
