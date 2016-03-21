@@ -1,4 +1,4 @@
-module krepel.memory.memory;
+module krepel.memory.common;
 import krepel.math;
 
 @nogc:
@@ -17,12 +17,11 @@ alias GB  = (const Bytes) => Bytes * (cast(size_t)1000).MB;
 alias TB  = (const Bytes) => Bytes * (cast(size_t)1000).GB;
 alias PB  = (const Bytes) => Bytes * (cast(size_t)1000).TB;
 
-alias MemoryRegion = ubyte[];
-alias StaticMemoryRegion(size_t N) = ubyte[N];
 
 /// Note: Apparently it's a good idea to have an alignment of 16. See
 ///       https://en.wikipedia.org/wiki/Data_structure_alignment#x86
 enum GlobalDefaultAlignment = 16;
+
 
 auto AlignedSize(const size_t Size, const size_t Alignment)
 {

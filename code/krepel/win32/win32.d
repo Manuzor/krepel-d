@@ -3,7 +3,7 @@ version(Windows):
 
 import core.sys.windows.windows;
 
-import krepel.memory;
+import krepel.memory : AlignedPointer;
 import krepel.math : IsPowerOfTwo;
 import krepel.log;
 
@@ -14,7 +14,7 @@ nothrow:
 /// Params:
 ///   RequestedBytes = The number of bytes the resulting memory block should have.
 ///   Alignment      = The boundary to align the resulting memory region to.
-MemoryRegion SystemMemoryAllocation(size_t RequestedBytes, size_t Alignment)
+void[] SystemMemoryAllocation(size_t RequestedBytes, size_t Alignment)
 {
   AlignmentCheck(Alignment);
 
@@ -29,7 +29,7 @@ MemoryRegion SystemMemoryAllocation(size_t RequestedBytes, size_t Alignment)
   auto Heap = GetProcessHeap();
   auto RequestedMemoryPointer = HeapAlloc(Heap, Flags, cast(SIZE_T)(RequestedBytes + Alignment));
   auto AlignedMemoryPointer = AlignAndSavePadding(cast(ubyte*)RequestedMemoryPointer, Alignment);
-  return cast(MemoryRegion)AlignedMemoryPointer[0 .. RequestedBytes];
+  return cast(void[])AlignedMemoryPointer[0 .. RequestedBytes];
 }
 
 /// Tries to grow or shrink the given memory block by using standard system procedures.
@@ -38,13 +38,13 @@ MemoryRegion SystemMemoryAllocation(size_t RequestedBytes, size_t Alignment)
 ///   RequestedBytes = The number of bytes the resulting memory block should have.
 ///   Alignment      = The boundary to align the resulting memory region to.
 ///                    Will only be used if the memory had to be moved.
-MemoryRegion SystemMemoryReallocation(MemoryRegion Memory, size_t RequestedBytes, size_t Alignment)
+void[] SystemMemoryReallocation(void[] Memory, size_t RequestedBytes, size_t Alignment)
 {
   AlignmentCheck(Alignment);
 
   if(!Memory) return null;
 
-  const PreviousPadding = *(Memory.ptr - 1);
+  const PreviousPadding = *cast(ubyte*)(Memory.ptr - 1);
   const OriginalPointer = Memory.ptr - PreviousPadding;
 
   DWORD Flags;
@@ -58,18 +58,18 @@ MemoryRegion SystemMemoryReallocation(MemoryRegion Memory, size_t RequestedBytes
   // changed (by the user), so we just re-align the pointer and save the
   // potentially changed padding.
   auto AlignedMemoryPointer = AlignAndSavePadding(cast(ubyte*)RequestedMemoryPointer, Alignment);
-  return cast(MemoryRegion)AlignedMemoryPointer[0 .. RequestedBytes];
+  return cast(void[])AlignedMemoryPointer[0 .. RequestedBytes];
 }
 
 /// Dynamically allocates memory from standard system procedures.
 /// Params:
 ///   Memory = The memory region to deallocate
-bool SystemMemoryDeallocation(MemoryRegion Memory)
+bool SystemMemoryDeallocation(void[] Memory)
 {
   if(Memory)
   {
     auto Heap = GetProcessHeap();
-    const Padding = *(Memory.ptr - 1);
+    const Padding = *cast(ubyte*)(Memory.ptr - 1);
     return HeapFree(Heap, 0, cast(LPVOID)(Memory.ptr - Padding)) != FALSE;
   }
 
