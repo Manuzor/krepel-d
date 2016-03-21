@@ -49,7 +49,7 @@ struct Array(T)
 
   this(this)
   {
-    auto NewMemory = Allocator.NewUnconstructedArray!ElementType(Capacity);
+    auto NewMemory = Allocator.NewUnconstructedArray!ElementType(Count);
     NewMemory[] = Data[];
     Data = NewMemory;
   }
