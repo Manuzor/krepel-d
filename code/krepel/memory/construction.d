@@ -208,3 +208,49 @@ unittest
   assert(DestructionCount == Array.length);
   foreach(ref Element; Array) assert(Element.Value == 1337);
 }
+
+version(unittest) int BazDataDestructionCount;
+version(unittest) int BarDataDestructionCount;
+version(unittest) int FooDataDestructionCount;
+unittest
+{
+  import krepel.memory.common : SetupGlobalAllocatorForTesting;
+  mixin(SetupGlobalAllocatorForTesting!256);
+
+  static struct BazData
+  {
+    int Data = 179;
+
+    ~this() { BazDataDestructionCount++; }
+  }
+
+  static struct BarData
+  {
+    int Data = 1337;
+    BazData Baz;
+
+    ~this() { BarDataDestructionCount++; }
+  }
+
+  import krepel.container.array;
+
+  static struct FooData
+  {
+    int Data = 42;
+    BarData Bar;
+    Array!int Integers;
+
+    ~this() { FooDataDestructionCount++; }
+  }
+
+  void[FooData.sizeof] RawFoo = void;
+  auto FooPointer = Construct!FooData(RawFoo);
+  assert(FooPointer);
+  assert(FooPointer.Data == 42);
+  assert(FooPointer.Bar.Data == 1337);
+  assert(FooPointer.Bar.Baz.Data == 179);
+  Destruct(FooPointer);
+  assert(FooDataDestructionCount == 1);
+  assert(BarDataDestructionCount == 1);
+  assert(BazDataDestructionCount == 1);
+}
