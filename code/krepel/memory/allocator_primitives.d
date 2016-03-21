@@ -1,4 +1,8 @@
-module krepel.memory.allocation;
+/// Primitives for low-level memory management.
+///
+/// Naming convention for these primitives is to let their name contain
+/// "Memory", such as "HeapMemory".
+module krepel.memory.allocator_primitives;
 
 import krepel;
 import krepel.memory;
@@ -6,183 +10,6 @@ import krepel.algorithm;
 import krepel.math : IsPowerOfTwo, IsEven, IsOdd;
 import Meta = krepel.meta;
 
-IAllocator GlobalAllocator;
-
-/// Common functionality for all memory types.
-mixin template CommonMemoryStuff()
-{
-  alias ThisIsAMemoryType = typeof(this);
-
-  ubyte[Meta.ClassInstanceSizeOf!MinimalMemoryClass] WrapperMemory = void;
-}
-
-/// Adds the Contains function to a memory type so it can be asked whether a
-/// given memory region belongs to them.
-mixin template MemoryContainsCheckMixin(alias Member)
-{
-  bool Contains(const MemoryRegion SomeRegion) const
-  {
-    bool IsWithinLeftBound  = SomeRegion.ptr >= Member.ptr;
-    bool IsWithinRightBound = SomeRegion.ptr + SomeRegion.length <= Member.ptr + Member.length;
-    return IsWithinLeftBound && IsWithinRightBound;
-  }
-}
-
-/// A template to determine whether the given type is a memory type.
-template IsSomeMemory(M)
-{
-  static if(is(M.ThisIsAMemoryType)) enum bool IsSomeMemory = true;
-  else                               enum bool IsSomeMemory = false;
-}
-
-
-interface IAllocator
-{
-  @nogc nothrow
-  {
-    bool Contains(const MemoryRegion SomeRegion);
-
-    MemoryRegion Allocate(size_t RequestedBytes, size_t Alignment = 0);
-
-    bool Deallocate(MemoryRegion MemoryToDeallocate);
-  }
-
-  // TODO(Manu): Add @nogc and nothrow for the rest of the interface once Construct and Destruct are compatible.
-
-  /// Creates a new instance of Type without constructing it.
-  final Type* NewUnconstructed(Type)()
-    if(!is(Type == class))
-  {
-    auto Raw = Allocate(Type.sizeof, Type.alignof);
-    if(Raw is null) return null;
-    assert(Raw.length >= Type.sizeof);
-    auto Instance = cast(Type*)Raw.ptr;
-    return Instance;
-  }
-
-  /// Ditto
-  final Type NewUnconstructed(Type)()
-    if(is(Type == class))
-  {
-    enum Size = Meta.ClassInstanceSizeOf!Type;
-    enum Alignment = Meta.ClassInstanceAlignmentOf!Type;
-    auto Raw = Allocate(Size, Alignment);
-    if(Raw is null) return null;
-    assert(Raw.length >= Type.sizeof);
-    auto Instance = cast(Type)Raw.ptr;
-    return Instance;
-  }
-
-  /// Free the memory occupied by Instance without destructing it.
-  /// Note: If the memory type used does not support deallocation
-  ///       (e.g. StackMemory), this function does nothing.
-  final void DeleteUndestructed(Type)(Type* Instance)
-    if(!is(Type == class))
-  {
-    if(Instance)
-    {
-      Deallocate((cast(ubyte*)Instance)[0 .. Type.sizeof]);
-    }
-  }
-
-  /// Ditto
-  final void DeleteUndestructed(Type)(Type Instance)
-    if(is(Type == class))
-  {
-    if(Instance)
-    {
-      Deallocate((cast(ubyte*)Instance)[0 .. Type.sizeof]);
-    }
-  }
-
-  /// Allocate a new instance of type Type and construct it using the given Args.
-  final Type* New(Type, ArgTypes...)(auto ref ArgTypes Args)
-    if(!is(Type == class))
-  {
-    return .Construct(NewUnconstructed!Type(), Args);
-  }
-
-  final Type New(Type, ArgTypes...)(auto ref ArgTypes Args)
-    if(is(Type == class))
-  {
-    static assert(!__traits(isAbstractClass, Type), "Cannot instantiate abstract class.");
-    enum Size = Meta.ClassInstanceSizeOf!Type;
-    enum Alignment = Meta.ClassInstanceAlignmentOf!Type;
-    auto Raw = Allocate(Size, Alignment);
-    if(Raw is null) return null;
-    assert(Raw.length >= Type.sizeof);
-    auto Instance = cast(Type)Raw.ptr;
-
-    .Construct(Instance, Args);
-    return Instance;
-  }
-
-  /// Destruct the given Instance and free the memory occupied by it.
-  /// Note: If the memory type used does not support deallocation
-  ///       (e.g. StackMemory), this function only destructs Instance,
-  ///       but does not free memory.
-  final void Delete(Type)(Type* Instance)
-    if(!is(Type == class))
-  {
-    if(Instance)
-    {
-      .Destruct(Instance);
-      DeleteUndestructed(Instance);
-    }
-  }
-
-  /// Ditto
-  final void Delete(Type)(Type Instance)
-    if(is(Type == class))
-  {
-    if(Instance)
-    {
-      .Destruct(Instance);
-      DeleteUndestructed(Instance);
-    }
-  }
-
-  /// Creates a new array of Type's without constructing them.
-  final Type[] NewUnconstructedArray(Type)(size_t Count)
-  {
-    // TODO(Manu): Implement.
-    auto RawMemory = Allocate(Count * Type.sizeof, Type.alignof);
-
-    // Out of memory?
-    if(RawMemory is null) return null;
-
-    auto Array = cast(Type[])RawMemory[0 .. Count * Type.sizeof];
-    return Array;
-  }
-
-  /// Free the memory occupied by the given Array without destructing its
-  /// elements.
-  /// Note: If the memory type used does not support deallocation
-  ///       (e.g. StackMemory), this function does nothing.
-  final void DeleteUndestructed(Type)(Type[] Array)
-  {
-    Deallocate(cast(ubyte[])Array);
-  }
-
-  /// Creates a new array of Type's and construct each element of it with the
-  /// given Args.
-  final Type[] NewArray(Type, ArgTypes...)(size_t Count, auto ref ArgTypes Args)
-  {
-    auto Array = NewUnconstructedArray!Type(Count);
-    .Construct(Array, Args);
-    return Array;
-  }
-
-  /// Destructs all elements of Array and frees the memory occupied by it.
-  /// Note: If the memory type used does not support deallocation
-  ///       (e.g. StackMemory), this function only destructs Instance,
-  ///       but does not free memory.
-  final void Delete(Type)(Type[] Array)
-  {
-    .Destruct(Array);
-    DeleteUndestructed(Array);
-  }
-}
 
 /// Forwards all calls to the appropriate krepel.system.* functions.
 struct SystemMemory
@@ -190,7 +17,7 @@ struct SystemMemory
   @nogc:
   nothrow:
 
-  mixin CommonMemoryStuff;
+  mixin CommonMemoryImplementation;
 
   private import krepel.system;
 
@@ -202,7 +29,7 @@ struct SystemMemory
   }
 
   /// See_Also: krepel.system.SystemMemoryReallocation
-  auto Reallocate(MemoryRegion Memory, size_t RequestedBytes, size_t Alignment = 0)
+  auto Reallocate(void[] Memory, size_t RequestedBytes, size_t Alignment = 0)
   {
     return SystemMemoryReallocation(Memory,
                                     RequestedBytes,
@@ -210,9 +37,15 @@ struct SystemMemory
   }
 
   /// See_Also: krepel.system.Deallocate
-  bool Deallocate(MemoryRegion MemoryToDeallocate)
+  bool Deallocate(void[] MemoryToDeallocate)
   {
     return SystemMemoryDeallocation(MemoryToDeallocate);
+  }
+
+  bool Contains(void[] SomeRegion)
+  {
+    /// TODO(Manu): Support this somehow?
+    return false;
   }
 }
 
@@ -251,7 +84,7 @@ struct HeapMemory
   @nogc:
   nothrow:
 
-  MemoryRegion Memory;
+  void[] Memory;
   size_t DefaultAlignment = GlobalDefaultAlignment;
 
   debug(HeapMemory) @property bool IsInitialized() const { return cast(bool)FirstBlock; }
@@ -263,11 +96,11 @@ struct HeapMemory
   /// requests 1 byte of memory with an alignment of 1.
   enum MinimumBlockSize = BlockOverhead + 1;
 
-  mixin CommonMemoryStuff;
-  mixin MemoryContainsCheckMixin!(Memory);
+  mixin CommonMemoryImplementation;
+  mixin Contains_DefaultImplementation!Memory;
 
 
-  this(MemoryRegion AvailableMemory)
+  this(void[] AvailableMemory)
   {
     Initialize(AvailableMemory);
   }
@@ -277,7 +110,7 @@ struct HeapMemory
     Deinitialize();
   }
 
-  void Initialize(MemoryRegion AvailableMemory)
+  void Initialize(void[] AvailableMemory)
   {
     debug(HeapMemory)
     {
@@ -357,11 +190,11 @@ struct HeapMemory
     return UserPointer[0 .. RequestedBytes];
   }
 
-  bool Deallocate(MemoryRegion MemoryToDeallocate)
+  bool Deallocate(void[] MemoryToDeallocate)
   {
     if(!MemoryToDeallocate) return false;
 
-    ubyte PaddingSize = *(MemoryToDeallocate.ptr - 1);
+    ubyte PaddingSize = *cast(ubyte*)(MemoryToDeallocate.ptr - 1);
     auto Block = cast(BlockData*)(MemoryToDeallocate.ptr - PaddingSize - BlockData.sizeof);
 
     if(!IsValidBlockPointer(Block)) return false;
@@ -465,19 +298,19 @@ struct StackMemory
   @nogc:
   nothrow:
 
-  MemoryRegion Memory;
+  void[] Memory;
   size_t AllocationMark;
 
   size_t DefaultAlignment = GlobalDefaultAlignment;
 
   bool IsInitialized;
 
-  this(MemoryRegion AvailableMemory)
+  this(void[] AvailableMemory)
   {
     Initialize(AvailableMemory);
   }
 
-  void Initialize(MemoryRegion AvailableMemory)
+  void Initialize(void[] AvailableMemory)
   {
     debug assert(!IsInitialized);
 
@@ -485,8 +318,8 @@ struct StackMemory
     IsInitialized = true;
   }
 
-  mixin StackMemoryTemplate;
-  mixin MemoryContainsCheckMixin!(Memory);
+  mixin CommonStackMemoryImplementation;
+  mixin Contains_DefaultImplementation!Memory;
 }
 
 struct StaticStackMemory(size_t N)
@@ -496,23 +329,23 @@ struct StaticStackMemory(size_t N)
 
   static assert(N > 0, "Need at least one byte of static memory.");
 
-  StaticMemoryRegion!N Memory;
+  void[N] Memory;
   size_t AllocationMark;
 
   size_t DefaultAlignment = GlobalDefaultAlignment;
 
   enum bool IsInitialized = true;
 
-  mixin StackMemoryTemplate;
-  mixin MemoryContainsCheckMixin!(Memory);
+  mixin CommonStackMemoryImplementation;
+  mixin Contains_DefaultImplementation!Memory;
 }
 
 /// Common functionality for stack memory.
-mixin template StackMemoryTemplate()
+mixin template CommonStackMemoryImplementation()
 {
-  mixin CommonMemoryStuff;
+  mixin CommonMemoryImplementation;
 
-  MemoryRegion Allocate(size_t RequestedBytes, size_t Alignment = 0)
+  void[] Allocate(size_t RequestedBytes, size_t Alignment = 0)
   {
     debug assert(IsInitialized, "This stack memory is not initialized.");
 
@@ -533,95 +366,42 @@ mixin template StackMemoryTemplate()
     return RequestedMemory;
   }
 
-  bool Deallocate(MemoryRegion Memory)
+  bool Deallocate(void[] Memory)
   {
     return false;
   }
 }
 
-/// Wraps two other memory types.
+
+/// Common functionality for all memory types.
 ///
-/// When allocating from the first memory fails, it tries the second one.
-struct HybridMemory(P, S)
+/// You should probably place this mixin last in your struct because it adds
+/// data members to it and will mess up implicit member initialization.
+mixin template CommonMemoryImplementation()
 {
-  alias PrimaryMemoryType = P;
-  alias SecondaryMemoryType = S;
+  alias ThisIsAMemoryType = typeof(this);
 
-  static assert(IsSomeMemory!PrimaryMemoryType && IsSomeMemory!SecondaryMemoryType);
+  private import krepel.memory.allocator_interface : MinimalAllocatorWrapper;
+  package ubyte[Meta.ClassInstanceSizeOf!MinimalAllocatorWrapper] WrapperMemory = void;
+}
 
-  PrimaryMemoryType    PrimaryMemory;
-  SecondaryMemoryType  SecondaryMemory;
-
-  mixin CommonMemoryStuff;
-
-
-  auto Allocate(size_t RequestedBytes, size_t Alignment = 0)
+/// Adds the Contains() function to a memory type so it can be asked whether a
+/// given memory region belongs to them.
+mixin template Contains_DefaultImplementation(alias Member)
+{
+  bool Contains(const void[] SomeRegion) const
   {
-    auto RequestedMemory = PrimaryMemory.Allocate(RequestedBytes, Alignment);
-    if(RequestedMemory.length == RequestedBytes) return RequestedMemory;
-    return SecondaryMemory.Allocate(RequestedBytes, Alignment);
-  }
-
-  bool Deallocate(MemoryRegion MemoryToDeallocate)
-  {
-    if(PrimaryMemory.Contains(MemoryToDeallocate))
-    {
-      return PrimaryMemory.Deallocate(MemoryToDeallocate);
-    }
-    return SecondaryMemory.Deallocate(MemoryToDeallocate);
-  }
-
-  bool Contains(SomeType)(auto ref SomeType Something)
-  {
-    return PrimaryMemory.Contains(Something) || SecondaryMemory.Contains(Something);
+    bool IsWithinLeftBound  = SomeRegion.ptr >= Member.ptr;
+    bool IsWithinRightBound = SomeRegion.ptr + SomeRegion.length <= Member.ptr + Member.length;
+    return IsWithinLeftBound && IsWithinRightBound;
   }
 }
 
-/// Used to get the size of a minimal IAllocator class instance.
-private class MinimalMemoryClass : IAllocator
+/// A template to determine whether the given type is a memory type.
+template IsSomeMemory(M)
 {
-@nogc:
-nothrow:
-
-/// The actual memory to wrap.
-  void* WrappedPtr;
-  bool Contains(const MemoryRegion SomeRegion) { return false; }
-  MemoryRegion Allocate(size_t RequestedBytes, size_t Alignment = 0) { return null; }
-  bool Deallocate(MemoryRegion MemoryToDeallocate) { return false; }
-}
-
-template Wrap(SomeMemoryType)
-  if(IsSomeMemory!SomeMemoryType)
-{
-  class WrapperClass : IAllocator
-  {
-  @nogc:
-  nothrow:
-
-    SomeMemoryType* WrappedPtr;
-
-    final override bool Contains(const MemoryRegion SomeRegion)
-    {
-      return WrappedPtr.Contains(SomeRegion);
-    }
-
-    final override MemoryRegion Allocate(size_t RequestedBytes, size_t Alignment = 0)
-    {
-      return WrappedPtr.Allocate(RequestedBytes, Alignment);
-    }
-
-    final override bool Deallocate(MemoryRegion MemoryToDeallocate)
-    {
-      return WrappedPtr.Deallocate(MemoryToDeallocate);
-    }
-  }
-
-  WrapperClass Wrap(ref SomeMemoryType SomeMemory)
-  {
-    auto Wrapper = Construct!WrapperClass(SomeMemory.WrapperMemory);
-    Wrapper.WrappedPtr = &SomeMemory;
-    return Wrapper;
-  }
+  static if(is(M.ThisIsAMemoryType)) enum bool IsSomeMemory = true;
+  else                               enum bool IsSomeMemory = false;
 }
 
 //
@@ -633,11 +413,11 @@ unittest
 {
   SystemMemory SystemHeap;
 
-  auto Block1 = SystemHeap.Allocate(32);
+  auto Block1 = cast(ubyte[])SystemHeap.Allocate(32);
   assert(Block1);
   Block1[$-1] = cast(ubyte)123;
 
-  auto Block2 = SystemHeap.Allocate(8);
+  auto Block2 = cast(ubyte[])SystemHeap.Allocate(8);
   assert(Block2);
   Block2[] = 0xFU;
   foreach(ref Byte; Block2)
@@ -654,7 +434,7 @@ unittest
   assert(SystemHeap.Deallocate(Block2));
   //debug {} else assert(!SystemHeap.Deallocate(Block2));
 
-  auto Block3 = SystemHeap.Allocate(9, 16);
+  auto Block3 = cast(ubyte[])SystemHeap.Allocate(9, 16);
   assert(Block3);
   assert(Block3.ptr == AlignedPointer(Block3.ptr, 16));
 }
@@ -701,7 +481,7 @@ unittest
   assert(Stack.AllocationMark == 32);
   for(size_t Index = 0; Index < Block1.length; Index++)
   {
-    assert(Block1[Index] == Buffer[Index]);
+    assert((cast(ubyte[])Block1)[Index] == Buffer[Index]);
   }
 
   auto Block2 = Stack.Allocate(64);
@@ -710,7 +490,7 @@ unittest
   assert(Stack.AllocationMark == 32 + 64);
   for(size_t Index = 0; Index < Block2.length; Index++)
   {
-    assert(Block2[Index] == Buffer[Block1.length + Index]);
+    assert((cast(ubyte[])Block2)[Index] == Buffer[Block1.length + Index]);
   }
 
   // There's still room for a bit more, but 512 will not fit.
@@ -735,122 +515,4 @@ unittest
   auto Block3 = Stack.Allocate(128);
   assert(Block3 is null);
   assert(Stack.AllocationMark == 32 + 64);
-}
-
-// HybridMemory tests
-unittest
-{
-  ubyte[256] HeapBuffer;
-  auto Stack  = StaticStackMemory!32();
-  auto Heap   = HeapMemory(HeapBuffer[]);
-  auto Hybrid = HybridMemory!(typeof(Stack)*, typeof(Heap)*)(&Stack, &Heap);
-
-  auto Block1 = Hybrid.Allocate(16, 1);
-  assert(Block1);
-  assert(Block1.length == 16);
-  assert(Stack.Contains(Block1));
-  auto Block2 = Hybrid.Allocate(16, 1);
-  assert(Block2.length == 16);
-  assert(Stack.Contains(Block2));
-  auto Block3 = Hybrid.Allocate(16);
-  assert(Block3.length == 16);
-  assert(!Stack.Contains(Block3));
-  assert(Heap.Contains(Block3));
-  auto Block4 = Hybrid.Allocate(16);
-  assert(Block4);
-
-  // Note(Manu): Cannot deallocate Block1 and Block2 since it's a stack
-  // allocator.
-
-  assert(Hybrid.Deallocate(Block3));
-  assert(Hybrid.Deallocate(Block4));
-
-  // TODO(Manu): Test reliably for the out-of-memory case somehow.
-  //assert(Heap.Allocate(1) is null);
-}
-
-// IAllocator tests
-unittest
-{
-  static struct TestData
-  {
-    bool Boolean = true;
-    int Integer = 42;
-
-    ~this()
-    {
-      Integer = 0xDeadBeef;
-    }
-  }
-
-  StaticStackMemory!128 Memory;
-  auto StackAllocator = Wrap(Memory);
-
-  auto Data = StackAllocator.New!TestData(false, 1337);
-  static assert(Meta.IsPointer!(typeof(Data)), "New!() should always return a pointer!");
-  assert(AlignedPointer(Data, TestData.alignof) == Data);
-  assert(Data.Boolean == false);
-  assert(Data.Integer == 1337);
-
-  StackAllocator.Delete(Data);
-  assert(Data.Boolean == false);
-  assert(Data.Integer == 0xDeadBeef);
-
-  Data = StackAllocator.NewUnconstructed!TestData();
-  // StackAllocator's memory is initialized to zero, so all the unconstructed
-  // data we get from it must also be 0.
-  assert(Data.Boolean == false);
-  assert(Data.Integer == 0);
-  Construct(Data);
-  assert(Data.Boolean == true);
-  assert(Data.Integer == 42);
-}
-
-// IAllocator allocating class instances.
-unittest
-{
-  class SuperClass
-  {
-    int Data() { return 42; }
-  }
-
-  class SubClass : SuperClass
-  {
-    override int Data() { return 1337; }
-  }
-
-  StaticStackMemory!128 Memory;
-  auto StackAllocator = Wrap(Memory);
-  SuperClass Instance = StackAllocator.New!SubClass();
-  assert(Instance);
-  assert(Instance.Data == 1337);
-}
-
-// IAllocator
-unittest
-{
-  StaticStackMemory!128 SomeStack;
-  auto SomeAllocator = Wrap(SomeStack);
-  assert(cast(void*)SomeAllocator == cast(void*)SomeStack.WrapperMemory.ptr);
-
-  auto Mem = SomeAllocator.Allocate(32);
-  Mem[] = 42;
-
-  foreach(Byte; SomeStack.Memory[0 .. 32])
-  {
-    assert(Byte == 42);
-  }
-
-  foreach(Byte; SomeStack.Memory[32 .. $])
-  {
-    assert(Byte != 42);
-  }
-
-  static struct Foo
-  {
-    int Bar = 42;
-  }
-
-  assert(SomeAllocator.New!Foo().Bar == 42);
-  assert(*cast(int*)(SomeStack.Memory[32 .. 32 + int.sizeof].ptr) == 42);
 }
