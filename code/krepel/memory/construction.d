@@ -69,7 +69,7 @@ void Destruct(Type)(Type* Instance)
         static if(__traits(compiles, typeof(mixin(`Instance.` ~ MemberName))))
         {
           alias MemberType = typeof(mixin(`Instance.` ~ MemberName));
-          static if(Meta.HasDestructor!MemberType)
+          static if(Meta.HasDestructor!MemberType && !Meta.IsPointer!MemberType)
           {
             static if(is(MemberType == class))
             {
