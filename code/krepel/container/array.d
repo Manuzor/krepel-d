@@ -210,7 +210,14 @@ struct Array(T)
   void PopFront(size_t Amount = 1)
   {
     DestructArray(Data[0 .. Amount]);
-    Data = Data[Amount .. $];
+    if(Count - Amount == 0)
+    {
+      Data = AvailableMemory[0..0];
+    }
+    else
+    {
+      Data = Data[Amount .. $];
+    }
   }
 
   @property ref auto Front() inout { return Data[0]; }
