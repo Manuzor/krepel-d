@@ -28,7 +28,6 @@ void CloseFile(IAllocator Allocator, IFile File)
 /// Converts a long to a LARGE_INTEGER (useful for WINAPI calls, which expect 64 bit values as LARGE_INTEGER)
 LARGE_INTEGER LargeInteger(long Value)
 {
-  LARGE_INTEGER LargeValue;
-  LargeValue.QuadPart = Value;
+  LARGE_INTEGER LargeValue = {QuadPart: Value};
   return LargeValue;
 }
