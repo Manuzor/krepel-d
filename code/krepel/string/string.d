@@ -102,15 +102,16 @@ struct StringBase(CharType)
 
   this(IAllocator Allocator)
   {
-    Data = Allocator.New!(Array!CharType);
+    Data = Allocator.New!(Array!CharType)(Allocator);
     RefCount = Allocator.New!(uint);
     *RefCount = 1;
-    Data.Allocator = Allocator;
+    Data.PushBack('\0');
   }
 
   this(const CharType[] String, IAllocator Allocator = GlobalAllocator)
   {
     this(Allocator);
+    Data.PopFront();
     Data.PushBack(String);
     Data.PushBack('\0');
   }
@@ -275,17 +276,6 @@ struct StringBase(CharType)
 
   void opAssign(const CharType[] Chars)
   {
-    if (*RefCount == 1)
-    {
-      Allocator.Delete(RefCount);
-      RefCount = null;
-      Allocator.Delete!(Array!CharType)(Data);
-      Data = null;
-    }
-    else
-    {
-      (*RefCount)--;
-    }
     this = StringBase!CharType(Chars);
   }
 
