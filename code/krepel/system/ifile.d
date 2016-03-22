@@ -20,33 +20,25 @@ interface IFile
   /// Params:
   /// Region = Where the data will be written into which was red from the file
   /// Returns: Returns the amount of bytes written into Region. The value is >= 0 and <= Region.length.
-  long Read(void[] Region)
+  ulong Read(void[] Region)
   in
   {
     assert(Region.length > 0);
-  }
-  out(result)
-  {
-    assert(result >= 0);
   }
 
   /// Reads data from a file until it finds a \r or \n or the eof
   /// Params:
   /// Array = Where the data will be written into which was red from the file
   /// Returns: Returns the amount of bytes written into Region. The value is >= 0 and <= Region.length.
-  long ReadLine(CharType)(ref Array!CharType Array)
+  ulong ReadLine(CharType)(ref Array!CharType Array)
     if(IsSomeChar!CharType)
-  out(result)
-  {
-    assert(result >= 0);
-  }
   body
   {
     CharType[10] Buffer;
     while(true)
     {
       auto CurPosition = MoveCursor(0);
-      auto ReadCount = Read(cast(ubyte[])Buffer);
+      auto ReadCount = Read(cast(void[])Buffer);
       foreach(Index; 0 .. ReadCount)
       {
         //Reached newline
@@ -76,7 +68,8 @@ interface IFile
   /// while negative values will move the cursor towards the beginning of the file.
   ///
   /// Move will stop at either end of the file.
-  long MoveCursor(long RelativeMove);
+  /// Returns: The absolute position after the move.
+  ulong MoveCursor(long RelativeMove);
 
   /// Sets the cursor position at an absolute position, either from start or backwards from end
   /// Params:
@@ -85,20 +78,13 @@ interface IFile
   ///             If false, the Position will be subtracted from the end of the file,
   ///             e.g. a Value of 1 will Point at the last Character of the file
   /// Position = The Position to set according to the FromStart value.
-  long SetCursorPosition(bool FromStart, long Position)
-  in
-  {
-    assert(Position >= 0);
-  }
+  /// Returns: The absolute position after the move.
+  ulong SetCursorPosition(bool FromStart, ulong Position);
 
-  long Write(void[] Region)
+  ulong Write(void[] Region)
   in
   {
     assert(Region.length > 0);
-  }
-  out(result)
-  {
-    assert(result >= 0);
   }
 
 }

@@ -47,7 +47,7 @@ class Win32File : IFile
     FileHandle = INVALID_HANDLE_VALUE;
   }
 
-  override long Read(void[] Region)
+  override ulong Read(void[] Region)
   {
     assert(FileHandle != INVALID_HANDLE_VALUE);
 
@@ -83,7 +83,7 @@ class Win32File : IFile
     return TotalBytesRead;
   }
 
-  override long Write(void[] Region)
+  override ulong Write(void[] Region)
   {
     assert(FileHandle != INVALID_HANDLE_VALUE);
 
@@ -114,7 +114,7 @@ class Win32File : IFile
     return TotalBytesWritten;
   }
 
-  override long MoveCursor(long RelativeMove)
+  override ulong MoveCursor(long RelativeMove)
   {
     assert(FileHandle != INVALID_HANDLE_VALUE);
 
@@ -131,7 +131,7 @@ class Win32File : IFile
     return NewPosition.QuadPart;
   }
 
-  override long SetCursorPosition(bool FromStart, long Position)
+  override ulong SetCursorPosition(bool FromStart, ulong Position)
   {
     assert(FileHandle != INVALID_HANDLE_VALUE);
 
