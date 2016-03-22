@@ -54,13 +54,6 @@ struct WaveFrontVertexDefinition
   long VertexIndex = -1;
   long NormalIndex = -1;
   long TextureIndex = -1;
-
-  bool opEqual(WaveFrontVertexDefinition VertexDefinition)
-  {
-    return VertexIndex == VertexDefinition.VertexIndex &&
-      NormalIndex == VertexDefinition.NormalIndex &&
-      TextureIndex == VertexDefinition.TextureIndex;
-  }
 }
 
 struct WaveFrontFaceDefinition
@@ -210,6 +203,7 @@ class WavefrontResourceLoader : IResourceLoader
 
   override IResource Load(IAllocator Allocator, IFile File)
   {
+    TempMesh.Clear();
     MeshResource Mesh = Allocator.New!(MeshResource,IAllocator)(Allocator);
     TempMesh = WaveFrontMesh(Allocator);
 
@@ -295,7 +289,8 @@ class WavefrontResourceLoader : IResourceLoader
       }
       NewSubMesh.Name = MeshName;
       Mesh.Meshes.PushBack(NewSubMesh);
-      TempMesh.Clear();
+
+      TempMesh.Faces.Clear();
     }
   }
 
@@ -309,7 +304,7 @@ unittest
   import krepel.memory;
   import krepel.string;
 
-  StaticStackMemory!50000 StackMemory;
+  StaticStackMemory!100000 StackMemory;
   GlobalAllocator = StackMemory.Wrap;
 
   Log.Sinks.PushBack(ToDelegate(&StdoutLogSink));
@@ -318,6 +313,30 @@ unittest
   auto WaveFrontLoader = GlobalAllocator.New!WavefrontResourceLoader();
   Manager.RegisterLoader(WaveFrontLoader, WString(".obj"));
 
-  auto Result = Manager.LoadResource(WString("../unittest/Cube.obj"));
-  Result = Manager.LoadResource(WString("../unittest/CubeOnlyIndex.obj"));
+  MeshResource Result = cast(MeshResource)(Manager.LoadResource(WString("../unittest/Cube.obj")));
+  assert(Result !is null);
+  assert(Result.Meshes.Count == 1);
+  auto SubMesh = Result.Meshes[0];
+  assert(SubMesh);
+  assert(SubMesh.Name == "Cube");
+  assert(SubMesh.Vertices.Count == 24);
+  assert(SubMesh.Indices.Count == 36);
+  Result = cast(MeshResource)Manager.LoadResource(WString("../unittest/CubeOnlyIndex.obj"));
+  assert(Result);
+  assert(Result.Meshes.Count == 1);
+  SubMesh = Result.Meshes[0];
+  assert(SubMesh);
+  assert(SubMesh.Name == "Cube");
+  assert(SubMesh.Vertices.Count == 8);
+  assert(SubMesh.Indices.Count == 36);
+
+  Result = cast(MeshResource)Manager.LoadResource(WString("../unittest/TwoObjects.obj"));
+  assert(Result);
+  assert(Result.Meshes.Count == 2);
+  SubMesh = Result.Meshes[0];
+  assert(SubMesh);
+  assert(SubMesh.Name == "Icosphere");
+  SubMesh = Result.Meshes[1];
+  assert(SubMesh);
+  assert(SubMesh.Name == "Cube");
 }
