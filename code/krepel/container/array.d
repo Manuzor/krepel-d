@@ -51,6 +51,7 @@ struct Array(T)
     auto NewMemory = Allocator.NewUnconstructedArray!ElementType(Count);
     NewMemory[] = Data[];
     Data = NewMemory;
+    AvailableMemory = Data;
   }
 
   ~this()
