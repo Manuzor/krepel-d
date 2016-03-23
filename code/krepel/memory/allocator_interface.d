@@ -10,9 +10,6 @@ import krepel.memory.allocator_primitives : IsSomeMemory;
 
 // TODO(Manu): Add @nogc and friends.
 
-/// Global allocator instance.
-IAllocator GlobalAllocator;
-
 /// General allocator interface.
 interface IAllocator
 {
