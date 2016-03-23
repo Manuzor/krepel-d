@@ -14,6 +14,12 @@ struct LogState
   Array!char MessageBuffer;
   Array!LogSink Sinks;
 
+  @property void Allocator(IAllocator SomeAllocator)
+  {
+    MessageBuffer.Allocator = SomeAllocator;
+    Sinks.Allocator = SomeAllocator;
+  }
+
   void ClearMessageBuffer()
   {
     MessageBuffer.Clear();
