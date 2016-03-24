@@ -7,12 +7,17 @@ import Meta = krepel.meta;
 import krepel.container;
 
 /// The global default log.
-LogState Log;
+LogData* Log;
 
-struct LogState
+struct LogData
 {
   Array!char MessageBuffer;
   Array!LogSink Sinks;
+
+  this(IAllocator Allocator)
+  {
+    this.Allocator = Allocator;
+  }
 
   @property void Allocator(IAllocator SomeAllocator)
   {
@@ -42,10 +47,12 @@ alias LogSink = void delegate(LogLevel, char[]);
 
 template LogMessageDispatch(LogLevel Level)
 {
-  void LogMessageDispatch(LogType, Char, ArgTypes...)(ref LogType Log, in Char[] Message, auto ref ArgTypes Args)
+  void LogMessageDispatch(Char, ArgTypes...)(LogData* Log, in Char[] Message, auto ref ArgTypes Args)
     if(Meta.IsSomeChar!Char)
   {
-    FormattedWrite(&Log, Message, Args);
+    assert(Log);
+
+    FormattedWrite(Log, Message, Args);
 
     scope(exit) Log.ClearMessageBuffer();
 
@@ -63,39 +70,38 @@ alias Failure = LogMessageDispatch!(LogLevel.Failure);
 
 void StdoutLogSink(LogLevel Level, char[] Message)
 {
+  static import std.stdio;
+
   final switch(Level)
   {
-    case LogLevel.Info:    io.write("Info: ");    break;
-    case LogLevel.Warning: io.write("Warning: "); break;
-    case LogLevel.Failure: io.write("Failure: "); break;
+    case LogLevel.Info:    std.stdio.write("Info: "); break;
+    case LogLevel.Warning: std.stdio.write("Warn: "); break;
+    case LogLevel.Failure: std.stdio.write("Fail: "); break;
   }
 
-  io.writeln(Message);
+  std.stdio.writeln(Message);
 }
 
 unittest
 {
-  char[1024] LogBuffer;
-  struct MyLog
+  auto TestAllocator = CreateTestAllocator();
+  auto TestLog = LogData(TestAllocator);
+
+  char[256] Buffer;
+  void TestLogSink(LogLevel Level, char[] Message)
   {
-    char[] EntireBuffer;
-    char[] MessageBuffer;
-    LogSink[] Sinks;
-
-    void ClearMessageBuffer()
+    final switch(Level)
     {
-      MessageBuffer = EntireBuffer;
+      case LogLevel.Info:    Buffer[0] = 'I'; break;
+      case LogLevel.Warning: Buffer[0] = 'W'; break;
+      case LogLevel.Failure: Buffer[0] = 'F'; break;
     }
-
-    void put(in char[] Chars)
-    {
-      MessageBuffer[0 .. Chars.length] = Chars[];
-      MessageBuffer = MessageBuffer[Chars.length .. $];
-    }
+    Buffer[1 .. Message.length + 1][] = Message;
   }
+  TestLog.Sinks ~= &TestLogSink;
 
-  auto Log = MyLog(LogBuffer, LogBuffer);
-  auto Message = "Hello";
-  Log.Failure(Message);
-  assert(LogBuffer[0 .. Message.length] == Message);
+  auto Message = "Hello World.";
+  (&TestLog).Failure(Message);
+  assert(Buffer.front == 'F');
+  assert(Buffer[1 .. Message.length + 1] == Message);
 }

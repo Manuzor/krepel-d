@@ -56,8 +56,14 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
   }
   assert(RawMemory);
   auto Heap = HeapMemory((cast(ubyte*)RawMemory)[0 .. MemorySize]);
-  GlobalAllocator = Heap.Wrap();
-  scope(exit) GlobalAllocator = null;
+  IAllocator MainAllocator = Heap.Wrap();
+
+  Log = MainAllocator.New!LogData(MainAllocator);
+  scope(success)
+  {
+    MainAllocator.Delete(Log);
+    Log = null;
+  }
 
   // Note(Manu): There's no point to add the stdout log sink since stdout
   // isn't attached to anything in a windows application. We add the VS log
