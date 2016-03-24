@@ -70,6 +70,7 @@ struct WavefrontLexer
     this.Allocator = Allocator;
     CurrentLineType = WavefrontLineType.Unknown;
     this.File = File;
+    Buffer.Allocator = Allocator;
   }
 
   WavefrontLineType IdentifyValidLine(typeof(Buffer) Buffer)
@@ -158,7 +159,7 @@ struct WavefrontLexer
   bool ParseString(ref UString String)
   {
     assert(CurrentLineType == WavefrontLineType.Object);
-    String = TrimStart(Buffer[2..$]);
+    String = UString(TrimStart(Buffer[2..$]), Allocator);
     return true;
   }
 
@@ -304,16 +305,15 @@ unittest
   import krepel.memory;
   import krepel.string;
 
-  StaticStackMemory!100000 StackMemory;
-  GlobalAllocator = StackMemory.Wrap;
-
+  auto TestAllocator = CreateTestAllocator();
+  Log.Sinks.Allocator = TestAllocator;
   Log.Sinks.PushBack(ToDelegate(&StdoutLogSink));
 
-  auto Manager = GlobalAllocator.New!ResourceManager(GlobalAllocator);
-  auto WaveFrontLoader = GlobalAllocator.New!WavefrontResourceLoader();
-  Manager.RegisterLoader(WaveFrontLoader, WString(".obj"));
+  auto Manager = TestAllocator.New!ResourceManager(TestAllocator);
+  auto WaveFrontLoader = TestAllocator.New!WavefrontResourceLoader();
+  Manager.RegisterLoader(WaveFrontLoader, WString(".obj", TestAllocator));
 
-  MeshResource Result = cast(MeshResource)(Manager.LoadResource(WString("../unittest/Cube.obj")));
+  MeshResource Result = cast(MeshResource)(Manager.LoadResource(WString("../unittest/Cube.obj", TestAllocator)));
   assert(Result !is null);
   assert(Result.Meshes.Count == 1);
   auto SubMesh = Result.Meshes[0];
@@ -321,7 +321,7 @@ unittest
   assert(SubMesh.Name == "Cube");
   assert(SubMesh.Vertices.Count == 24);
   assert(SubMesh.Indices.Count == 36);
-  Result = cast(MeshResource)Manager.LoadResource(WString("../unittest/CubeOnlyIndex.obj"));
+  Result = cast(MeshResource)Manager.LoadResource(WString("../unittest/CubeOnlyIndex.obj", TestAllocator));
   assert(Result);
   assert(Result.Meshes.Count == 1);
   SubMesh = Result.Meshes[0];
@@ -330,7 +330,7 @@ unittest
   assert(SubMesh.Vertices.Count == 8);
   assert(SubMesh.Indices.Count == 36);
 
-  Result = cast(MeshResource)Manager.LoadResource(WString("../unittest/TwoObjects.obj"));
+  Result = cast(MeshResource)Manager.LoadResource(WString("../unittest/TwoObjects.obj", TestAllocator));
   assert(Result);
   assert(Result.Meshes.Count == 2);
   SubMesh = Result.Meshes[0];

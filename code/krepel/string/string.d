@@ -97,7 +97,7 @@ struct StringBase(CharType)
 
   @property auto Allocator()
   {
-    return Data != null ? Data.Allocator : GlobalAllocator;
+    return Data.Allocator;
   }
 
   this(IAllocator Allocator)
@@ -108,7 +108,7 @@ struct StringBase(CharType)
     Data.PushBack('\0');
   }
 
-  this(const CharType[] String, IAllocator Allocator = GlobalAllocator)
+  this(const CharType[] String, IAllocator Allocator)
   {
     this(Allocator);
     Data.PopFront();
@@ -143,7 +143,7 @@ struct StringBase(CharType)
   {
     if (*RefCount != 1)
     {
-      Array!CharType* NewData = Allocator.New!(Array!CharType)();
+      Array!CharType* NewData = Allocator.New!(Array!CharType)(Allocator);
       (*RefCount)--;
       NewData.PushBack(Data.Data[]);
       Data = NewData;
@@ -246,9 +246,9 @@ struct StringBase(CharType)
     return Count;
   }
 
-  StringBase!CharType ConcatCopy(const(CharType[]) OtherString) const
+  StringBase!CharType ConcatCopy(const(CharType[]) OtherString)
   {
-    StringBase!CharType Result = StringBase!CharType(this);
+    StringBase!CharType Result = StringBase!CharType(this, this.Allocator);
     Result.Concat(OtherString);
     return Result;
   }
@@ -274,10 +274,11 @@ struct StringBase(CharType)
     Data.Data[Index] = Value;
   }
 
-  void opAssign(const CharType[] Chars)
-  {
-    this = StringBase!CharType(Chars);
-  }
+  // TODO(Marvin): Which allocator for assignment ?
+  //void opAssign(const CharType[] Chars)
+  //{
+  //  this = StringBase!CharType(Chars);
+  //}
 
   ulong opDollar() const
   {
@@ -320,9 +321,9 @@ alias UString = StringBase!char;
 unittest
 {
   StaticStackMemory!2048 StackMemory;
-  GlobalAllocator = Wrap(StackMemory);
+  auto TestAllocator = Wrap(StackMemory);
 
-  WString TestString = WString("This is a Test");
+  WString TestString = WString("This is a Test", TestAllocator);
 
   assert(TestString == "This is a Test");
   assert(TestString == TestString);
@@ -348,17 +349,19 @@ unittest
   assert(TestString.ReplaceAll("t", "f") ==  3);
   assert(TestString == "Yef anofher Tesf");
 
-  TestString = "TESTESTEST";
+  //TODO(Marvin): Retest when assign is back again
+  //TestString = "TESTESTEST";
+  TestString = WString("TESTESTEST", TestAllocator);
   assert(TestString.ReplaceAll("TEST", "TEST") == 2);
   assert(TestString == "TESTESTEST");
   assert(TestString.ReplaceAll("TEST", "FOO") == 2);
   assert(TestString == "FOOESFOO");
 
-  TestString = WString("Conc").ConcatCopy("atenation");
+  TestString = WString("Conc", TestAllocator).ConcatCopy("atenation");
 
   assert(TestString == "Concatenation");
 
-  TestString = WString("Another ") + "Test" + " for" + " concatenation";
+  TestString = WString("Another ", TestAllocator) + "Test" + " for" + " concatenation";
 
   assert(TestString == "Another Test for concatenation");
 

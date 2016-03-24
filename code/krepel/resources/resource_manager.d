@@ -18,6 +18,7 @@ class ResourceManager
   this(IAllocator Allocator)
   {
     this.Allocator = Allocator;
+    ResourceLoader = Dictionary!(WString, IResourceLoader)(Allocator);
   }
 
 
