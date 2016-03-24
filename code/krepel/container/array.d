@@ -28,7 +28,7 @@ struct Array(T)
 
   @property IAllocator Allocator()
   {
-    return InternalAllocator ? InternalAllocator : GlobalAllocator;
+    return InternalAllocator;
   }
 
   @property void Allocator(IAllocator NewAllocator)
@@ -58,7 +58,10 @@ struct Array(T)
   void ClearMemory()
   {
     Clear();
-    Allocator.DeleteUndestructed(AvailableMemory);
+    if(Allocator)
+    {
+      Allocator.DeleteUndestructed(AvailableMemory);
+    }
     AvailableMemory = null;
     Data = null;
   }
@@ -337,9 +340,9 @@ unittest
 
 unittest
 {
-  mixin(SetupGlobalAllocatorForTesting!(1024));
+  auto TestAllocator = CreateTestAllocator();
 
-  Array!int Arr;
+  auto Arr = Array!int(TestAllocator);
   assert(Arr.Count == 0);
   static assert(!__traits(compiles, Arr.PushBack()));
   Arr.PushBack(123);
@@ -436,7 +439,7 @@ unittest
 {
   StaticStackMemory!1024 Memory;
   auto Array = Array!int(Memory.Wrap);
-  assert(Array.Allocator != GlobalAllocator);
+  assert(Array.Allocator == Memory.Wrap);
 
   Array.PushBack(0, 1, 2, 3, 4);
 
