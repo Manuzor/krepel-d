@@ -7,3 +7,6 @@
 
 # A place to store everything you want to keep around but that is not shared with anyone.
 /workspace/
+
+# Sublime workspace files
+*.sublime-workspace
