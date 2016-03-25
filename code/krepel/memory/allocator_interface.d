@@ -143,7 +143,7 @@ void DeleteUndestructed(Type)(IAllocator Allocator, Type[] Array)
 Type[] NewArray(Type, ArgTypes...)(IAllocator Allocator, size_t Count, auto ref ArgTypes Args)
 {
   auto Array = Allocator.NewUnconstructedArray!Type(Count);
-  .Construct(Array, Args);
+  .ConstructArray(Array, Args);
   return Array;
 }
 
@@ -153,7 +153,7 @@ Type[] NewArray(Type, ArgTypes...)(IAllocator Allocator, size_t Count, auto ref 
 ///       but does not free memory.
 void Delete(Type)(IAllocator Allocator, Type[] Array)
 {
-  Destruct(Array);
+  DestructArray(Array);
   Allocator.DeleteUndestructed(Array);
 }
 
