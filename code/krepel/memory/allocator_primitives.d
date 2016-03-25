@@ -127,6 +127,31 @@ struct HeapMemory
 
   void Deinitialize() { FirstBlock = null; }
 
+  auto CalculateRequiredBlockSize(size_t RequestedBytes, size_t Alignment = 0)
+  {
+    debug(HeapMemory)
+    {
+      assert(Alignment == 0 || Alignment < ubyte.max,
+             "Alignment value is supposed to fit into 1 byte.");
+      alias DeadBeefType = typeof(0xDeadBeef);
+    }
+    if(RequestedBytes == 0)
+    {
+      return 0;
+    }
+
+    if(Alignment == 0)
+    {
+      Alignment = DefaultAlignment;
+    }
+    const RequiredBytes = RequestedBytes + Alignment;
+    const PaddingToAchieveAnEvenBlockSize = RequiredBytes.IsEven ? 0 : 1;
+    debug(HeapMemory) const RequiredBlockSize = BlockOverhead + RequiredBytes + PaddingToAchieveAnEvenBlockSize + DeadBeefType.sizeof;
+    else              const RequiredBlockSize = BlockOverhead + RequiredBytes + PaddingToAchieveAnEvenBlockSize;
+
+    return RequiredBlockSize;
+  }
+
   auto Allocate(size_t RequestedBytes, size_t Alignment = 0)
   {
     debug(HeapMemory)
@@ -141,10 +166,7 @@ struct HeapMemory
 
     if(Alignment == 0) Alignment = DefaultAlignment;
 
-    const RequiredBytes = RequestedBytes + Alignment;
-    const PaddingToAchieveAnEvenBlockSize = RequiredBytes.IsEven ? 0 : 1;
-    debug(HeapMemory) const RequiredBlockSize = BlockOverhead + RequiredBytes + PaddingToAchieveAnEvenBlockSize + DeadBeefType.sizeof;
-    else              const RequiredBlockSize = BlockOverhead + RequiredBytes + PaddingToAchieveAnEvenBlockSize;
+    const RequiredBlockSize = CalculateRequiredBlockSize(RequestedBytes, Alignment);
 
     auto Block = FindFreeBlockAndMergeAdjacent(FirstBlock, RequiredBlockSize);
 
