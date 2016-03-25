@@ -86,10 +86,11 @@ struct AutoHeapAllocator
 
     EnsureValidState();
 
-    // TODO(Manu): assert(RequestedBytes < HeapSize)?
-    const NewHeapSize = Max(RequestedBytes, HeapSize);
+    assert(RequestedBytes < HeapSize - HeapMemory.MinimumBlockSize,
+           "Insufficient heap size.");
+
     auto NewHeap = &Heaps.Expand();
-    auto NewHeapMemory = Allocator.Allocate(NewHeapSize, 1);
+    auto NewHeapMemory = Allocator.Allocate(HeapSize, 1);
     NewHeap.Initialize(NewHeapMemory);
 
     return NewHeap.Allocate(RequestedBytes, Alignment);
@@ -170,8 +171,18 @@ version(unittest)
   {
     static struct TestAllocatorData
     {
+      // Note(Manu): I've prefixed stuff with an underscore '_' so they may
+      // never conflict with anything in the IAllocator interface (due to the
+      // 'alias this' thing).
+
       SystemMemory _Sys;
       AutoHeapAllocator _AutoHeap;
+
+      this(this)
+      {
+        // Ensure the pointer is correct.
+        _AutoHeap.Allocator = Wrap(_Sys);
+      }
 
       @property IAllocator _Allocator() { return Wrap(_AutoHeap); }
 
@@ -179,6 +190,7 @@ version(unittest)
 
       alias _Allocator this;
     }
+
 
     TestAllocatorData Result;
     Result._AutoHeap.HeapSize = HeapSize;
@@ -247,4 +259,14 @@ unittest
 
   // TODO(Manu): Test reliably for the out-of-memory case somehow.
   //assert(Heap.Allocate(1) is null);
+}
+
+// CreateTestAllocator
+unittest
+{
+  auto Allocator = CreateTestAllocator(8.KiB);
+  auto Mem1 = Allocator.Allocate(4.KiB);
+  assert(Mem1 !is null);
+  auto Mem2 = Allocator.Allocate(6.KiB);
+  assert(Mem2 !is null);
 }
