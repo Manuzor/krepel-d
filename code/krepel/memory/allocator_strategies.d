@@ -86,11 +86,10 @@ struct AutoHeapAllocator
 
     EnsureValidState();
 
-    assert(RequestedBytes < HeapSize - HeapMemory.MinimumBlockSize,
-           "Insufficient heap size.");
-
+    // TODO(Manu): assert(RequestedBytes < HeapSize)?
     auto NewHeap = &Heaps.Expand();
-    auto NewHeapMemory = Allocator.Allocate(HeapSize, 1);
+    const NewHeapSize = NewHeap.CalculateRequiredBlockSize(Max(RequestedBytes, HeapSize), Alignment);
+    auto NewHeapMemory = Allocator.Allocate(NewHeapSize, 1);
     NewHeap.Initialize(NewHeapMemory);
 
     return NewHeap.Allocate(RequestedBytes, Alignment);
