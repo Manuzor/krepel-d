@@ -14,9 +14,6 @@ import Meta = krepel.meta;
 /// Forwards all calls to the appropriate krepel.system.* functions.
 struct SystemMemory
 {
-  @nogc:
-  nothrow:
-
   mixin CommonMemoryImplementation;
 
   private import krepel.system;
@@ -81,9 +78,6 @@ debug = HeapMemory;
 /// efficient way while guaranteeing alignment requirements.
 struct HeapMemory
 {
-  @nogc:
-  nothrow:
-
   void[] Memory;
   size_t DefaultAlignment = GlobalDefaultAlignment;
 
@@ -235,9 +229,6 @@ private:
   ///       is used as a flag.
   static struct BlockData
   {
-    @nogc:
-    nothrow:
-
     size_t HeaderData;
 
     @property size_t Size() { return HeaderData.RemoveBit(0); }
@@ -317,9 +308,6 @@ private:
 
 struct StackMemory
 {
-  @nogc:
-  nothrow:
-
   void[] Memory;
   size_t AllocationMark;
 
@@ -346,9 +334,6 @@ struct StackMemory
 
 struct StaticStackMemory(size_t N)
 {
-  @nogc:
-  nothrow:
-
   static assert(N > 0, "Need at least one byte of static memory.");
 
   void[N] Memory;

@@ -13,9 +13,6 @@ import krepel.memory.allocator_interface;
 /// Maintains an array of heap memory blocks of a given size
 struct AutoHeapAllocator
 {
-  @nogc:
-  nothrow:
-
   import krepel.container.array;
 
   /// Change this to affect the size of newly allocated heaps.

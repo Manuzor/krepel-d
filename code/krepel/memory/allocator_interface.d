@@ -8,14 +8,9 @@ import krepel.memory.common;
 import krepel.memory.construction;
 import krepel.memory.allocator_primitives : IsSomeMemory;
 
-// TODO(Manu): Add @nogc and friends.
-
 /// General allocator interface.
 interface IAllocator
 {
-@nogc:
-nothrow:
-
   bool Contains(in void[] SomeRegion);
 
   void[] Allocate(size_t RequestedBytes, size_t Alignment = 0);
@@ -160,9 +155,6 @@ void Delete(Type)(IAllocator Allocator, Type[] Array)
 /// Used to get the size of a minimal IAllocator class instance.
 package class MinimalAllocatorWrapper : IAllocator
 {
-@nogc:
-nothrow:
-
   /// The actual memory to wrap.
   void* WrappedPtr;
 
@@ -176,9 +168,6 @@ template Wrap(SomeMemoryType)
 {
   class WrapperClass : IAllocator
   {
-  @nogc:
-  nothrow:
-
     SomeMemoryType* WrappedPtr;
 
     final override bool Contains(in void[] SomeRegion)

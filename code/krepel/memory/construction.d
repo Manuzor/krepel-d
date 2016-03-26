@@ -5,14 +5,6 @@ import Meta = krepel.meta;
 
 private static import std.conv;
 
-// TODO(Manu): Get rid of phobos?
-
-// Enable these when we got rid of phobos.
-// @nogc:
-// nothrow:
-// pure:
-
-
 Type Construct(Type, ArgTypes...)(void[] RawMemory, auto ref ArgTypes Args)
   if(is(Type == class))
 {
@@ -148,7 +140,7 @@ private void BlitInitialData(Type)(Type[] BlitTargets)
 // Single struct object construction
 unittest
 {
-  nothrow @nogc static struct TestData
+  static struct TestData
   {
     int Value;
     float Precision;
