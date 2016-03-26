@@ -205,7 +205,7 @@ struct HeapMemory
 
     debug(HeapMemory)
     {
-      auto DeadBeefPointer = cast(DeadBeefType*)(cast(ubyte*)Block + Block.Size - DeadBeefType.sizeof);
+      auto DeadBeefPointer = cast(DeadBeefType*)(cast(void*)Block + Block.Size - DeadBeefType.sizeof);
       *DeadBeefPointer = 0xDeadBeef;
     }
 
@@ -263,7 +263,7 @@ private:
   BlockData* NextBlock(BlockData* Block)
   {
     assert(Block);
-    return cast(BlockData*)(cast(ubyte*)Block + Block.Size);
+    return cast(BlockData*)(cast(void*)Block + Block.Size);
   }
 
   /// Traverses all blocks, merging free adjacent blocks together, until a
@@ -291,7 +291,7 @@ private:
   bool IsValidBlockPointer(BlockData* Block)
   {
     return Block &&
-           cast(ubyte*)Block - Memory.ptr <= Memory.length - MinimumBlockSize;
+           cast(void*)Block - Memory.ptr <= Memory.length - MinimumBlockSize;
   }
 
   void MergeAdjacentFreeBlocks(BlockData* Block)
