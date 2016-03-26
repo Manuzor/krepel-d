@@ -58,7 +58,7 @@ struct WaveFrontVertexDefinition
 
 struct WaveFrontFaceDefinition
 {
-  WaveFrontVertexDefinition[3] Vertices;
+  WaveFrontVertexDefinition[4] Vertices;
 }
 
 struct WavefrontLexer
@@ -170,6 +170,7 @@ struct WavefrontLexer
     ParseVertexDefinition(Face.Vertices[0], ToParse);
     ParseVertexDefinition(Face.Vertices[1], ToParse);
     ParseVertexDefinition(Face.Vertices[2], ToParse);
+    ParseVertexDefinition(Face.Vertices[3], ToParse);
     return true;
   }
 
@@ -263,28 +264,41 @@ class WavefrontResourceLoader : IResourceLoader
       DefinedVertices.Allocator = Allocator;
       foreach(FaceDefinition; TempMesh.Faces)
       {
-        int VertexIndex;
-        foreach(Index, VertexDefinition; FaceDefinition.Vertices)
+        int VertexIndex = void;
+        WaveFrontFaceDefinition[2] FaceArray;
+        auto FaceRange = FaceArray[0..1];
+        FaceRange[0].Vertices[0..3] = FaceDefinition.Vertices[0..3];
+        if (FaceDefinition.Vertices[3].VertexIndex != -1)
         {
-          if (DefinedVertices.TryGet(FaceDefinition.Vertices[Index], VertexIndex))
+          FaceArray[1].Vertices[0] = FaceDefinition.Vertices[0];
+          FaceArray[1].Vertices[1] = FaceDefinition.Vertices[2];
+          FaceArray[1].Vertices[2] = FaceDefinition.Vertices[3];
+          FaceRange = FaceArray[0..2];
+        }
+        foreach(TriangleDefinition; FaceRange)
+        {
+          foreach(Index, VertexDefinition; TriangleDefinition.Vertices[0..3])
           {
-            NewSubMesh.Indices.PushBack(VertexIndex);
-          }
-          else
-          {
-            Vertex NewVertex = void;
-            NewVertex.Position = TempMesh.Vertices[VertexDefinition.VertexIndex];
-            if(VertexDefinition.NormalIndex != -1)
+            if (DefinedVertices.TryGet(TriangleDefinition.Vertices[Index], VertexIndex))
             {
-              NewVertex.Normal = TempMesh.Normals[VertexDefinition.NormalIndex];
+              NewSubMesh.Indices.PushBack(VertexIndex);
             }
-            if(VertexDefinition.TextureIndex != -1)
+            else
             {
-              NewVertex.TextureCoordinate = TempMesh.TextureCoordinates[VertexDefinition.TextureIndex];
+              Vertex NewVertex = void;
+              NewVertex.Position = TempMesh.Vertices[VertexDefinition.VertexIndex];
+              if(VertexDefinition.NormalIndex != -1)
+              {
+                NewVertex.Normal = TempMesh.Normals[VertexDefinition.NormalIndex];
+              }
+              if(VertexDefinition.TextureIndex != -1)
+              {
+                NewVertex.TextureCoordinate = TempMesh.TextureCoordinates[VertexDefinition.TextureIndex];
+              }
+              NewSubMesh.Indices.PushBack(cast(int)NewSubMesh.Vertices.Count);
+              DefinedVertices[VertexDefinition] = cast(int)NewSubMesh.Vertices.Count;
+              NewSubMesh.Vertices.PushBack(NewVertex);
             }
-            NewSubMesh.Indices.PushBack(cast(int)NewSubMesh.Vertices.Count);
-            DefinedVertices[VertexDefinition] = cast(int)NewSubMesh.Vertices.Count;
-            NewSubMesh.Vertices.PushBack(NewVertex);
           }
         }
       }
@@ -321,6 +335,8 @@ unittest
   assert(SubMesh.Name == "Cube");
   assert(SubMesh.Vertices.Count == 24);
   assert(SubMesh.Indices.Count == 36);
+  TestAllocator.Delete(Result);
+
   Result = cast(MeshResource)Manager.LoadResource(WString("../unittest/CubeOnlyIndex.obj", TestAllocator));
   assert(Result);
   assert(Result.Meshes.Count == 1);
@@ -329,6 +345,7 @@ unittest
   assert(SubMesh.Name == "Cube");
   assert(SubMesh.Vertices.Count == 8);
   assert(SubMesh.Indices.Count == 36);
+  TestAllocator.Delete(Result);
 
   Result = cast(MeshResource)Manager.LoadResource(WString("../unittest/TwoObjects.obj", TestAllocator));
   assert(Result);
@@ -339,4 +356,15 @@ unittest
   SubMesh = Result.Meshes[1];
   assert(SubMesh);
   assert(SubMesh.Name == "Cube");
+  TestAllocator.Delete(Result);
+
+  Result = cast(MeshResource)Manager.LoadResource(WString("../unittest/QuadCube.obj", TestAllocator));
+  assert(Result);
+  assert(Result.Meshes.Count == 1);
+  SubMesh = Result.Meshes[0];
+  assert(SubMesh);
+  assert(SubMesh.Name == "Cube");
+  assert(SubMesh.Indices.Count == 36);
+  assert(SubMesh.Vertices.Count == 24);
+  TestAllocator.Delete(Result);
 }
