@@ -50,7 +50,8 @@ template LogMessageDispatch(LogLevel Level)
   void LogMessageDispatch(Char, ArgTypes...)(LogData* Log, in Char[] Message, auto ref ArgTypes Args)
     if(Meta.IsSomeChar!Char)
   {
-    assert(Log);
+    // When null is passed for Log, we don't crash but don't do anything.
+    if(Log is null) return;
 
     FormattedWrite(Log, Message, Args);
 
