@@ -902,7 +902,7 @@ void EmitEnum(ref EnumData Enum, FormattedOutput Output)
   foreach(ref Entry; Entries)
   {
     Output.write(Output.Indentation, Entry.Key);
-    if(Entry.Value)
+    if(Entry.Value.length)
     {
       Output.writef("%s = %s", ' '.repeat(MaxLen - Entry.Key.length), Entry.Value);
     }
