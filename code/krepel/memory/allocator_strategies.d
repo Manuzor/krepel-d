@@ -236,16 +236,6 @@ unittest
   Allocator.Delete(A);
 }
 
-// CreateTestAllocator
-unittest
-{
-  auto Allocator = CreateTestAllocator(4.KiB);
-  auto Mem1 = Allocator.Allocate(4.KiB);
-  assert(Mem1 !is null);
-  auto Mem2 = Allocator.Allocate(16.KiB);
-  assert(Mem2 !is null);
-}
-
 // HybridAllocator tests
 unittest
 {
@@ -281,9 +271,9 @@ unittest
 // CreateTestAllocator
 unittest
 {
-  auto Allocator = CreateTestAllocator(8.KiB);
+  auto Allocator = CreateTestAllocator(4.KiB);
   auto Mem1 = Allocator.Allocate(4.KiB);
   assert(Mem1 !is null);
-  auto Mem2 = Allocator.Allocate(6.KiB);
+  auto Mem2 = Allocator.Allocate(16.KiB);
   assert(Mem2 !is null);
 }
