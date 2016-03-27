@@ -6,7 +6,6 @@ import krepel.memory;
 import krepel.string;
 import krepel.system;
 
-@nogc:
 
 interface IResource
 {
