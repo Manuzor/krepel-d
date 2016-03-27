@@ -50,7 +50,8 @@ template LogMessageDispatch(LogLevel Level)
   void LogMessageDispatch(Char, ArgTypes...)(LogData* Log, in Char[] Message, auto ref ArgTypes Args)
     if(Meta.IsSomeChar!Char)
   {
-    // When null is passed for Log, we don't crash but don't do anything.
+    // We ignore when `Log is null` as this usually means that the given log
+    // is not yet initialized. It is no reason to crash the program.
     if(Log is null) return;
 
     FormattedWrite(Log, Message, Args);
