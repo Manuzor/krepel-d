@@ -41,7 +41,7 @@ void Win32ExperimentsCommon(ref BuildContext Context)
     }
 
     // DirectX files.
-    foreach(FileName; only("dxgiformat.d", "dxgitype.d", "dxgi.d"))
+    foreach(FileName; only("dxgiformat.d", "dxgitype.d", "dxgi.d", "d3dcommon.d"))
     {
       Files ~= buildNormalizedPath(thisDir, "directx", FileName);
     }
