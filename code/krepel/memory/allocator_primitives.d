@@ -14,9 +14,6 @@ import Meta = krepel.meta;
 /// Forwards all calls to the appropriate krepel.system.* functions.
 struct SystemMemory
 {
-  @nogc:
-  nothrow:
-
   mixin CommonMemoryImplementation;
 
   private import krepel.system;
@@ -81,9 +78,6 @@ debug = HeapMemory;
 /// efficient way while guaranteeing alignment requirements.
 struct HeapMemory
 {
-  @nogc:
-  nothrow:
-
   void[] Memory;
   size_t DefaultAlignment = GlobalDefaultAlignment;
 
@@ -129,6 +123,31 @@ struct HeapMemory
 
   void Deinitialize() { FirstBlock = null; }
 
+  auto CalculateRequiredBlockSize(size_t RequestedBytes, size_t Alignment = 0)
+  {
+    debug(HeapMemory)
+    {
+      assert(Alignment == 0 || Alignment < ubyte.max,
+             "Alignment value is supposed to fit into 1 byte.");
+      alias DeadBeefType = typeof(0xDeadBeef);
+    }
+    if(RequestedBytes == 0)
+    {
+      return 0;
+    }
+
+    if(Alignment == 0)
+    {
+      Alignment = DefaultAlignment;
+    }
+    const RequiredBytes = RequestedBytes + Alignment;
+    const PaddingToAchieveAnEvenBlockSize = RequiredBytes.IsEven ? 0 : 1;
+    debug(HeapMemory) auto RequiredBlockSize = BlockOverhead + RequiredBytes + PaddingToAchieveAnEvenBlockSize + DeadBeefType.sizeof;
+    else              auto RequiredBlockSize = BlockOverhead + RequiredBytes + PaddingToAchieveAnEvenBlockSize;
+
+    return RequiredBlockSize;
+  }
+
   auto Allocate(size_t RequestedBytes, size_t Alignment = 0)
   {
     debug(HeapMemory)
@@ -143,10 +162,7 @@ struct HeapMemory
 
     if(Alignment == 0) Alignment = DefaultAlignment;
 
-    const RequiredBytes = RequestedBytes + Alignment;
-    const PaddingToAchieveAnEvenBlockSize = RequiredBytes.IsEven ? 0 : 1;
-    debug(HeapMemory) const RequiredBlockSize = BlockOverhead + RequiredBytes + PaddingToAchieveAnEvenBlockSize + DeadBeefType.sizeof;
-    else              const RequiredBlockSize = BlockOverhead + RequiredBytes + PaddingToAchieveAnEvenBlockSize;
+    const RequiredBlockSize = CalculateRequiredBlockSize(RequestedBytes, Alignment);
 
     auto Block = FindFreeBlockAndMergeAdjacent(FirstBlock, RequiredBlockSize);
 
@@ -183,7 +199,7 @@ struct HeapMemory
 
     debug(HeapMemory)
     {
-      auto DeadBeefPointer = cast(DeadBeefType*)(cast(ubyte*)Block + Block.Size - DeadBeefType.sizeof);
+      auto DeadBeefPointer = cast(DeadBeefType*)(cast(void*)Block + Block.Size - DeadBeefType.sizeof);
       *DeadBeefPointer = 0xDeadBeef;
     }
 
@@ -213,9 +229,6 @@ private:
   ///       is used as a flag.
   static struct BlockData
   {
-    @nogc:
-    nothrow:
-
     size_t HeaderData;
 
     @property size_t Size() { return HeaderData.RemoveBit(0); }
@@ -241,7 +254,7 @@ private:
   BlockData* NextBlock(BlockData* Block)
   {
     assert(Block);
-    return cast(BlockData*)(cast(ubyte*)Block + Block.Size);
+    return cast(BlockData*)(cast(void*)Block + Block.Size);
   }
 
   /// Traverses all blocks, merging free adjacent blocks together, until a
@@ -269,7 +282,7 @@ private:
   bool IsValidBlockPointer(BlockData* Block)
   {
     return Block &&
-           cast(ubyte*)Block - Memory.ptr <= Memory.length - MinimumBlockSize;
+           cast(void*)Block - Memory.ptr <= Memory.length - MinimumBlockSize;
   }
 
   void MergeAdjacentFreeBlocks(BlockData* Block)
@@ -295,9 +308,6 @@ private:
 
 struct StackMemory
 {
-  @nogc:
-  nothrow:
-
   void[] Memory;
   size_t AllocationMark;
 
@@ -324,9 +334,6 @@ struct StackMemory
 
 struct StaticStackMemory(size_t N)
 {
-  @nogc:
-  nothrow:
-
   static assert(N > 0, "Need at least one byte of static memory.");
 
   void[N] Memory;

@@ -8,14 +8,9 @@ import krepel.memory.common;
 import krepel.memory.construction;
 import krepel.memory.allocator_primitives : IsSomeMemory;
 
-// TODO(Manu): Add @nogc and friends.
-
 /// General allocator interface.
 interface IAllocator
 {
-@nogc:
-nothrow:
-
   bool Contains(in void[] SomeRegion);
 
   void[] Allocate(size_t RequestedBytes, size_t Alignment = 0);
@@ -73,7 +68,7 @@ void DeleteUndestructed(Type)(IAllocator Allocator, Type Instance)
 Type* New(Type, ArgTypes...)(IAllocator Allocator, auto ref ArgTypes Args)
   if(!is(Type == class))
 {
-  return .Construct(Allocator.NewUnconstructed!Type(), Args);
+  return Construct(Allocator.NewUnconstructed!Type(), Args);
 }
 
 Type New(Type, ArgTypes...)(IAllocator Allocator, auto ref ArgTypes Args)
@@ -87,7 +82,7 @@ Type New(Type, ArgTypes...)(IAllocator Allocator, auto ref ArgTypes Args)
   assert(Raw.length >= Type.sizeof);
   auto Instance = cast(Type)Raw.ptr;
 
-  .Construct(Instance, Args);
+  Construct(Instance, Args);
   return Instance;
 }
 
@@ -143,7 +138,7 @@ void DeleteUndestructed(Type)(IAllocator Allocator, Type[] Array)
 Type[] NewArray(Type, ArgTypes...)(IAllocator Allocator, size_t Count, auto ref ArgTypes Args)
 {
   auto Array = Allocator.NewUnconstructedArray!Type(Count);
-  .Construct(Array, Args);
+  ConstructArray(Array, Args);
   return Array;
 }
 
@@ -153,16 +148,13 @@ Type[] NewArray(Type, ArgTypes...)(IAllocator Allocator, size_t Count, auto ref 
 ///       but does not free memory.
 void Delete(Type)(IAllocator Allocator, Type[] Array)
 {
-  Destruct(Array);
+  DestructArray(Array);
   Allocator.DeleteUndestructed(Array);
 }
 
 /// Used to get the size of a minimal IAllocator class instance.
 package class MinimalAllocatorWrapper : IAllocator
 {
-@nogc:
-nothrow:
-
   /// The actual memory to wrap.
   void* WrappedPtr;
 
@@ -176,9 +168,6 @@ template Wrap(SomeMemoryType)
 {
   class WrapperClass : IAllocator
   {
-  @nogc:
-  nothrow:
-
     SomeMemoryType* WrappedPtr;
 
     final override bool Contains(in void[] SomeRegion)

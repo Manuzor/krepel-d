@@ -10,12 +10,11 @@ import krepel.memory.common;
 import krepel.memory.allocator_primitives;
 import krepel.memory.allocator_interface;
 
+import krepel.log;
+
 /// Maintains an array of heap memory blocks of a given size
 struct AutoHeapAllocator
 {
-  @nogc:
-  nothrow:
-
   import krepel.container.array;
 
   /// Change this to affect the size of newly allocated heaps.
@@ -86,9 +85,18 @@ struct AutoHeapAllocator
 
     EnsureValidState();
 
-    // TODO(Manu): assert(RequestedBytes < HeapSize)?
-    const NewHeapSize = Max(RequestedBytes, HeapSize);
     auto NewHeap = &Heaps.Expand();
+    auto NewHeapSize = NewHeap.CalculateRequiredBlockSize(HeapSize, Alignment);
+    const RequiredBlockSize = NewHeap.CalculateRequiredBlockSize(RequestedBytes, Alignment);
+    if(RequiredBlockSize > NewHeapSize)
+    {
+      NewHeapSize = RequiredBlockSize;
+      Log.Warning("Allocation requested more memory than the current heap size"
+                  "(%s) can take. A new heap of size %s will be created to"
+                  "accomodate for this unusual request. It is advised to"
+                  "review whether the current heap size is sufficient and that"
+                  "the correct type of allocator is used.", HeapSize, NewHeapSize);
+    }
     auto NewHeapMemory = Allocator.Allocate(NewHeapSize, 1);
     NewHeap.Initialize(NewHeapMemory);
 
@@ -170,8 +178,18 @@ version(unittest)
   {
     static struct TestAllocatorData
     {
+      // Note(Manu): I've prefixed stuff with an underscore '_' so they may
+      // never conflict with anything in the IAllocator interface (due to the
+      // 'alias this' thing).
+
       SystemMemory _Sys;
       AutoHeapAllocator _AutoHeap;
+
+      this(this)
+      {
+        // Ensure the pointer is correct.
+        _AutoHeap.Allocator = Wrap(_Sys);
+      }
 
       @property IAllocator _Allocator() { return Wrap(_AutoHeap); }
 
@@ -179,6 +197,7 @@ version(unittest)
 
       alias _Allocator this;
     }
+
 
     TestAllocatorData Result;
     Result._AutoHeap.HeapSize = HeapSize;
@@ -247,4 +266,14 @@ unittest
 
   // TODO(Manu): Test reliably for the out-of-memory case somehow.
   //assert(Heap.Allocate(1) is null);
+}
+
+// CreateTestAllocator
+unittest
+{
+  auto Allocator = CreateTestAllocator(4.KiB);
+  auto Mem1 = Allocator.Allocate(4.KiB);
+  assert(Mem1 !is null);
+  auto Mem2 = Allocator.Allocate(16.KiB);
+  assert(Mem2 !is null);
 }
