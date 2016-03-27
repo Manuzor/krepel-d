@@ -68,7 +68,7 @@ void DeleteUndestructed(Type)(IAllocator Allocator, Type Instance)
 Type* New(Type, ArgTypes...)(IAllocator Allocator, auto ref ArgTypes Args)
   if(!is(Type == class))
 {
-  return .Construct(Allocator.NewUnconstructed!Type(), Args);
+  return Construct(Allocator.NewUnconstructed!Type(), Args);
 }
 
 Type New(Type, ArgTypes...)(IAllocator Allocator, auto ref ArgTypes Args)
@@ -82,7 +82,7 @@ Type New(Type, ArgTypes...)(IAllocator Allocator, auto ref ArgTypes Args)
   assert(Raw.length >= Type.sizeof);
   auto Instance = cast(Type)Raw.ptr;
 
-  .Construct(Instance, Args);
+  Construct(Instance, Args);
   return Instance;
 }
 
@@ -138,7 +138,7 @@ void DeleteUndestructed(Type)(IAllocator Allocator, Type[] Array)
 Type[] NewArray(Type, ArgTypes...)(IAllocator Allocator, size_t Count, auto ref ArgTypes Args)
 {
   auto Array = Allocator.NewUnconstructedArray!Type(Count);
-  .ConstructArray(Array, Args);
+  ConstructArray(Array, Args);
   return Array;
 }
 
