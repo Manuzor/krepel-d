@@ -5,6 +5,7 @@ import krepel;
 import krepel.win32;
 
 
+version(Windows):
 import std.string : toStringz, fromStringz;
 
 extern(Windows)

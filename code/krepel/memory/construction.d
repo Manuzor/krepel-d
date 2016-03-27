@@ -36,7 +36,7 @@ void Destruct(Type)(Type Instance)
   // TODO(Manu): assert(Instance)?
   if(Instance)
   {
-    static if(Meta.HasMember!("__dtor")) Instance.__dtor();
+    static if(Meta.HasMember!(Type, "__dtor")) Instance.__dtor();
     //BlitInitialData((&Instance)[0 .. 1]);
   }
 }
@@ -61,7 +61,7 @@ void Destruct(Type)(Type* Instance)
         static if(__traits(compiles, typeof(mixin(`Instance.` ~ MemberName))))
         {
           alias MemberType = typeof(mixin(`Instance.` ~ MemberName));
-          static if(Meta.HasDestructor!MemberType)
+          static if(Meta.HasDestructor!MemberType && !Meta.IsPointer!MemberType)
           {
             static if(is(MemberType == class))
             {

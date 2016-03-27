@@ -4,9 +4,7 @@ import krepel.math.vector3;
 import krepel.math.vector4;
 import krepel.math.math;
 
-@nogc:
 @safe:
-nothrow:
 
 Matrix4 GetTransposed(Matrix4 Mat)
 {
@@ -294,9 +292,7 @@ Vector3 GetUnitAxis(Matrix4 Mat, EAxisType Type)
 /// Translation part is stored in the lower row (M[3][0] -> M[3][2])
 align(16) struct Matrix4
 {
-  @nogc:
   @safe:
-  nothrow:
 
   float[4][4] M;
 

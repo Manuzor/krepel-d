@@ -10,3 +10,5 @@
 
 # Sublime workspace files
 *.sublime-workspace
+# Temporary data for unit tests interacting with the file system
+/unittest/tmp

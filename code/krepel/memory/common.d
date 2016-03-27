@@ -2,7 +2,6 @@ module krepel.memory.common;
 import krepel.math;
 
 @nogc:
-nothrow:
 pure:
 
 alias KiB = (const Bytes) => Bytes * (cast(size_t)1024);
