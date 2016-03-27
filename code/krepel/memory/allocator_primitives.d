@@ -142,8 +142,8 @@ struct HeapMemory
     }
     const RequiredBytes = RequestedBytes + Alignment;
     const PaddingToAchieveAnEvenBlockSize = RequiredBytes.IsEven ? 0 : 1;
-    debug(HeapMemory) const RequiredBlockSize = BlockOverhead + RequiredBytes + PaddingToAchieveAnEvenBlockSize + DeadBeefType.sizeof;
-    else              const RequiredBlockSize = BlockOverhead + RequiredBytes + PaddingToAchieveAnEvenBlockSize;
+    debug(HeapMemory) auto RequiredBlockSize = BlockOverhead + RequiredBytes + PaddingToAchieveAnEvenBlockSize + DeadBeefType.sizeof;
+    else              auto RequiredBlockSize = BlockOverhead + RequiredBytes + PaddingToAchieveAnEvenBlockSize;
 
     return RequiredBlockSize;
   }
