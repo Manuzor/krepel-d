@@ -1,5 +1,6 @@
 // Original file name: d3dcommon.idl
 // Conversion date: 2016-Mar-27 15:53:57.3220656
+module directx.d3dcommon;
 
 version(Windows):
 
