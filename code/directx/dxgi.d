@@ -565,7 +565,10 @@ extern(Windows):
 
 }
 
+alias PFN_CREATE_DXGI_FACTORY = extern(Windows) HRESULT function(REFIID riid, void** ppFactory);
 extern(Windows) HRESULT CreateDXGIFactory(REFIID riid, void **ppFactory);
+
+alias PFN_CREATE_DXGI_FACTORY_1 = extern(Windows) HRESULT function(REFIID riid, void** ppFactory);
 extern(Windows) HRESULT CreateDXGIFactory1(REFIID riid, void **ppFactory);
 
 mixin DEFINE_GUID!(IDXGIDevice, "54ec77fa-1377-44e6-8c32-88fd5f44c84c");
