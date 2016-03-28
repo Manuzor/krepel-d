@@ -2,14 +2,18 @@
 
 setlocal
 
-pushd "%~dp0..\.."
+set ThisDir=%~dp0
+set RepoRoot=%ThisDir%..\..
+set BuildDir=%RepoRoot%\build
+
+pushd "%RepoRoot%"
   echo Building converter...
   call build.bat midltod
 popd
 
-pushd "%~dp0"
+pushd "%ThisDir%"
   set Converter=..\..\build\midltod.exe
-  set Log=ConversionLog.txt
+  set Log=%BuildDir%\midltod.log
 
   echo Converting...
 
