@@ -201,10 +201,16 @@ class WavefrontResourceLoader : IResourceLoader
 {
   WaveFrontMesh TempMesh;
 
+  override void Destroy(IAllocator Allocator, IResource Resource)
+  {
+    MeshResource MeshResource = cast(MeshResource)Resource;
+    Allocator.Delete(MeshResource);
+  }
+
   override IResource Load(IAllocator Allocator, IFile File)
   {
     TempMesh.Clear();
-    MeshResource Mesh = Allocator.New!(MeshResource,IAllocator)(Allocator);
+    MeshResource Mesh = Allocator.New!MeshResource(Allocator, this);
     TempMesh = WaveFrontMesh(Allocator);
 
     Lexer.Initialize(Allocator, File);

@@ -7,4 +7,5 @@ import krepel.memory;
 interface IResourceLoader
 {
   IResource Load(IAllocator Allocator, IFile Data);
+  void Destroy(IAllocator Allocator, IResource Resource);
 }

@@ -31,9 +31,16 @@ class SubMesh
 class MeshResource : IResource
 {
   Array!SubMesh Meshes;
+  IResourceLoader Loader;
 
-  this(IAllocator Allocator)
+  this(IAllocator Allocator, IResourceLoader Loader)
   {
+    this.Loader = Loader;
     Meshes = Array!SubMesh(Allocator);
+  }
+
+  override IResourceLoader GetLoader()
+  {
+    return Loader;
   }
 }

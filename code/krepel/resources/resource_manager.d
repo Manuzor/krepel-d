@@ -1,6 +1,7 @@
 module krepel.resources.resource_manager;
 
 import krepel.resources.resource_loader;
+import krepel.resources.resource_mesh;
 import krepel.container;
 import krepel.memory;
 import krepel.string;
@@ -9,7 +10,7 @@ import krepel.system;
 
 interface IResource
 {
-
+  IResourceLoader GetLoader();
 }
 
 class ResourceManager
@@ -19,7 +20,6 @@ class ResourceManager
     this.Allocator = Allocator;
     ResourceLoader = Dictionary!(WString, IResourceLoader)(Allocator);
   }
-
 
   Dictionary!(WString, IResourceLoader) ResourceLoader;
 
@@ -45,6 +45,23 @@ class ResourceManager
     }
 
     return null;
+  }
+
+  ResourceType Load(ResourceType)(WString FileName)
+    if(is(ResourceType : IResource))
+  {
+    auto Resource = LoadResource(FileName);
+    ResourceType TargetResource = cast(ResourceType)Resource;
+    if(TargetResource is null)
+    {
+      Resource.GetLoader().Destroy(Allocator, Resource);
+    }
+    return TargetResource;
+  }
+
+  MeshResource LoadMesh(WString FileName)
+  {
+    return Load!MeshResource(FileName);
   }
 
   IAllocator Allocator;
