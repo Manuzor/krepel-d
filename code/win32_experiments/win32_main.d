@@ -103,12 +103,14 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
 
     if(Window)
     {
-      import directx.dxgi;
+      import directx.d3d11;
 
       IDXGIFactory1 DXGIFactory;
       if(SUCCEEDED(CreateDXGIFactory1(&DXGIFactory.uuidof, cast(void**)&DXGIFactory)))
       {
         assert(DXGIFactory);
+
+        Log.Info("Available Adapters:");
 
         UINT CurrentAdapterIndex;
         IDXGIAdapter1 DXGIAdapter;
@@ -129,6 +131,71 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
       else
       {
         Log.Failure("Failed to create DXGI factory.");
+      }
+
+      DXGI_SWAP_CHAIN_DESC SwapChainDesc;
+      with(SwapChainDesc)
+      {
+        BufferCount                        = 1;
+        BufferDesc.Width                   = 640;
+        BufferDesc.Height                  = 480;
+        BufferDesc.Format                  = DXGI_FORMAT_R8G8B8A8_UNORM;
+        BufferDesc.RefreshRate.Numerator   = 60;
+        BufferDesc.RefreshRate.Denominator = 1;
+        BufferUsage                        = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+        OutputWindow                       = Window;
+        SampleDesc.Count                   = 1;
+        SampleDesc.Quality                 = 0;
+        Windowed                           = TRUE;
+      }
+
+      IDXGISwapChain SwapChain;
+
+      D3D_FEATURE_LEVEL[7] AllFeatureLevels = [
+        D3D_FEATURE_LEVEL_11_1,
+        D3D_FEATURE_LEVEL_11_0,
+        D3D_FEATURE_LEVEL_10_1,
+        D3D_FEATURE_LEVEL_10_0,
+        D3D_FEATURE_LEVEL_9_3,
+        D3D_FEATURE_LEVEL_9_2,
+        D3D_FEATURE_LEVEL_9_1
+      ];
+
+      auto FeatureLevels = AllFeatureLevels[];
+      D3D_FEATURE_LEVEL SupportedFeatureLevel;
+
+      UINT CreateDeviceFlags = 0;
+      debug CreateDeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
+
+      ID3D11Device Device;
+      ID3D11DeviceContext ImmediateContext;
+      HRESULT Result = D3D11CreateDeviceAndSwapChain(null,
+                                                     D3D_DRIVER_TYPE_HARDWARE,
+                                                     null,
+                                                     CreateDeviceFlags,
+                                                     FeatureLevels.ptr,
+                                                     cast(UINT)FeatureLevels.length,
+                                                     D3D11_SDK_VERSION,
+                                                     &SwapChainDesc,
+                                                     &SwapChain,
+                                                     &Device,
+                                                     &SupportedFeatureLevel,
+                                                     &ImmediateContext);
+      if (Result == E_INVALIDARG)
+      {
+        FeatureLevels.popFront();
+        D3D11CreateDeviceAndSwapChain(null,
+                                      D3D_DRIVER_TYPE_HARDWARE,
+                                      null,
+                                      CreateDeviceFlags,
+                                      FeatureLevels.ptr,
+                                      cast(UINT)FeatureLevels.length,
+                                      D3D11_SDK_VERSION,
+                                      &SwapChainDesc,
+                                      &SwapChain,
+                                      &Device,
+                                      &SupportedFeatureLevel,
+                                      &ImmediateContext);
       }
 
       GlobalRunning = true;

@@ -54,8 +54,8 @@ private mixin template DEFINE_GUID(ComType, alias IIDString)
 // enough.
 
 
-import directx.dxgi;
-import directx.d3dcommon;
+public import directx.dxgi;
+public import directx.d3dcommon;
 
 enum UINT D3D11_16BIT_INDEX_STRIP_CUT_VALUE = 0xffff;
 enum UINT D3D11_32BIT_INDEX_STRIP_CUT_VALUE = 0xffffffff;
@@ -5079,27 +5079,27 @@ enum UINT D3D11_SDK_VERSION = 7;
 //          D3D11CreateDevice
 //
 ///////////////////////////////////////////////////////////////////////////
-alias PFN_D3D11_CREATE_DEVICE = extern(Windows) HRESULT function(IDXGIAdapter* pAdapter,
+alias PFN_D3D11_CREATE_DEVICE = extern(Windows) HRESULT function(IDXGIAdapter pAdapter,
                                                                  D3D_DRIVER_TYPE DriverType,
                                                                  HMODULE Software,
                                                                  UINT Flags,
                                                                  in D3D_FEATURE_LEVEL* pFeatureLevels,
                                                                  UINT FeatureLevels,
                                                                  UINT SDKVersion,
-                                                                 ID3D11Device** ppDevice,
+                                                                 ID3D11Device* ppDevice,
                                                                  D3D_FEATURE_LEVEL* pFeatureLevel,
-                                                                 ID3D11DeviceContext** ppImmediateContext);
+                                                                 ID3D11DeviceContext* ppImmediateContext);
 
-extern(Windows) HRESULT D3D11CreateDevice(IDXGIAdapter* pAdapter,
+extern(Windows) HRESULT D3D11CreateDevice(IDXGIAdapter pAdapter,
                                           D3D_DRIVER_TYPE DriverType,
                                           HMODULE Software,
                                           UINT Flags,
                                           in D3D_FEATURE_LEVEL* pFeatureLevels,
                                           UINT FeatureLevels,
                                           UINT SDKVersion,
-                                          ID3D11Device** ppDevice,
+                                          ID3D11Device* ppDevice,
                                           D3D_FEATURE_LEVEL* pFeatureLevel,
-                                          ID3D11DeviceContext** ppImmediateContext);
+                                          ID3D11DeviceContext* ppImmediateContext);
 
 ///////////////////////////////////////////////////////////////////////////
 // D3D11CreateDeviceAndSwapChain
@@ -5154,7 +5154,7 @@ extern(Windows) HRESULT D3D11CreateDevice(IDXGIAdapter* pAdapter,
 //          IDXGIFactory::CreateSwapChain
 //
 ///////////////////////////////////////////////////////////////////////////
-alias PFN_D3D11_CREATE_DEVICE_AND_SWAP_CHAIN = extern(Windows) HRESULT function(IDXGIAdapter* pAdapter,
+alias PFN_D3D11_CREATE_DEVICE_AND_SWAP_CHAIN = extern(Windows) HRESULT function(IDXGIAdapter pAdapter,
                                                                                 D3D_DRIVER_TYPE DriverType,
                                                                                 HMODULE Software,
                                                                                 UINT Flags,
@@ -5162,12 +5162,12 @@ alias PFN_D3D11_CREATE_DEVICE_AND_SWAP_CHAIN = extern(Windows) HRESULT function(
                                                                                 UINT FeatureLevels,
                                                                                 UINT SDKVersion,
                                                                                 in DXGI_SWAP_CHAIN_DESC* pSwapChainDesc,
-                                                                                IDXGISwapChain** ppSwapChain,
-                                                                                ID3D11Device** ppDevice,
+                                                                                IDXGISwapChain* ppSwapChain,
+                                                                                ID3D11Device* ppDevice,
                                                                                 D3D_FEATURE_LEVEL* pFeatureLevel,
-                                                                                ID3D11DeviceContext** ppImmediateContext );
+                                                                                ID3D11DeviceContext* ppImmediateContext);
 
-extern(Windows) HRESULT D3D11CreateDeviceAndSwapChain(IDXGIAdapter* pAdapter,
+extern(Windows) HRESULT D3D11CreateDeviceAndSwapChain(IDXGIAdapter pAdapter,
                                                       D3D_DRIVER_TYPE DriverType,
                                                       HMODULE Software,
                                                       UINT Flags,
@@ -5175,7 +5175,7 @@ extern(Windows) HRESULT D3D11CreateDeviceAndSwapChain(IDXGIAdapter* pAdapter,
                                                       UINT FeatureLevels,
                                                       UINT SDKVersion,
                                                       in DXGI_SWAP_CHAIN_DESC* pSwapChainDesc,
-                                                      IDXGISwapChain** ppSwapChain,
-                                                      ID3D11Device** ppDevice,
+                                                      IDXGISwapChain* ppSwapChain,
+                                                      ID3D11Device* ppDevice,
                                                       D3D_FEATURE_LEVEL* pFeatureLevel,
-                                                      ID3D11DeviceContext** ppImmediateContext );
+                                                      ID3D11DeviceContext* ppImmediateContext);

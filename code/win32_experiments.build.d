@@ -48,5 +48,6 @@ void Win32ExperimentsCommon(ref BuildContext Context)
 
     // Additional libs
     BuildArgs ~= "-Ldxgi.lib";
+    BuildArgs ~= "-Ld3d11.lib";
   }
 }
