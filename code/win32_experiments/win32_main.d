@@ -74,11 +74,6 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
   Log.Info("=== Beginning of Log");
   scope(exit) Log.Info("=== End of Log");
 
-  if(!Win32LoadXInput())
-  {
-    Log.Info("Failed to load XInput.");
-  }
-
   WNDCLASSA WindowClass;
   with(WindowClass)
   {
@@ -205,13 +200,17 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
       assert(SwapChain);
       assert(ImmediateContext);
 
+
+      import krepel.win32.directx.xinput;
+      version(XInput_RuntimeLinking) LoadXInput();
+
       GlobalRunning = true;
 
       while(GlobalRunning)
       {
         Win32ProcessPendingMessages();
 
-        Wrapped.XINPUT_STATE ControllerState;
+        XINPUT_STATE ControllerState;
         if(XInputGetState(0, &ControllerState) == ERROR_SUCCESS)
         {
           Log.Info("Marvin!! XINPUT FUNKTIONIERT!!");

@@ -27,6 +27,8 @@ version(D3D11_RuntimeLinking)
         RawFunctionPointer = cast(T)GetProcAddress(DLL, "D3D11CreateDeviceAndSwapChain".ptr);
         if(RawFunctionPointer) D3D11CreateDeviceAndSwapChain = cast(typeof(D3D11CreateDeviceAndSwapChain))RawFunctionPointer;
 
+        Log.Info("Successfully loaded library: %s", DLLName);
+
         return true;
       }
       else

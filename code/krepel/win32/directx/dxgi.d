@@ -26,6 +26,8 @@ version(DXGI_RuntimeLinking)
         RawFunctionPointer = GetProcAddress(DLL, "CreateDXGIFactory1".ptr);
         if(RawFunctionPointer) CreateDXGIFactory1 = cast(typeof(CreateDXGIFactory1))RawFunctionPointer;
 
+        Log.Info("Successfully loaded library: %s", DLLName);
+
         return true;
       }
       else

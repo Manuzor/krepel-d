@@ -40,13 +40,22 @@ void Win32ExperimentsCommon(ref BuildContext Context)
                .array;                                                 // Convert the range to a proper array.
     }
 
+    //
     // DirectX files.
-    foreach(FileName; only("dxgiformat.d", "dxerror.d", "dxgitype.d", "dxgi.d", "d3dcommon.d", "d3d11.d"))
+    //
+    auto DirectXFiles = chain(only("dxgiformat.d", "dxerror.d", "dxgitype.d", "dxgi.d"),
+                              only("d3dcommon.d", "d3d11.d"),
+                              only("xinput.d"));
+    foreach(FileName; DirectXFiles)
     {
       Files ~= buildNormalizedPath(thisDir, "directx", FileName);
     }
 
+    //
+    // Set runtime linking versions
+    //
     BuildArgs ~= "-version=DXGI_RuntimeLinking";
     BuildArgs ~= "-version=D3D11_RuntimeLinking";
+    BuildArgs ~= "-version=XInput_RuntimeLinking";
   }
 }
