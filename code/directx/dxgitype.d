@@ -57,6 +57,10 @@ private mixin template DEFINE_GUID(ComType, alias IIDString)
 
 import directx.dxgiformat;
 
+// TODO: Remove this once dmd includes directx errors in
+// core.sys.windows.winerror.
+public import directx.dxerror;
+
 struct DXGI_RGB
 {
   float Red;

@@ -565,11 +565,25 @@ extern(Windows):
 
 }
 
-alias PFN_CREATE_DXGI_FACTORY = extern(Windows) HRESULT function(REFIID riid, void** ppFactory);
-extern(Windows) HRESULT CreateDXGIFactory(REFIID riid, void **ppFactory);
+extern(Windows) @nogc nothrow
+{
+  alias PFN_CREATE_DXGI_FACTORY = HRESULT function(REFIID riid, void **ppFactory);
+  alias PFN_CREATE_DXGI_FACTORY_1 = HRESULT function(REFIID riid, void **ppFactory);
 
-alias PFN_CREATE_DXGI_FACTORY_1 = extern(Windows) HRESULT function(REFIID riid, void** ppFactory);
-extern(Windows) HRESULT CreateDXGIFactory1(REFIID riid, void **ppFactory);
+  version(DXGI_RuntimeLinking)
+  {
+    __gshared
+    {
+      PFN_CREATE_DXGI_FACTORY CreateDXGIFactory = (REFIID riid, void **ppFactory) => DXGI_ERROR_NOT_CURRENTLY_AVAILABLE;
+      PFN_CREATE_DXGI_FACTORY_1 CreateDXGIFactory1 = (REFIID riid, void **ppFactory) => DXGI_ERROR_NOT_CURRENTLY_AVAILABLE;
+    }
+  }
+  else
+  {
+    HRESULT CreateDXGIFactory(REFIID riid, void **ppFactory);
+    HRESULT CreateDXGIFactory1(REFIID riid, void **ppFactory);
+  }
+}
 
 mixin DEFINE_GUID!(IDXGIDevice, "54ec77fa-1377-44e6-8c32-88fd5f44c84c");
 // [object][uuid("54ec77fa-1377-44e6-8c32-88fd5f44c84c")][local][pointer_default("unique")]

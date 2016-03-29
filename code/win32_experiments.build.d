@@ -41,13 +41,12 @@ void Win32ExperimentsCommon(ref BuildContext Context)
     }
 
     // DirectX files.
-    foreach(FileName; only("dxgiformat.d", "dxgitype.d", "dxgi.d", "d3dcommon.d", "d3d11.d"))
+    foreach(FileName; only("dxgiformat.d", "dxerror.d", "dxgitype.d", "dxgi.d", "d3dcommon.d", "d3d11.d"))
     {
       Files ~= buildNormalizedPath(thisDir, "directx", FileName);
     }
 
-    // Additional libs
-    BuildArgs ~= "-Ldxgi.lib";
-    BuildArgs ~= "-Ld3d11.lib";
+    BuildArgs ~= "-version=DXGI_RuntimeLinking";
+    BuildArgs ~= "-version=D3D11_RuntimeLinking";
   }
 }

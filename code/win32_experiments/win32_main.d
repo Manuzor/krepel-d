@@ -103,7 +103,11 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
 
     if(Window)
     {
-      import directx.d3d11;
+      import krepel.win32.directx.dxgi;
+      import krepel.win32.directx.d3d11;
+
+      version(DXGI_RuntimeLinking)  LoadDXGI();
+      version(D3D11_RuntimeLinking) LoadD3D11();
 
       IDXGIFactory1 DXGIFactory;
       if(SUCCEEDED(CreateDXGIFactory1(&DXGIFactory.uuidof, cast(void**)&DXGIFactory)))
@@ -149,8 +153,6 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
         Windowed                           = TRUE;
       }
 
-      IDXGISwapChain SwapChain;
-
       D3D_FEATURE_LEVEL[7] AllFeatureLevels = [
         D3D_FEATURE_LEVEL_11_1,
         D3D_FEATURE_LEVEL_11_0,
@@ -168,6 +170,7 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
       debug CreateDeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
 
       ID3D11Device Device;
+      IDXGISwapChain SwapChain;
       ID3D11DeviceContext ImmediateContext;
       HRESULT Result = D3D11CreateDeviceAndSwapChain(null,
                                                      D3D_DRIVER_TYPE_HARDWARE,
@@ -197,6 +200,10 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
                                       &SupportedFeatureLevel,
                                       &ImmediateContext);
       }
+
+      assert(Device);
+      assert(SwapChain);
+      assert(ImmediateContext);
 
       GlobalRunning = true;
 
