@@ -43,8 +43,8 @@ void Win32ExperimentsCommon(ref BuildContext Context)
     //
     // DirectX files.
     //
-    auto DirectXFiles = chain(only("dxgiformat.d", "dxerror.d", "dxgitype.d", "dxgi.d"),
-                              only("d3dcommon.d", "d3d11.d"),
+    auto DirectXFiles = chain(only("dxgiformat.d", "dxerror.d", "dxgitype.d", "dxgi.d", "dxgi1_2.d"),
+                              only("d3dcommon.d", "d3d11.d", "d3d11_1"),
                               only("xinput.d"));
     foreach(FileName; DirectXFiles)
     {

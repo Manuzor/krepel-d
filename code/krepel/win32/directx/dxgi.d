@@ -1,7 +1,7 @@
 module krepel.win32.directx.dxgi;
 
 public import core.sys.windows.windows;
-public import directx.dxgi;
+public import directx.dxgi1_2;
 
 version(DXGI_RuntimeLinking)
 {

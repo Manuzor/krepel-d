@@ -212,6 +212,9 @@ alias ElementType = std.range.ElementType;
 /// }
 alias Bitfields  = std.bitmanip.bitfields;
 
+alias ModuleNameOf = std.traits.moduleName;
+alias ParentOf = std.traits.parentOf;
+
 
 //
 // Unit Tests

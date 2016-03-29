@@ -1313,14 +1313,6 @@ private mixin template DEFINE_GUID(ComType, alias IIDString)
                IIDString[32 .. 34], // IID.Data4[6] <=> xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxx[xx]xx
                IIDString[34 .. 36], // IID.Data4[7] <=> xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxx[xx]
                ));
-
-  /// Example: uuidof!IDXGIObject
-  ref auto uuidof(T)() if(is(T == ComType)) { mixin("return IID_%s;".format(ComType.stringof)); }
-
-  /// Example:
-  ///   IDXGIObject Object = /* ... */;
-  ///   auto Foo = Object.uuidof;
-  ref auto uuidof(T)(auto ref in T) if(is(T == ComType)) { return uuidof!ComType; }
 }
 
 // Note: Everything below this line is automatically converted and likely to

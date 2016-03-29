@@ -1,7 +1,7 @@
 module krepel.win32.directx.d3d11;
 
 public import core.sys.windows.windows;
-public import directx.d3d11;
+public import directx.d3d11_1;
 
 version(D3D11_RuntimeLinking)
 {
@@ -18,13 +18,12 @@ version(D3D11_RuntimeLinking)
       auto DLL = LoadLibraryA(DLLName.ptr);
       if(DLL)
       {
-        alias T = void function();
-        T RawFunctionPointer;
+        void* RawFunctionPointer;
 
-        RawFunctionPointer = cast(T)GetProcAddress(DLL, "D3D11CreateDevice".ptr);
+        RawFunctionPointer = GetProcAddress(DLL, "D3D11CreateDevice".ptr);
         if(RawFunctionPointer) D3D11CreateDevice = cast(typeof(D3D11CreateDevice))RawFunctionPointer;
 
-        RawFunctionPointer = cast(T)GetProcAddress(DLL, "D3D11CreateDeviceAndSwapChain".ptr);
+        RawFunctionPointer = GetProcAddress(DLL, "D3D11CreateDeviceAndSwapChain".ptr);
         if(RawFunctionPointer) D3D11CreateDeviceAndSwapChain = cast(typeof(D3D11CreateDeviceAndSwapChain))RawFunctionPointer;
 
         Log.Info("Successfully loaded library: %s", DLLName);

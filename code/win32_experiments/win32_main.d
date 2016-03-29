@@ -3,7 +3,12 @@ version(Windows):
 
 import krepel;
 import krepel.win32;
+import krepel.math;
 
+import krepel.win32.directx.dxgi;
+import krepel.win32.directx.d3d11;
+import krepel.win32.directx.xinput;
+import krepel.win32.directx.uuidof;
 
 version(Windows):
 import std.string : toStringz, fromStringz;
@@ -74,6 +79,9 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
   Log.Info("=== Beginning of Log");
   scope(exit) Log.Info("=== End of Log");
 
+  StateData State;
+  State.ProcessInstance = Instance;
+
   WNDCLASSA WindowClass;
   with(WindowClass)
   {
@@ -85,123 +93,24 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
 
   if(RegisterClassA(&WindowClass))
   {
-    HWND Window = CreateWindowExA(0,
-                                  WindowClass.lpszClassName,
-                                  "The Title Text".ptr,
-                                  WS_OVERLAPPEDWINDOW | WS_VISIBLE,
-                                  CW_USEDEFAULT, CW_USEDEFAULT,
-                                  CW_USEDEFAULT, CW_USEDEFAULT,
-                                  null,
-                                  null,
-                                  Instance,
-                                  null);
+    State.WindowHandle = CreateWindowExA(0,
+                                         WindowClass.lpszClassName,
+                                         "The Title Text".ptr,
+                                         WS_OVERLAPPEDWINDOW | WS_VISIBLE,
+                                         CW_USEDEFAULT, CW_USEDEFAULT,
+                                         CW_USEDEFAULT, CW_USEDEFAULT,
+                                         null,
+                                         null,
+                                         Instance,
+                                         null);
 
-    if(Window)
+    if(State.WindowHandle)
     {
-      import krepel.win32.directx.dxgi;
-      import krepel.win32.directx.d3d11;
-
       version(DXGI_RuntimeLinking)  LoadDXGI();
       version(D3D11_RuntimeLinking) LoadD3D11();
 
-      IDXGIFactory1 DXGIFactory;
-      if(SUCCEEDED(CreateDXGIFactory1(&DXGIFactory.uuidof, cast(void**)&DXGIFactory)))
-      {
-        assert(DXGIFactory);
+      InitDevice(&State);
 
-        Log.Info("Available Adapters:");
-
-        UINT CurrentAdapterIndex;
-        IDXGIAdapter1 DXGIAdapter;
-        while(SUCCEEDED(DXGIFactory.EnumAdapters1(CurrentAdapterIndex, &DXGIAdapter)))
-        {
-          scope(exit) CurrentAdapterIndex++;
-          DXGI_ADAPTER_DESC AdapterDesc = void;
-          if(SUCCEEDED(DXGIAdapter.GetDesc(&AdapterDesc)))
-          {
-            Log.Info("Adapter[%d]: %s", CurrentAdapterIndex, AdapterDesc.Description[].ByUTF!char);
-          }
-          else
-          {
-            Log.Failure("Failed to get adapter %d's description.", CurrentAdapterIndex);
-          }
-        }
-      }
-      else
-      {
-        Log.Failure("Failed to create DXGI factory.");
-      }
-
-      DXGI_SWAP_CHAIN_DESC SwapChainDesc;
-      with(SwapChainDesc)
-      {
-        BufferCount                        = 1;
-        BufferDesc.Width                   = 640;
-        BufferDesc.Height                  = 480;
-        BufferDesc.Format                  = DXGI_FORMAT_R8G8B8A8_UNORM;
-        BufferDesc.RefreshRate.Numerator   = 60;
-        BufferDesc.RefreshRate.Denominator = 1;
-        BufferUsage                        = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-        OutputWindow                       = Window;
-        SampleDesc.Count                   = 1;
-        SampleDesc.Quality                 = 0;
-        Windowed                           = TRUE;
-      }
-
-      D3D_FEATURE_LEVEL[7] AllFeatureLevels = [
-        D3D_FEATURE_LEVEL_11_1,
-        D3D_FEATURE_LEVEL_11_0,
-        D3D_FEATURE_LEVEL_10_1,
-        D3D_FEATURE_LEVEL_10_0,
-        D3D_FEATURE_LEVEL_9_3,
-        D3D_FEATURE_LEVEL_9_2,
-        D3D_FEATURE_LEVEL_9_1
-      ];
-
-      auto FeatureLevels = AllFeatureLevels[];
-      D3D_FEATURE_LEVEL SupportedFeatureLevel;
-
-      UINT CreateDeviceFlags = 0;
-      debug CreateDeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
-
-      ID3D11Device Device;
-      IDXGISwapChain SwapChain;
-      ID3D11DeviceContext ImmediateContext;
-      HRESULT Result = D3D11CreateDeviceAndSwapChain(null,
-                                                     D3D_DRIVER_TYPE_HARDWARE,
-                                                     null,
-                                                     CreateDeviceFlags,
-                                                     FeatureLevels.ptr,
-                                                     cast(UINT)FeatureLevels.length,
-                                                     D3D11_SDK_VERSION,
-                                                     &SwapChainDesc,
-                                                     &SwapChain,
-                                                     &Device,
-                                                     &SupportedFeatureLevel,
-                                                     &ImmediateContext);
-      if (Result == E_INVALIDARG)
-      {
-        FeatureLevels.popFront();
-        D3D11CreateDeviceAndSwapChain(null,
-                                      D3D_DRIVER_TYPE_HARDWARE,
-                                      null,
-                                      CreateDeviceFlags,
-                                      FeatureLevels.ptr,
-                                      cast(UINT)FeatureLevels.length,
-                                      D3D11_SDK_VERSION,
-                                      &SwapChainDesc,
-                                      &SwapChain,
-                                      &Device,
-                                      &SupportedFeatureLevel,
-                                      &ImmediateContext);
-      }
-
-      assert(Device);
-      assert(SwapChain);
-      assert(ImmediateContext);
-
-
-      import krepel.win32.directx.xinput;
       version(XInput_RuntimeLinking) LoadXInput();
 
       GlobalRunning = true;
@@ -215,6 +124,10 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
         {
           Log.Info("Marvin!! XINPUT FUNKTIONIERT!!");
         }
+
+        auto CornflowerBlue = Vector4(100 / 255.0f, 149 / 255.0f, 237 / 255.0f, 1.0f);
+        State.ImmediateContext.ClearRenderTargetView(State.RenderTargetView, CornflowerBlue.Data);
+        State.SwapChain.Present(0, 0);
       }
     }
   }
@@ -310,4 +223,176 @@ LRESULT Win32MainWindowCallback(HWND Window, UINT Message,
   }
 
   return Result;
+}
+
+struct StateData
+{
+  HINSTANCE ProcessInstance;
+  HWND WindowHandle;
+  D3D_DRIVER_TYPE DriverType;
+  D3D_FEATURE_LEVEL FeatureLevel;
+  ID3D11Device D3DDevice;
+  ID3D11Device1 D3DDevice1;
+  ID3D11DeviceContext ImmediateContext;
+  ID3D11DeviceContext1 ImmediateContext1;
+  IDXGISwapChain SwapChain;
+  IDXGISwapChain1 SwapChain1;
+  ID3D11RenderTargetView RenderTargetView;
+}
+
+bool InitDevice(StateData* State)
+{
+  HRESULT Result;
+
+  RECT ClientRect;
+  GetClientRect(State.WindowHandle, &ClientRect);
+  auto WindowWidth = ClientRect.right - ClientRect.left;
+  auto WindowHeight = ClientRect.bottom - ClientRect.top;
+
+  UINT CreateDeviceFlags = 0;
+  debug CreateDeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
+
+  D3D_DRIVER_TYPE[3] DriverTypes =
+  [
+    D3D_DRIVER_TYPE_HARDWARE,
+    D3D_DRIVER_TYPE_WARP,
+    D3D_DRIVER_TYPE_REFERENCE,
+  ];
+
+  D3D_FEATURE_LEVEL[4] FeatureLevels =
+  [
+    D3D_FEATURE_LEVEL_11_1,
+    D3D_FEATURE_LEVEL_11_0,
+    D3D_FEATURE_LEVEL_10_1,
+    D3D_FEATURE_LEVEL_10_0,
+  ];
+
+  foreach(DriverType; DriverTypes)
+  {
+    Result = D3D11CreateDevice(null, DriverType, null, CreateDeviceFlags,
+                               FeatureLevels.ptr, cast(UINT)FeatureLevels.length,
+                               D3D11_SDK_VERSION,
+                               &State.D3DDevice, &State.FeatureLevel, &State.ImmediateContext);
+    if(Result == E_INVALIDARG)
+    {
+      // DirectX 11.0 platforms will not recognize D3D_FEATURE_LEVEL_11_1 so
+      // we need to retry without it.
+      auto TrimmedFeatureLevels = FeatureLevels[1 .. $];
+      Result = D3D11CreateDevice(null, DriverType, null, CreateDeviceFlags,
+                                 TrimmedFeatureLevels.ptr, cast(UINT)TrimmedFeatureLevels.length,
+                                 D3D11_SDK_VERSION,
+                                 &State.D3DDevice, &State.FeatureLevel, &State.ImmediateContext);
+    }
+
+    if(SUCCEEDED(Result))
+      break;
+  }
+
+  if(FAILED(Result))
+    return false;
+
+  // Obtain DXGI factory from device.
+  IDXGIFactory1 DXGIFactory;
+  {
+    IDXGIDevice DXGIDevice;
+    Result = State.D3DDevice.QueryInterface(uuidof!IDXGIDevice, cast(void**)&DXGIDevice);
+    if(SUCCEEDED(Result))
+    {
+      scope(exit) DXGIDevice.Release();
+
+      IDXGIAdapter Adapter;
+      DXGIDevice.GetAdapter(&Adapter);
+      if(SUCCEEDED(Result))
+      {
+        scope(exit) Adapter.Release();
+
+        Result = Adapter.GetParent(uuidof!IDXGIFactory1, cast(void**)&DXGIFactory);
+      }
+    }
+  }
+  if(FAILED(Result))
+    return false;
+
+  scope(exit) DXGIFactory.Release();
+
+  IDXGIFactory2 DXGIFactory2;
+  Result = DXGIFactory.QueryInterface(uuidof!IDXGIFactory2, cast(void**)&DXGIFactory2);
+  if(DXGIFactory2)
+  {
+    scope(exit) DXGIFactory2.Release();
+
+    Result = State.D3DDevice.QueryInterface(uuidof!ID3D11Device1, cast(void**)&State.D3DDevice1);
+    if(SUCCEEDED(Result))
+    {
+      State.ImmediateContext.QueryInterface(uuidof!ID3D11DeviceContext1, cast(void**)&State.ImmediateContext1);
+    }
+
+    DXGI_SWAP_CHAIN_DESC1 SwapChainDesc;
+    with(SwapChainDesc)
+    {
+      Width = WindowWidth;
+      Height = WindowHeight;
+      Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+      SampleDesc.Count = 1;
+      SampleDesc.Quality = 0;
+      BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+      BufferCount = 1;
+
+      Result = DXGIFactory2.CreateSwapChainForHwnd(State.D3DDevice, State.WindowHandle, &SwapChainDesc, null, null, &State.SwapChain1);
+      if(SUCCEEDED(Result))
+      {
+        Result = State.SwapChain1.QueryInterface(uuidof!IDXGISwapChain, cast(void**)&State.SwapChain);
+      }
+    }
+  }
+  else
+  {
+    // DirectX 11.0 systems
+    DXGI_SWAP_CHAIN_DESC SwapChainDesc;
+    with(SwapChainDesc)
+    {
+      BufferCount = 1;
+      BufferDesc.Width = WindowWidth;
+      BufferDesc.Height = WindowHeight;
+      BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+      BufferDesc.RefreshRate.Numerator = 60;
+      BufferDesc.RefreshRate.Denominator = 1;
+      BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+      OutputWindow = State.WindowHandle;
+      SampleDesc.Count = 1;
+      SampleDesc.Quality = 0;
+      Windowed = TRUE;
+    }
+
+    Result = DXGIFactory.CreateSwapChain(State.D3DDevice, &SwapChainDesc, &State.SwapChain);
+  }
+
+  DXGIFactory.MakeWindowAssociation(State.WindowHandle, DXGI_MWA_NO_ALT_ENTER);
+
+  if(FAILED(Result)) return false;
+
+  ID3D11Texture2D BackBuffer;
+  Result = State.SwapChain.GetBuffer(0, uuidof!ID3D11Texture2D, cast(void**)&BackBuffer);
+  if(FAILED(Result)) return false;
+
+  scope(exit) BackBuffer.Release();
+
+  State.D3DDevice.CreateRenderTargetView(BackBuffer, null, &State.RenderTargetView);
+
+  if(FAILED(Result)) return false;
+
+  State.ImmediateContext.OMSetRenderTargets(1, &State.RenderTargetView, null);
+
+  D3D11_VIEWPORT ViewPort;
+  with(ViewPort)
+  {
+    Width = cast(FLOAT)WindowWidth;
+    Height = cast(FLOAT)WindowHeight;
+    MinDepth = 0.0f;
+    MaxDepth = 1.0f;
+  }
+
+  State.ImmediateContext.RSSetViewports(1, &ViewPort);
+
+  return true;
 }

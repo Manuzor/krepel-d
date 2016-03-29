@@ -39,6 +39,11 @@ alias SetBit    = (const Bits, const Position) => Bits |  (1 << Position);
 alias RemoveBit = (const Bits, const Position) => Bits & ~(1 << Position);
 alias HasBit    = (const Bits, const Position) => cast(bool)(Bits &  (1 << Position));
 
+auto ByteCount(Type)(in Type[] Slice)
+{
+  return Slice.length * Type.sizeof;
+}
+
 //
 // Unit Tests
 //
@@ -88,4 +93,22 @@ unittest
   assert( HasBit(0b1010, 1));
   assert(!HasBit(0b1010, 2));
   assert( HasBit(0b1010, 3));
+}
+
+unittest
+{
+  int[3] Integers = void;
+  assert(Integers.ByteCount == 12);
+
+  float[3] Floats = void;
+  assert(Floats.ByteCount == 12);
+
+  static struct Aggregate
+  {
+  align(4):
+    int A; float B; bool C;
+  }
+
+  Aggregate[3] Aggregates = void;
+  assert(Aggregates.ByteCount == 36);
 }
