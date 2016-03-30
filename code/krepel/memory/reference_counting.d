@@ -4,22 +4,14 @@ import krepel.memory.construction;
 import krepel.memory.allocator_interface;
 import Meta = krepel.meta;
 
-/// Allocation data for reference counted objects.
-class ARCData(Type)
+struct RefCountPayloadData
 {
   IAllocator Allocator;
   long RefCount;
-  InPlace!Type.Data Instance;
-
-  this(IAllocator Allocator, long InitialRefCount)
-  {
-    this.Allocator = Allocator;
-    this.RefCount = InitialRefCount;
-  }
 
   void AddRef()
   {
-    // TODO(Manu): Thread safety.unt)++;
+    // TODO(Manu): Thread safety.
 
     RefCount++;
   }
@@ -29,55 +21,81 @@ class ARCData(Type)
     // TODO(Manu): Thread safety.
 
     RefCount--;
-
     assert(RefCount >= 0, "Invalid reference count.");
-    if(RefCount <= 0)
-    {
-      InPlace!Type.Destruct(Instance);
-      Allocator.Delete(this);
-    }
   }
+}
+
+/// Used for external reference-counting.
+class RefCountWrapper(Type)
+{
+  RefCountPayloadData RefCountPayload;
+  InPlace!Type.Data _Wrapped;
+
+  this(ArgTypes...)(auto ref ArgTypes Args)
+  {
+    InPlace!Type.Construct(_Wrapped, Args);
+  }
+
+  ~this()
+  {
+    InPlace!Type.Destruct(_Wrapped);
+  }
+
+  alias _Wrapped this;
 }
 
 /// Pointer-like wrapper for reference-counted objects.
 struct ARC(Type)
 {
-  ARCData!Type _Data;
-
-  @property inout(Type) _Instance() inout
-  {
-    assert(_Data);
-    return _Data.Instance;
-  }
+  Type _Instance;
 
   this(this)
   {
-    assert(_Data);
-    _Data.AddRef();
+    assert(_Instance);
+    _Instance.RefCountPayload.AddRef();
   }
 
   ~this()
   {
-    assert(_Data);
-    _Data.RemoveRef();
+    assert(_Instance);
+    _Instance.RefCountPayload.RemoveRef();
+    if(_Instance.RefCountPayload.RefCount <= 0)
+    {
+      _Instance.RefCountPayload.Allocator.Delete(_Instance);
+    }
   }
 
   alias _Instance this;
 }
 
-@property auto RefCount(Type)(ref in ARC!Type Object)
+/// Convenience wrapper to query the current reference count of an object.
+@property auto RefCount(Type)(auto ref in Type Object)
+  if(Meta.HasMember!(Type, "RefCountPayload"))
 {
-  return Object._Data.RefCount;
+  return Object.RefCountPayload.RefCount;
+}
+
+enum RefCountMode
+{
+  Auto,     // Either intrusive if the type has a RefCountPayload member, otherwise same as External.
+  External, // Reference counting is done separately from the actual object.
 }
 
 /// Allocates an automatically reference-counted object and initializes it
 /// with the given arguments.
-ARC!Type NewARC(Type, ArgTypes...)(IAllocator Allocator, auto ref ArgTypes Args)
+auto NewARC(Type, RefCountMode Mode = RefCountMode.Auto, ArgTypes...)(IAllocator Allocator, auto ref ArgTypes Args)
   if(is(Type == class))
 {
-  auto Data = Allocator.New!(ARCData!Type)(Allocator, 1);
-  InPlace!Type.Construct(Data.Instance, Args);
-  auto Result = ARC!Type(Data);
+  enum BeInstrusive = Mode != RefCountMode.External && Meta.HasMember!(Type, "RefCountPayload");
+
+  static if(BeInstrusive) alias InstanceType = Type;
+  else                    alias InstanceType = RefCountWrapper!Type;
+
+  auto Instance = Allocator.New!InstanceType(Args);
+  Instance.RefCountPayload.Allocator = Allocator;
+  Instance.RefCountPayload.RefCount = 1;
+
+  auto Result = ARC!InstanceType(Instance);
   return Result;
 }
 
@@ -87,7 +105,7 @@ ARC!Type NewARC(Type, ArgTypes...)(IAllocator Allocator, auto ref ArgTypes Args)
 
 version(unittest) import krepel.memory : CreateTestAllocator;
 
-// NewARC
+// NewARC for external reference counting
 unittest
 {
   class TestObject
@@ -109,21 +127,51 @@ unittest
 
   auto TestAllocator = CreateTestAllocator();
 
-  ARCData!TestObject* ObjectData;
+  RefCountWrapper!TestObject ObjectData;
 
   {
     int Message;
-    auto WrappedObject = TestAllocator.NewARC!TestObject(&Message);
+    ARC!(RefCountWrapper!TestObject) WrappedObject = TestAllocator.NewARC!TestObject(&Message);
     assert(Message == 1);
     assert(WrappedObject.Foo == 42);
     import krepel.math : IsNaN;
     assert(WrappedObject.Bar.IsNaN);
 
-    ObjectData = &WrappedObject._Data;
+    ObjectData = WrappedObject._Instance;
     assert(ObjectData.RefCount == 1);
   }
 
   assert(ObjectData.RefCount == 0);
-  assert(ObjectData.Instance.Foo == 42);
-  assert(ObjectData.Instance.Bar == 3.1415f);
+  assert(ObjectData.Foo == 42);
+  assert(ObjectData.Bar == 3.1415f);
+}
+
+// NewARC for intrusive reference counting
+unittest
+{
+  class TestObject
+  {
+    RefCountPayloadData RefCountPayload;
+    int Foo = 42;
+
+    ~this()
+    {
+      Foo = 94;
+    }
+  }
+
+  auto TestAllocator = CreateTestAllocator();
+
+  TestObject Object;
+
+  {
+    ARC!TestObject WrappedObject = TestAllocator.NewARC!TestObject();
+    assert(WrappedObject.RefCount == 1);
+    assert(WrappedObject.Foo == 42);
+
+    Object = WrappedObject;
+  }
+
+  assert(Object.RefCount == 0);
+  assert(Object.Foo == 94);
 }
