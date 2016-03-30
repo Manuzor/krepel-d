@@ -6,9 +6,7 @@ import krepel.math.vector3;
 import krepel.math.vector2;
 import std.conv;
 
-@nogc:
 @safe:
-nothrow:
 
 /// Calculates the Dot Product of the two Vectors
 /// Input Vectors will not be modified
@@ -130,8 +128,6 @@ Vector4 ClampSize2D(Vector4 Vec, float MaxSize)
 struct Vector4
 {
   @safe:
-  @nogc:
-  nothrow:
 
   union
   {

@@ -1,9 +1,6 @@
 deprecated("This module is not ready for use yet.")
 module krepel.memory.ownership;
 
-nothrow:
-@nogc:
-
 struct Owned(T)
 {
   alias ElementType = T;
@@ -28,7 +25,7 @@ version(unittest)
     __gshared int NumberOfCopies;
 
     int Value = 42;
-    this(this) nothrow @nogc { ++NumberOfCopies; }
+    this(this) { ++NumberOfCopies; }
   }
 
   auto SomeFunction(ref S Instance) { assert(Instance.Value == 42); }

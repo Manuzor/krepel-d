@@ -5,9 +5,7 @@ import krepel.math.vector4;
 import krepel.math.math;
 import krepel.math.matrix4;
 
-@nogc:
 @safe:
-nothrow:
 
 Quaternion ConcatenateQuaternion(Quaternion Quat1, Quaternion Quat2)
 {
@@ -158,9 +156,7 @@ bool ContainsNaN(Quaternion Quat)
 
 struct Quaternion
 {
-  @nogc:
   @safe:
-  nothrow:
 
   union
   {

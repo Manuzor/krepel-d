@@ -10,12 +10,11 @@ import krepel.memory.common;
 import krepel.memory.allocator_primitives;
 import krepel.memory.allocator_interface;
 
+import krepel.log;
+
 /// Maintains an array of heap memory blocks of a given size
 struct AutoHeapAllocator
 {
-  @nogc:
-  nothrow:
-
   import krepel.container.array;
 
   /// Change this to affect the size of newly allocated heaps.
@@ -86,11 +85,19 @@ struct AutoHeapAllocator
 
     EnsureValidState();
 
-    assert(RequestedBytes < HeapSize - HeapMemory.MinimumBlockSize,
-           "Insufficient heap size.");
-
     auto NewHeap = &Heaps.Expand();
-    auto NewHeapMemory = Allocator.Allocate(HeapSize, 1);
+    auto NewHeapSize = NewHeap.CalculateRequiredBlockSize(HeapSize, Alignment);
+    const RequiredBlockSize = NewHeap.CalculateRequiredBlockSize(RequestedBytes, Alignment);
+    if(RequiredBlockSize > NewHeapSize)
+    {
+      NewHeapSize = RequiredBlockSize;
+      Log.Warning("Allocation requested more memory than the current heap size"
+                  "(%s) can take. A new heap of size %s will be created to"
+                  "accomodate for this unusual request. It is advised to"
+                  "review whether the current heap size is sufficient and that"
+                  "the correct type of allocator is used.", HeapSize, NewHeapSize);
+    }
+    auto NewHeapMemory = Allocator.Allocate(NewHeapSize, 1);
     NewHeap.Initialize(NewHeapMemory);
 
     return NewHeap.Allocate(RequestedBytes, Alignment);
@@ -264,9 +271,9 @@ unittest
 // CreateTestAllocator
 unittest
 {
-  auto Allocator = CreateTestAllocator(8.KiB);
+  auto Allocator = CreateTestAllocator(4.KiB);
   auto Mem1 = Allocator.Allocate(4.KiB);
   assert(Mem1 !is null);
-  auto Mem2 = Allocator.Allocate(6.KiB);
+  auto Mem2 = Allocator.Allocate(16.KiB);
   assert(Mem2 !is null);
 }

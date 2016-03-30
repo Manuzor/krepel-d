@@ -11,9 +11,6 @@ import Meta = krepel.meta;
 /// also accounted for and only slightly more expensive in some cases.
 struct Array(T)
 {
-  @nogc:
-  nothrow:
-
   enum size_t MinimumElementAllocationCount = 16;
 
   alias ElementType = T;
@@ -47,8 +44,13 @@ struct Array(T)
   @property auto SlackFront() const { return Data.ptr - AvailableMemory.ptr; }
   @property auto SlackBack() const { return Capacity - Count - SlackFront; }
 
-  // Note(Manu): Disable copy construction.
-  @disable this(this);
+  this(this)
+  {
+    auto NewMemory = Allocator.NewUnconstructedArray!ElementType(Count);
+    NewMemory[] = Data[];
+    Data = NewMemory;
+    AvailableMemory = Data;
+  }
 
   ~this()
   {
@@ -169,7 +171,7 @@ struct Array(T)
     }
   }
 
-  void PushBack(ArgTypes...)(in auto ref ArgTypes Args)
+  void PushBack(ArgTypes...)(auto ref ArgTypes Args)
     if(ArgTypes.length)
   {
     auto NewData = ExpandUninitialized(ArgTypes.length);
@@ -209,11 +211,18 @@ struct Array(T)
   void PopFront(size_t Amount = 1)
   {
     DestructArray(Data[0 .. Amount]);
+    if(Count - Amount == 0)
+    {
+      Data = AvailableMemory[0..0];
+    }
+    else
+    {
     Data = Data[Amount .. $];
+  }
   }
 
   @property ref auto Front() inout { return Data[0]; }
-  @property ref auto Back() inout { return Data[0]; }
+  @property ref auto Back() inout { return Data[$-1]; }
 
   void RemoveAt(IndexType, CountType)(IndexType Index, CountType CountToRemove = 1)
   {
@@ -225,6 +234,25 @@ struct Array(T)
 
     Data[EndIndex .. $].CopyTo(Data[Index .. $ - CountToRemove]);
     Data = Data[0 .. $ - CountToRemove];
+  }
+
+  void Insert(IndexType)(IndexType Where, const(ElementType[]) ToInsert)
+  {
+    assert(Where >= 0 && Where <= Count);
+    auto DataToMove = Data[Where .. $];
+    auto ExpandedArea = ExpandUninitialized(ToInsert.length);
+    if (Where == Count)
+    {
+      ExpandedArea[] = ToInsert[];
+    }
+    else
+    {
+      for(long Index = Count - 1; Index >= Where + ToInsert.length; Index--)
+      {
+        Data[Index] = Data[Index - ToInsert.length];
+      }
+      Data[Where .. Where + ToInsert.length] = ToInsert[];
+    }
   }
 
   void RemoveAtSwap(IndexType, CountType)(IndexType Index, CountType CountToRemove = 1)
@@ -431,8 +459,13 @@ unittest
   Arr.PushBack(4, 5, 9);
   assert(Arr.Count == 3);
   assert(Arr[0] == 4);
+  assert(Arr.Front == 4);
   assert(Arr[1] == 5);
   assert(Arr[2] == 9);
+  assert(Arr.Back == 9);
+
+  Arr.RemoveAt(1, 2);
+  assert(Arr.Count == 1);
 }
 
 unittest
@@ -450,4 +483,54 @@ unittest
 
   static assert(!__traits(compiles, Array.PushBack(1.0)),
                 "A double is not implicitly convertible to an int.");
+}
+
+unittest
+{
+  StaticStackMemory!1024 Memory;
+  auto Array = Array!int(Memory.Wrap);
+
+  Array.PushBack(0, 1, 2, 3, 4);
+  assert(Array.length == 5);
+  assert(Array[0] == 0);
+  Array.Insert(0, [10]);
+  assert(Array.length == 6);
+  assert(Array[0] == 10);
+  assert(Array[1] == 0);
+  assert(Array[2] == 1);
+  assert(Array[3] == 2);
+  assert(Array[4] == 3);
+  assert(Array[5] == 4);
+  Array.Insert(2, [5]);
+  assert(Array.length == 7);
+  assert(Array[0] == 10);
+  assert(Array[1] == 0);
+  assert(Array[2] == 5);
+  assert(Array[3] == 1);
+  assert(Array[4] == 2);
+  assert(Array[5] == 3);
+  assert(Array[6] == 4);
+  Array.Insert(7, [200]);
+  assert(Array.length == 8);
+  assert(Array[0] == 10);
+  assert(Array[1] == 0);
+  assert(Array[2] == 5);
+  assert(Array[3] == 1);
+  assert(Array[4] == 2);
+  assert(Array[5] == 3);
+  assert(Array[6] == 4);
+  assert(Array[7] == 200);
+  Array.Insert(4, [500,600,700]);
+  assert(Array.length == 11);
+  assert(Array[0] == 10);
+  assert(Array[1] == 0);
+  assert(Array[2] == 5);
+  assert(Array[3] == 1);
+  assert(Array[4] == 500);
+  assert(Array[5] == 600);
+  assert(Array[6] == 700);
+  assert(Array[7] == 2);
+  assert(Array[8] == 3);
+  assert(Array[9] == 4);
+  assert(Array[10] == 200);
 }

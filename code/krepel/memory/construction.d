@@ -5,14 +5,6 @@ import Meta = krepel.meta;
 
 private static import std.conv;
 
-// TODO(Manu): Get rid of phobos?
-
-// Enable these when we got rid of phobos.
-// @nogc:
-// nothrow:
-// pure:
-
-
 Type Construct(Type, ArgTypes...)(void[] RawMemory, auto ref ArgTypes Args)
   if(is(Type == class))
 {
@@ -44,7 +36,7 @@ void Destruct(Type)(Type Instance)
   // TODO(Manu): assert(Instance)?
   if(Instance)
   {
-    static if(Meta.HasMember!("__dtor")) Instance.__dtor();
+    static if(Meta.HasMember!(Type, "__dtor")) Instance.__dtor();
     //BlitInitialData((&Instance)[0 .. 1]);
   }
 }
@@ -69,7 +61,7 @@ void Destruct(Type)(Type* Instance)
         static if(__traits(compiles, typeof(mixin(`Instance.` ~ MemberName))))
         {
           alias MemberType = typeof(mixin(`Instance.` ~ MemberName));
-          static if(Meta.HasDestructor!MemberType)
+          static if(Meta.HasDestructor!MemberType && !Meta.IsPointer!MemberType)
           {
             static if(is(MemberType == class))
             {
@@ -148,7 +140,7 @@ private void BlitInitialData(Type)(Type[] BlitTargets)
 // Single struct object construction
 unittest
 {
-  nothrow @nogc static struct TestData
+  static struct TestData
   {
     int Value;
     float Precision;

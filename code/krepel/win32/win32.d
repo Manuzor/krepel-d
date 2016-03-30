@@ -7,9 +7,6 @@ import krepel.memory : AlignedPointer;
 import krepel.math : IsPowerOfTwo;
 import krepel.log;
 
-@nogc:
-nothrow:
-
 /// Dynamically allocates memory from standard system procedures.
 /// Params:
 ///   RequestedBytes = The number of bytes the resulting memory block should have.
