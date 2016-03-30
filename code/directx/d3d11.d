@@ -8,11 +8,6 @@ import core.sys.windows.windows;
 
 private mixin template DEFINE_GUID(ComType, alias IIDString)
 {
-  static if(!is(ComType : IUnknown))
-  {
-    pragma(msg, "Warning: The type " ~ ComType.stringof ~ " does not derive from IUnknown.");
-  }
-
   // Format of a UUID:
   // [0  1  2  3  4  5  6  7]  8  [9  10 11 12] 13 [14 15 16 17] 18 [19 20] [21 22] 23 [24 25] [26 27] [28 29] [30 31] [32 33] [34 35]
   // [x  x  x  x  x  x  x  x]  -  [x  x  x  x ] -  [x  x  x  x ] -  [x  x ] [x  x ]  - [x  x ] [x  x ] [x  x ] [x  x ] [x  x ] [x  x ]
@@ -925,7 +920,7 @@ extern(Windows):
     UINT EvictionPriority,
   );
 
-  UINT GetEvictionPriority(  );
+  UINT GetEvictionPriority();
 
 }
 
@@ -1667,7 +1662,7 @@ interface ID3D11Asynchronous : ID3D11DeviceChild
 {
 extern(Windows):
 
-  UINT GetDataSize(  );
+  UINT GetDataSize();
 
 }
 
@@ -1895,7 +1890,7 @@ interface ID3D11CommandList : ID3D11DeviceChild
 {
 extern(Windows):
 
-  UINT GetContextFlags(  );
+  UINT GetContextFlags();
 
 }
 
@@ -2344,7 +2339,7 @@ extern(Windows):
     in UINT* pOffsets,
   );
 
-  void DrawAuto(  );
+  void DrawAuto();
 
   void DrawIndexedInstancedIndirect(
     // [annotation("_In_")]
@@ -2958,13 +2953,13 @@ extern(Windows):
     ID3D11Buffer* ppConstantBuffers,
   );
 
-  void ClearState(  );
+  void ClearState();
 
-  void Flush(  );
+  void Flush();
 
-  D3D11_DEVICE_CONTEXT_TYPE GetType(  );
+  D3D11_DEVICE_CONTEXT_TYPE GetType();
 
-  UINT GetContextFlags(  );
+  UINT GetContextFlags();
 
   HRESULT FinishCommandList(
     BOOL RestoreDeferredContextState,
@@ -4598,7 +4593,7 @@ extern(Windows):
     ID3D11VideoProcessorEnumerator* ppEnum,
   );
 
-  UINT GetVideoDecoderProfileCount(  );
+  UINT GetVideoDecoderProfileCount();
 
   HRESULT GetVideoDecoderProfile(
     // [annotation("_In_")]
@@ -4991,11 +4986,11 @@ extern(Windows):
     in IUnknown* pData,
   );
 
-  D3D_FEATURE_LEVEL GetFeatureLevel(  );
+  D3D_FEATURE_LEVEL GetFeatureLevel();
 
-  UINT GetCreationFlags(  );
+  UINT GetCreationFlags();
 
-  HRESULT GetDeviceRemovedReason(  );
+  HRESULT GetDeviceRemovedReason();
 
   void GetImmediateContext(
     // [annotation("_Outptr_")]
@@ -5006,7 +5001,7 @@ extern(Windows):
     UINT RaiseFlags,
   );
 
-  UINT GetExceptionMode(  );
+  UINT GetExceptionMode();
 
 }
 
