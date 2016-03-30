@@ -328,14 +328,14 @@ __gshared {
 struct DVulkanLoader {
 	@disable this();
 	@disable this(this);
-	
+
 	static void loadInstanceFunctions(typeof(vkGetInstanceProcAddr) getProcAddr) {
 		vkGetInstanceProcAddr = getProcAddr;
 		vkEnumerateInstanceExtensionProperties = cast(typeof(vkEnumerateInstanceExtensionProperties)) vkGetInstanceProcAddr(null, "vkEnumerateInstanceExtensionProperties");
 		vkEnumerateInstanceLayerProperties = cast(typeof(vkEnumerateInstanceLayerProperties)) vkGetInstanceProcAddr(null, "vkEnumerateInstanceLayerProperties");
 		vkCreateInstance = cast(typeof(vkCreateInstance)) vkGetInstanceProcAddr(null, "vkCreateInstance");
 	}
-	
+
 	static void loadAllFunctions(VkInstance instance) {
 		assert(vkGetInstanceProcAddr !is null, "Must call DVulkanLoader.loadInstanceFunctions before DVulkanLOADER.loadAllFunctions");
 
@@ -494,7 +494,7 @@ struct DVulkanLoader {
 		vkUpdateDescriptorSets = cast(typeof(vkUpdateDescriptorSets)) vkGetInstanceProcAddr(instance, "vkUpdateDescriptorSets");
 		vkWaitForFences = cast(typeof(vkWaitForFences)) vkGetInstanceProcAddr(instance, "vkWaitForFences");
 	}
-	
+
 	void loadAllFunctions(VkDevice device) {
 		assert(vkGetDeviceProcAddr !is null, "reload(VkDevice) must be called after reload(VkInstance)");
 
@@ -658,26 +658,26 @@ struct DVulkanLoader {
 version(DVulkanLoadFromDerelict) {
 	import derelict.util.loader;
 	import derelict.util.system;
-	
+
 	private {
 		version(Windows)
 			enum libNames = "vulkan-1.dll";
 		else
 			static assert(0,"Need to implement Vulkan libNames for this operating system.");
 	}
-	
+
 	class DVulkanDerelictLoader : SharedLibLoader {
 		this() {
 			super(libNames);
 		}
-		
+
 		protected override void loadSymbols() {
 			typeof(vkGetInstanceProcAddr) getProcAddr;
 			bindFunc(cast(void**)&getProcAddr, "vkGetInstanceProcAddr");
 			DVulkanLoader.loadInstanceFunctions(getProcAddr);
 		}
 	}
-	
+
 	__gshared DVulkanDerelictLoader DVulkanDerelict;
 
 	shared static this() {
