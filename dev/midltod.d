@@ -1064,9 +1064,10 @@ void EmitFunction(ref FunctionData Function, FormattedOutput Output, Flag!"AddEx
     }
 
     Output.Outdent();
+    Output.write(Output.Indentation);
   }
 
-  Output.write(Output.Indentation, ");", Output.Newline);
+  Output.write(");", Output.Newline);
 }
 
 void EmitAlias(ref AliasData Alias, FormattedOutput Output)
