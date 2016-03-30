@@ -3,6 +3,7 @@ version(Windows):
 
 import krepel;
 import krepel.win32;
+import krepel.memory.reference_counting;
 
 
 import std.string : toStringz, fromStringz;
@@ -110,68 +111,23 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
 
     if(Window)
     {
-      auto VulkanDLL = LoadLibrary("vulkan-1.dll");
-      if(VulkanDLL)
+      auto State = MainAllocator.NewARC!VulkanState();
+      State.Allocator = MainAllocator;
+
+      State.LoadDLL();
+      if(State.DLL)
       {
-        {
-          auto Func = cast(typeof(vkGetInstanceProcAddr))GetProcAddress(VulkanDLL, "vkGetInstanceProcAddr");
-          assert(Func, "Failed to load vkGetInstanceProcAddr.");
-          DVulkanLoader.loadInstanceFunctions(Func);
-        }
+        Log.Info("Using Vulkan DLL %s", State.DLLName);
 
-        VkApplicationInfo ApplicationInfo =
-        {
-          pApplicationName : "Vulkan Experiments".ptr,
-          applicationVersion : VK_MAKE_VERSION(0, 0, 1),
+        State.CreateInstance();
+        assert(State.Instance);
+        scope(exit) State.DestroyInstance();
 
-          pEngineName : "Krepel".ptr,
-          engineVersion : VK_MAKE_VERSION(0, 0, 1),
+        State.LoadPhysicalDevices();
 
-          apiVersion : VK_MAKE_VERSION(1, 0, 4),
-        };
-
-        const(char)*[1] Layers = [ "VK_LAYER_LUNARG_standard_validation".ptr ];
-
-        VkInstanceCreateInfo CreateInfo =
-        {
-          pApplicationInfo : &ApplicationInfo,
-          enabledLayerCount : Layers.length,
-          ppEnabledLayerNames : Layers.ptr,
-        };
-
-        VkInstance Vulkan;
-        vkCreateInstance(&CreateInfo, null, &Vulkan).Verify;
-        DVulkanLoader.loadAllFunctions(Vulkan);
-        scope(success) vkDestroyInstance(Vulkan, null);
-
-        uint DeviceCount;
-        vkEnumeratePhysicalDevices(Vulkan, &DeviceCount, null).Verify;
-        if(DeviceCount)
-        {
-          auto Devices = MainAllocator.NewArray!VkPhysicalDevice(DeviceCount);
-          scope(success) MainAllocator.Delete(Devices);
-
-          vkEnumeratePhysicalDevices(Vulkan, &DeviceCount, Devices.ptr).Verify;
-
-          foreach(ref Device; Devices)
-          {
-            VkPhysicalDeviceProperties DeviceProperties;
-            vkGetPhysicalDeviceProperties(Device, &DeviceProperties);
-            Log.Info("Device: %s", DeviceProperties.deviceName.ptr.fromStringz);
-            Log.Info("API Version: %s.%s.%s",
-                     VK_VERSION_MAJOR(DeviceProperties.apiVersion),
-                     VK_VERSION_MINOR(DeviceProperties.apiVersion),
-                     VK_VERSION_PATCH(DeviceProperties.apiVersion));
-          }
-        }
-        else
-        {
-          Log.Failure("Failed to enumerate devices.");
-        }
-      }
-      else
-      {
-        Log.Failure("Failed to load vulkan-1.dll.");
+        State.CreateDevice();
+        //assert(State.Device);
+        //scope(exit) State.DestroyDevice();
       }
     }
     else
@@ -275,4 +231,115 @@ LRESULT Win32MainWindowCallback(HWND Window, UINT Message,
   }
 
   return Result;
+}
+
+class VulkanState
+{
+  IAllocator Allocator;
+
+  string DLLName;
+  HANDLE DLL;
+
+  VkInstance Instance;
+  VkDevice Device;
+}
+
+void LoadDLL(VulkanState State)
+{
+  string[1] Candidates =
+  [
+    "vulkan-1.dll",
+  ];
+
+  foreach(DLLName; Candidates)
+  {
+    auto DLL = LoadLibrary("vulkan-1.dll");
+    if(DLL)
+    {
+      auto Func = cast(typeof(vkGetInstanceProcAddr))GetProcAddress(DLL, "vkGetInstanceProcAddr");
+      if(Func is null) return;
+      DVulkanLoader.loadInstanceFunctions(Func);
+      State.DLLName = DLLName;
+      State.DLL = DLL;
+      return;
+    }
+    else
+    {
+      Log.Failure("Failed to load DLL: %s", DLLName);
+    }
+  }
+
+  Log.Failure("Failed to load Vulkan.");
+}
+
+void CreateInstance(VulkanState State)
+{
+  VkApplicationInfo ApplicationInfo;
+  with(ApplicationInfo)
+  {
+    pApplicationName = "Vulkan Experiments".ptr;
+    applicationVersion = VK_MAKE_VERSION(0, 0, 1);
+
+    pEngineName = "Krepel".ptr,
+    engineVersion = VK_MAKE_VERSION(0, 0, 1);
+
+    apiVersion = VK_MAKE_VERSION(1, 0, 4);
+  }
+
+  const(char)*[1] Layers = [ "VK_LAYER_LUNARG_standard_validation".ptr ];
+
+  VkInstanceCreateInfo CreateInfo;
+  with(CreateInfo)
+  {
+    pApplicationInfo = &ApplicationInfo;
+    enabledLayerCount = Layers.length;
+    ppEnabledLayerNames = Layers.ptr;
+  }
+
+  VkInstance Instance;
+  vkCreateInstance(&CreateInfo, null, &Instance).Verify;
+  assert(Instance);
+  DVulkanLoader.loadAllFunctions(Instance);
+  State.Instance = Instance;
+}
+
+void DestroyInstance(VulkanState State)
+{
+  if(State.Instance)
+  {
+    vkDestroyInstance(State.Instance, null);
+  }
+}
+
+void CreateDevice(VulkanState State)
+{
+  // TODO(Manu): TBD.
+}
+
+void LoadPhysicalDevices(VulkanState State)
+{
+  uint DeviceCount;
+  vkEnumeratePhysicalDevices(State.Instance, &DeviceCount, null).Verify;
+  if(DeviceCount)
+  {
+    auto Devices = State.Allocator.NewArray!VkPhysicalDevice(DeviceCount);
+    scope(success) State.Allocator.Delete(Devices);
+
+    vkEnumeratePhysicalDevices(State.Instance, &DeviceCount, Devices.ptr).Verify;
+
+    foreach(ref Device; Devices)
+    {
+      VkPhysicalDeviceProperties DeviceProperties;
+      vkGetPhysicalDeviceProperties(Device, &DeviceProperties);
+      Log.Info("Device: %s", DeviceProperties.deviceName.ptr.fromStringz);
+      Log.Info("API Version: %s.%s.%s",
+               VK_VERSION_MAJOR(DeviceProperties.apiVersion),
+               VK_VERSION_MINOR(DeviceProperties.apiVersion),
+               VK_VERSION_PATCH(DeviceProperties.apiVersion));
+    }
+  }
+  else
+  {
+    Log.Failure("Failed to enumerate devices.");
+  }
 }
