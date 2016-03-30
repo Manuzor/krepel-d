@@ -174,4 +174,16 @@ unittest
 
   assert(Object.RefCount == 0);
   assert(Object.Foo == 94);
+
+  {
+    auto WrappedObject = TestAllocator.NewARC!(TestObject, RefCountMode.External);
+    assert(WrappedObject.RefCount == 1);
+    assert(WrappedObject.Foo == 42);
+
+    Object = WrappedObject;
+    assert(WrappedObject.RefCountPayload !is Object.RefCountPayload);
+    assert(Object.RefCount == 0);
+  }
+
+  assert(Object.Foo == 94);
 }
