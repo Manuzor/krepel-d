@@ -47,21 +47,25 @@ class RefCountWrapper(Type)
 /// Pointer-like wrapper for reference-counted objects.
 struct ARC(Type)
 {
-  Type _Instance;
+  static if(SupportsRefCounting!Type) alias StoredType = Type;
+  else                                alias StoredType = RefCountWrapper!Type;
+
+  StoredType _StoredInstance;
+  @property inout(Type) _Instance() inout { return _StoredInstance; }
 
   this(this)
   {
-    assert(_Instance);
-    _Instance.RefCountPayload.AddRef();
+    assert(_StoredInstance);
+    _StoredInstance.RefCountPayload.AddRef();
   }
 
   ~this()
   {
-    assert(_Instance);
-    _Instance.RefCountPayload.RemoveRef();
-    if(_Instance.RefCountPayload.RefCount <= 0)
+    assert(_StoredInstance);
+    _StoredInstance.RefCountPayload.RemoveRef();
+    if(_StoredInstance.RefCountPayload.RefCount <= 0)
     {
-      _Instance.RefCountPayload.Allocator.Delete(_Instance);
+      _StoredInstance.RefCountPayload.Allocator.Delete(_StoredInstance);
     }
   }
 
@@ -75,27 +79,23 @@ struct ARC(Type)
   return Object.RefCountPayload.RefCount;
 }
 
-enum RefCountMode
-{
-  Auto,     // Either intrusive if the type has a RefCountPayload member, otherwise same as External.
-  External, // Reference counting is done separately from the actual object.
-}
+/// We assume a type supports reference counting when it has a member called
+/// "RefCountPayload".
+enum SupportsRefCounting(Type) = Meta.HasMember!(Type, "RefCountPayload");
 
 /// Allocates an automatically reference-counted object and initializes it
 /// with the given arguments.
-auto NewARC(Type, RefCountMode Mode = RefCountMode.Auto, ArgTypes...)(IAllocator Allocator, auto ref ArgTypes Args)
+ARC!Type NewARC(Type, ArgTypes...)(IAllocator Allocator, auto ref ArgTypes Args)
   if(is(Type == class))
 {
-  enum BeInstrusive = Mode != RefCountMode.External && Meta.HasMember!(Type, "RefCountPayload");
-
-  static if(BeInstrusive) alias InstanceType = Type;
-  else                    alias InstanceType = RefCountWrapper!Type;
+  // ARC got the actual type figured out already, so we leverage that.
+  alias InstanceType = ARC!Type.StoredType;
 
   auto Instance = Allocator.New!InstanceType(Args);
   Instance.RefCountPayload.Allocator = Allocator;
   Instance.RefCountPayload.RefCount = 1;
 
-  auto Result = ARC!InstanceType(Instance);
+  auto Result = ARC!Type(Instance);
   return Result;
 }
 
@@ -131,13 +131,13 @@ unittest
 
   {
     int Message;
-    ARC!(RefCountWrapper!TestObject) WrappedObject = TestAllocator.NewARC!TestObject(&Message);
+    ARC!TestObject WrappedObject = TestAllocator.NewARC!TestObject(&Message);
     assert(Message == 1);
     assert(WrappedObject.Foo == 42);
     import krepel.math : IsNaN;
     assert(WrappedObject.Bar.IsNaN);
 
-    ObjectData = WrappedObject._Instance;
+    ObjectData = WrappedObject._StoredInstance;
     assert(ObjectData.RefCount == 1);
   }
 
@@ -173,17 +173,5 @@ unittest
   }
 
   assert(Object.RefCount == 0);
-  assert(Object.Foo == 94);
-
-  {
-    auto WrappedObject = TestAllocator.NewARC!(TestObject, RefCountMode.External);
-    assert(WrappedObject.RefCount == 1);
-    assert(WrappedObject.Foo == 42);
-
-    Object = WrappedObject;
-    assert(WrappedObject.RefCountPayload !is Object.RefCountPayload);
-    assert(Object.RefCount == 0);
-  }
-
   assert(Object.Foo == 94);
 }
