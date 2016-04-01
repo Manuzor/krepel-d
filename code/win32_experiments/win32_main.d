@@ -4,6 +4,7 @@ version(Windows):
 import krepel;
 import krepel.win32;
 import krepel.math;
+import krepel.input;
 
 import krepel.win32.directx.dxgi;
 import krepel.win32.directx.d3d11;
@@ -113,11 +114,14 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
 
       version(XInput_RuntimeLinking) LoadXInput();
 
+      InputState Input;
       GlobalRunning = true;
 
       while(GlobalRunning)
       {
-        Win32ProcessPendingMessages();
+        Win32ProcessPendingMessages(&Input);
+
+        if(Input.Keyboard.KeyW.IsDown) Log.Info("W is down!");
 
         XINPUT_STATE ControllerState;
         if(XInputGetState(0, &ControllerState) == ERROR_SUCCESS)
@@ -135,8 +139,10 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
   return 0;
 }
 
-void Win32ProcessPendingMessages()
+void Win32ProcessPendingMessages(InputState* Input)
 {
+  import win32_experiments.win32_vkmap;
+
   MSG Message;
   if(PeekMessageA(&Message, null, 0, 0, PM_REMOVE))
   {
@@ -153,6 +159,14 @@ void Win32ProcessPendingMessages()
       case WM_KEYUP:
       {
         auto VKCode = Message.wParam;
+        auto KeyProps = Win32MapVirtualKeyToKrepelKey(VKCode);
+        auto Key = Input.Keyboard[KeyProps.Id];
+
+        if(Key is null) break;
+
+        Key.IsDown = (Message.lParam & (1 << 31)) == 0;
+        //Key.WasDown = (Message.lParam & (1 << 30)) != 0;
+        //Key.RepeatCount = cast(ushort)(Message.LParam & 0xFFFF);
 
         if(VKCode == VK_SPACE)
         {
