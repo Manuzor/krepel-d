@@ -79,7 +79,7 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
   Log.Info("=== Beginning of Log");
   scope(exit) Log.Info("=== End of Log");
 
-  StateData State;
+  auto State = MainAllocator.NewARC!D3D11State();
   State.ProcessInstance = Instance;
 
   WNDCLASSA WindowClass;
@@ -109,7 +109,7 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
       version(DXGI_RuntimeLinking)  LoadDXGI();
       version(D3D11_RuntimeLinking) LoadD3D11();
 
-      InitDevice(&State);
+      State.InitDevice();
 
       version(XInput_RuntimeLinking) LoadXInput();
 
@@ -225,8 +225,10 @@ LRESULT Win32MainWindowCallback(HWND Window, UINT Message,
   return Result;
 }
 
-struct StateData
+class D3D11State
 {
+  RefCountPayloadData RefCountPayload;
+
   HINSTANCE ProcessInstance;
   HWND WindowHandle;
   D3D_DRIVER_TYPE DriverType;
@@ -240,7 +242,7 @@ struct StateData
   ID3D11RenderTargetView RenderTargetView;
 }
 
-bool InitDevice(StateData* State)
+bool InitDevice(D3D11State State)
 {
   HRESULT Result;
 
