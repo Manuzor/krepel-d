@@ -1,28 +1,25 @@
-module krepel.memory.memory;
+module krepel.memory.common;
 import krepel.math;
 
-@nogc:
-nothrow:
 pure:
 
-alias KiB = (const Bytes) => Bytes * (cast(typeof(Bytes))1024);
-alias MiB = (const Bytes) => Bytes * (cast(typeof(Bytes))1024).KiB;
-alias GiB = (const Bytes) => Bytes * (cast(typeof(Bytes))1024).MiB;
-alias TiB = (const Bytes) => Bytes * (cast(typeof(Bytes))1024).GiB;
-alias PiB = (const Bytes) => Bytes * (cast(typeof(Bytes))1024).TiB;
+alias KiB = (const Bytes) => Bytes * (cast(size_t)1024);
+alias MiB = (const Bytes) => Bytes * (cast(size_t)1024).KiB;
+alias GiB = (const Bytes) => Bytes * (cast(size_t)1024).MiB;
+alias TiB = (const Bytes) => Bytes * (cast(size_t)1024).GiB;
+alias PiB = (const Bytes) => Bytes * (cast(size_t)1024).TiB;
 
-alias KB  = (const Bytes) => Bytes * (cast(typeof(Bytes))1000);
-alias MB  = (const Bytes) => Bytes * (cast(typeof(Bytes))1000).KiB;
-alias GB  = (const Bytes) => Bytes * (cast(typeof(Bytes))1000).MiB;
-alias TB  = (const Bytes) => Bytes * (cast(typeof(Bytes))1000).GiB;
-alias PB  = (const Bytes) => Bytes * (cast(typeof(Bytes))1000).TiB;
+alias KB  = (const Bytes) => Bytes * (cast(size_t)1000);
+alias MB  = (const Bytes) => Bytes * (cast(size_t)1000).KB;
+alias GB  = (const Bytes) => Bytes * (cast(size_t)1000).MB;
+alias TB  = (const Bytes) => Bytes * (cast(size_t)1000).GB;
+alias PB  = (const Bytes) => Bytes * (cast(size_t)1000).TB;
 
-alias MemoryRegion = ubyte[];
-alias StaticMemoryRegion(size_t N) = ubyte[N];
 
 /// Note: Apparently it's a good idea to have an alignment of 16. See
 ///       https://en.wikipedia.org/wiki/Data_structure_alignment#x86
 enum GlobalDefaultAlignment = 16;
+
 
 auto AlignedSize(const size_t Size, const size_t Alignment)
 {
@@ -42,20 +39,9 @@ alias SetBit    = (const Bits, const Position) => Bits |  (1 << Position);
 alias RemoveBit = (const Bits, const Position) => Bits & ~(1 << Position);
 alias HasBit    = (const Bits, const Position) => cast(bool)(Bits &  (1 << Position));
 
-version(unittest)
+auto ByteCount(Type)(in Type[] Slice)
 {
-  /// Usage: mixin(SetupGlobalAllocatorForTesting!1024);
-  template SetupGlobalAllocatorForTesting(size_t N)
-  {
-     import std.format;
-    enum SetupGlobalAllocatorForTesting = q{
-      {
-        ubyte[%s] _SetupGlobalAllocatorForTesting_Buffer;
-        GlobalAllocator.Memory.Initialize(_SetupGlobalAllocatorForTesting_Buffer);
-      }
-      scope(exit) GlobalAllocator.Memory.Deinitialize();
-    }.format(N.stringof);
-  }
+  return Slice.length * Type.sizeof;
 }
 
 //
@@ -107,4 +93,22 @@ unittest
   assert( HasBit(0b1010, 1));
   assert(!HasBit(0b1010, 2));
   assert( HasBit(0b1010, 3));
+}
+
+unittest
+{
+  int[3] Integers = void;
+  assert(Integers.ByteCount == 12);
+
+  float[3] Floats = void;
+  assert(Floats.ByteCount == 12);
+
+  static struct Aggregate
+  {
+  align(4):
+    int A; float B; bool C;
+  }
+
+  Aggregate[3] Aggregates = void;
+  assert(Aggregates.ByteCount == 36);
 }

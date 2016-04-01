@@ -7,21 +7,32 @@ import Meta = krepel.meta;
 import krepel.container;
 
 /// The global default log.
-LogState Log;
+LogData* Log;
 
-struct LogState
+struct LogData
 {
-  Array!char Buffer;
+  Array!char MessageBuffer;
   Array!LogSink Sinks;
 
-  void ClearBuffer()
+  this(IAllocator Allocator)
   {
-    Buffer.Clear();
+    this.Allocator = Allocator;
+  }
+
+  @property void Allocator(IAllocator SomeAllocator)
+  {
+    MessageBuffer.Allocator = SomeAllocator;
+    Sinks.Allocator = SomeAllocator;
+  }
+
+  void ClearMessageBuffer()
+  {
+    MessageBuffer.Clear();
   }
 
   void put(in char[] Chars)
   {
-    Buffer.PushBack(Chars);
+    MessageBuffer ~= Chars;
   }
 }
 
@@ -29,21 +40,25 @@ enum LogLevel
 {
   Info,
   Warning,
-  Error,
+  Failure,
 }
 
 alias LogSink = void delegate(LogLevel, char[]);
 
 template LogMessageDispatch(LogLevel Level)
 {
-  void LogMessageDispatch(LogType, Char, ArgTypes...)(ref LogType Log, in Char[] Message, auto ref ArgTypes Args)
+  void LogMessageDispatch(Char, ArgTypes...)(LogData* Log, in Char[] Message, auto ref ArgTypes Args)
     if(Meta.IsSomeChar!Char)
   {
-    FormattedWrite(&Log, Message, Args);
+    // We ignore when `Log is null` as this usually means that the given log
+    // is not yet initialized. It is no reason to crash the program.
+    if(Log is null) return;
 
-    scope(exit) Log.ClearBuffer();
+    FormattedWrite(Log, Message, Args);
 
-    auto Buffer = Log.Buffer[];
+    scope(exit) Log.ClearMessageBuffer();
+
+    auto Buffer = Log.MessageBuffer[];
     foreach(ref Sink ; Log.Sinks[])
     {
       Sink(Level, Buffer);
@@ -53,44 +68,42 @@ template LogMessageDispatch(LogLevel Level)
 
 alias Info    = LogMessageDispatch!(LogLevel.Info);
 alias Warning = LogMessageDispatch!(LogLevel.Warning);
-alias Error   = LogMessageDispatch!(LogLevel.Error);
-
+alias Failure = LogMessageDispatch!(LogLevel.Failure);
 
 void StdoutLogSink(LogLevel Level, char[] Message)
 {
+  static import std.stdio;
+
   final switch(Level)
   {
-    case LogLevel.Info:    io.write("Info: ");    break;
-    case LogLevel.Warning: io.write("Warning: "); break;
-    case LogLevel.Error:   io.write("Error: ");   break;
+    case LogLevel.Info:    std.stdio.write("Info: "); break;
+    case LogLevel.Warning: std.stdio.write("Warn: "); break;
+    case LogLevel.Failure: std.stdio.write("Fail: "); break;
   }
 
-  io.writeln(Message);
+  std.stdio.writeln(Message);
 }
 
 unittest
 {
-  char[1024] LogBuffer;
-  struct MyLog
+  auto TestAllocator = CreateTestAllocator();
+  auto TestLog = LogData(TestAllocator);
+
+  char[256] Buffer;
+  void TestLogSink(LogLevel Level, char[] Message)
   {
-    char[] EntireBuffer;
-    char[] Buffer;
-    LogSink[] Sinks;
-
-    void ClearBuffer()
+    final switch(Level)
     {
-      Buffer = EntireBuffer;
+      case LogLevel.Info:    Buffer[0] = 'I'; break;
+      case LogLevel.Warning: Buffer[0] = 'W'; break;
+      case LogLevel.Failure: Buffer[0] = 'F'; break;
     }
-
-    void put(in char[] Chars)
-    {
-      Buffer[0 .. Chars.length] = Chars[];
-      Buffer = Buffer[Chars.length .. $];
-    }
+    Buffer[1 .. Message.length + 1][] = Message;
   }
+  TestLog.Sinks ~= &TestLogSink;
 
-  auto Log = MyLog(LogBuffer, LogBuffer);
-  auto Message = "Hello";
-  Log.Info(Message);
-  assert(LogBuffer[0 .. Message.length] == Message);
+  auto Message = "Hello World.";
+  (&TestLog).Failure(Message);
+  assert(Buffer.front == 'F');
+  assert(Buffer[1 .. Message.length + 1] == Message);
 }

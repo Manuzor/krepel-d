@@ -164,8 +164,12 @@ template HasMember(ArgTypes...)
 
 template ClassInstanceSizeOf(Type)
 {
-  static assert(is(Type == class), "The type " ~ Type.stringof ~ " is not a class.");
   enum ClassInstanceSizeOf = __traits(classInstanceSize, Type);
+}
+
+template IsAbstractClass(Types...)
+{
+  enum IsAbstractClass = __traits(isAbstractClass, Types);
 }
 
 enum bool IsPlainOldData(Type) = __traits(isPOD, Type);
@@ -182,10 +186,10 @@ template HasDestructor(Type)
   }
 }
 
-alias IsArray                = std.traits.isArray;
-alias IsIntegral             = std.traits.isIntegral;
-alias IsPointer              = std.traits.isPointer;
-alias ClassInstanceAlignment = std.traits.classInstanceAlignment;
+alias IsArray                  = std.traits.isArray;
+alias IsIntegral               = std.traits.isIntegral;
+alias IsPointer                = std.traits.isPointer;
+alias ClassInstanceAlignmentOf = std.traits.classInstanceAlignment;
 
 alias IsInputRange         = std.range.isInputRange;
 alias IsOutputRange        = std.range.isOutputRange;
@@ -207,6 +211,27 @@ alias ElementType = std.range.ElementType;
 ///                    ));
 /// }
 alias Bitfields  = std.bitmanip.bitfields;
+
+/// Get the sequence of template arguments given to Type. Type MUST be a
+/// template.
+///
+/// Example:
+///   // Pseudo code:
+///   assert(TemplateArguments!( Foo!(A, B, C) ) == AliasSequence!(A, B, C));
+template TemplateArguments(Type)
+{
+  static if(is(Type : Type!Inner, Inner...))
+  {
+    alias TemplateArguments = Inner;
+  }
+  else
+  {
+    alias TemplateArguments = AliasSequence!();
+  }
+}
+
+alias ModuleNameOf = std.traits.moduleName;
+alias ParentOf = std.traits.parentOf;
 
 
 //

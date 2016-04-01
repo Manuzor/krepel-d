@@ -1,0 +1,49 @@
+{
+	"folders":
+	[
+		{
+			"path": "."
+		}
+	],
+  "build_systems":
+  [
+    {
+      "name": "Krepel",
+
+      "file_regex": "^(?:[A-z0-9_$.]*?@)?([^[]+?)\\(([0-9]+)(?:,([0-9]+))?\\):? (.*)$",
+
+      "windows":
+      {
+        "cmd": [ "${folder}\\build.bat", "all" ]
+      },
+
+      "variants":
+      [
+        {
+          "name": "Krepel Tests",
+
+          "windows":
+          {
+            "cmd": [ "${folder}\\build.bat", "krepel_tests" ]
+          }
+        },
+        {
+          "name": "Win32 Experiments",
+
+          "windows":
+          {
+            "cmd": [ "${folder}\\build.bat", "win32_experiments" ]
+          }
+        },
+        {
+          "name": "Vulkan Experiments",
+
+          "windows":
+          {
+            "cmd": [ "${folder}\\build.bat", "vulkan_experiments" ]
+          }
+        }
+      ]
+    }
+  ]
+}

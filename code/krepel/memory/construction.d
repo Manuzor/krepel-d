@@ -5,30 +5,22 @@ import Meta = krepel.meta;
 
 private static import std.conv;
 
-// TODO(Manu): Get rid of phobos?
-
-// Enable these when we got rid of phobos.
-// @nogc:
-// nothrow:
-// pure:
-
-
-Type Construct(Type, ArgTypes...)(MemoryRegion RawMemory, auto ref ArgTypes Args)
+Type Construct(Type, ArgTypes...)(void[] RawMemory, auto ref ArgTypes Args)
   if(is(Type == class))
 {
-  return std.conv.emplace!Type(cast(void[])RawMemory, Args);
+  return std.conv.emplace!Type(RawMemory, Args);
 }
 
-Type* Construct(Type, ArgTypes...)(MemoryRegion RawMemory, auto ref ArgTypes Args)
+Type* Construct(Type, ArgTypes...)(void[] RawMemory, auto ref ArgTypes Args)
   if(!is(Type == class))
 {
-  return std.conv.emplace!Type(cast(void[])RawMemory, Args);
+  return std.conv.emplace!Type(RawMemory, Args);
 }
 
 Type Construct(Type, ArgTypes...)(Type Instance, auto ref ArgTypes Args)
   if(is(Type == class))
 {
-  MemoryRegion RawMemory = (cast(ubyte*)Instance)[0 .. Meta.ClassInstanceSizeOf!Type];
+  void[] RawMemory = (cast(void*)Instance)[0 .. Meta.ClassInstanceSizeOf!Type];
   return Construct!Type(RawMemory, Args);
 }
 
@@ -44,7 +36,7 @@ void Destruct(Type)(Type Instance)
   // TODO(Manu): assert(Instance)?
   if(Instance)
   {
-    static if(Meta.HasMember!("__dtor")) Instance.__dtor();
+    static if(Meta.HasMember!(Type, "__dtor")) Instance.__dtor();
     //BlitInitialData((&Instance)[0 .. 1]);
   }
 }
@@ -66,16 +58,19 @@ void Destruct(Type)(Type* Instance)
       // Destruct all the members of Instance.
       foreach(MemberName; __traits(allMembers, Type))
       {
-        alias MemberType = typeof(mixin(`Instance.` ~ MemberName));
-        static if(Meta.HasDestructor!MemberType)
+        static if(__traits(compiles, typeof(mixin(`Instance.` ~ MemberName))))
         {
-          static if(is(MemberType == class))
+          alias MemberType = typeof(mixin(`Instance.` ~ MemberName));
+          static if(Meta.HasDestructor!MemberType && !Meta.IsPointer!MemberType)
           {
-            Destruct(mixin(`Instance.` ~ MemberName));
-          }
-          else
-          {
-            Destruct(mixin(`&Instance.` ~ MemberName));
+            static if(is(MemberType == class))
+            {
+              Destruct(mixin(`Instance.` ~ MemberName));
+            }
+            else
+            {
+              Destruct(mixin(`&Instance.` ~ MemberName));
+            }
           }
         }
       }
@@ -138,6 +133,88 @@ private void BlitInitialData(Type)(Type[] BlitTargets)
 }
 
 
+/// Template for creation of a class 'in-place', e.g. on the stack.
+///
+/// This implementation provides two options: Automatically
+/// constructed/destructed instances and manually managed ones.
+///
+/// Example:
+///   // Create a class on the stack.
+///   class FooClass { int Data = 42; }
+///   auto Foo = InPlace!FooClass.New();
+///   assert(Foo.Data == 42);
+///
+///   // Manually manage construction and destruction.
+///   InPlace!FooClass.Data FooData;
+///   Foo = InPlace!FooClass.Construct(FooData);
+///   assert(Foo.Data == 42);
+template InPlace(Type)
+  if(is(Type == class))
+{
+  import krepel.krepel;
+
+  enum InstanceAlignment = Meta.ClassInstanceAlignmentOf!Type;
+  enum InstanceSize = Meta.ClassInstanceSizeOf!Type;
+
+  struct _Data(Flag!"SelfDestruct" SelfDestruct)
+  {
+    size_t _Offset;
+    void[InstanceSize + InstanceAlignment] _Memory;
+
+    @property inout(Type) _Payload() inout
+    {
+      auto RawPointer = _Memory.ptr + _Offset;
+      auto Result = cast(inout(Type))RawPointer;
+      return Result;
+    }
+
+    @disable this(this);
+
+    static if(SelfDestruct)
+    {
+      ~this()
+      {
+        .Destruct(_Payload);
+      }
+    }
+
+    alias _Payload this;
+  }
+
+  /// Use this to manually manage construction/destruction of the data.
+  alias Data = _Data!(No.SelfDestruct);
+
+  template IsSomeData(DataType)
+  {
+    static if(is(DataType == _Data!(Yes.SelfDestruct)) || is(DataType == _Data!(No.SelfDestruct)))
+      enum IsSomeData = true;
+    else
+      enum IsSomeData = false;
+  }
+
+  Type Construct(DataType, ArgTypes...)(ref DataType SomeData, auto ref ArgTypes Args)
+    if(IsSomeData!DataType)
+  {
+    auto BasePtr = SomeData._Memory.ptr;
+    auto AlignedPtr = AlignedPointer(BasePtr, InstanceAlignment);
+    SomeData._Offset = AlignedPtr - BasePtr;
+    return .Construct(cast(Type)SomeData, Args);
+  }
+
+  void Destruct(DataType)(ref DataType SomeData)
+  {
+    .Destruct(cast(Type)SomeData);
+  }
+
+  auto New(ArgTypes...)(auto ref ArgTypes Args)
+  {
+    _Data!(Yes.SelfDestruct) Result;
+    Construct(Result, Args);
+    return Result;
+  }
+}
+
+
 //
 // Unit Tests
 //
@@ -145,7 +222,7 @@ private void BlitInitialData(Type)(Type[] BlitTargets)
 // Single struct object construction
 unittest
 {
-  nothrow @nogc static struct TestData
+  static struct TestData
   {
     int Value;
     float Precision;
@@ -204,4 +281,97 @@ unittest
   DestructArray(Array);
   assert(DestructionCount == Array.length);
   foreach(ref Element; Array) assert(Element.Value == 1337);
+}
+
+version(unittest) int BazDataDestructionCount;
+version(unittest) int BarDataDestructionCount;
+version(unittest) int FooDataDestructionCount;
+unittest
+{
+  static struct BazData
+  {
+    int Data = 179;
+
+    ~this() { BazDataDestructionCount++; }
+  }
+
+  static struct BarData
+  {
+    int Data = 1337;
+    BazData Baz;
+
+    ~this() { BarDataDestructionCount++; }
+  }
+
+  import krepel.container.array;
+
+  static struct FooData
+  {
+    int Data = 42;
+    BarData Bar;
+    Array!int Integers;
+
+    ~this() { FooDataDestructionCount++; }
+  }
+
+  void[FooData.sizeof] RawFoo = void;
+  auto FooPointer = Construct!FooData(RawFoo);
+  assert(FooPointer);
+  assert(FooPointer.Data == 42);
+  assert(FooPointer.Bar.Data == 1337);
+  assert(FooPointer.Bar.Baz.Data == 179);
+  Destruct(FooPointer);
+  assert(FooDataDestructionCount == 1);
+  assert(BarDataDestructionCount == 1);
+  assert(BazDataDestructionCount == 1);
+}
+
+// InPlace
+unittest
+{
+  static class FooClass
+  {
+    int Data = 42;
+
+    this(int* Message)
+    {
+      (*Message)++;
+    }
+
+    ~this()
+    {
+      Data = 1337;
+    }
+  }
+
+  FooClass Foo;
+  {
+    int Message;
+    auto WrappedFoo = InPlace!FooClass.New(&Message);
+    Foo = WrappedFoo;
+    assert(Message == 1);
+    assert(Foo.Data == 42);
+  }
+  assert(Foo.Data == 1337);
+
+  {
+    int Message;
+    InPlace!FooClass.Data WrappedFoo;
+    Foo = WrappedFoo;
+    InPlace!FooClass.Construct(WrappedFoo, &Message);
+    assert(Message == 1);
+    assert(WrappedFoo.Data == 42);
+
+    InPlace!FooClass.Destruct(WrappedFoo);
+    assert(WrappedFoo.Data == 1337);
+
+    // Construct it again...
+    InPlace!FooClass.Construct(WrappedFoo, &Message);
+    assert(Message == 2);
+    assert(WrappedFoo.Data == 42);
+
+    // ... but don't destruct anymore to prove this kind of data does not
+    // destruct itself at the end of the scope.
+  }
+  assert(Foo.Data == 42);
 }

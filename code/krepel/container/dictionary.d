@@ -8,8 +8,25 @@ struct Dictionary(K, V)
   alias KeyType = K;
   alias ValueType = V;
 
+  this(IAllocator Allocator)
+  {
+    this.Allocator = Allocator;
+  }
+
   @property auto Keys() inout { return KeyArray[]; }
   @property auto Values() inout { return ValueArray[]; }
+
+  @property IAllocator Allocator()
+  {
+    assert(KeyArray.Allocator is ValueArray.Allocator);
+    return KeyArray.Allocator;
+  }
+
+  @property void Allocator(IAllocator NewAllocator)
+  {
+    KeyArray.Allocator = NewAllocator;
+    ValueArray.Allocator = NewAllocator;
+  }
 
   // TODO(Manu): Collapse with the other overload and make it `inout` once the
   // compiler allows this.
@@ -47,6 +64,16 @@ struct Dictionary(K, V)
     {
       ValueArray[Index] = Value;
     }
+  }
+
+  bool TryGet(InKeyType, OutValueType)(auto ref InKeyType Key, out OutValueType Value)
+  {
+    if(Contains(Key))
+    {
+      Value = this[Key];
+      return true;
+    }
+    return false;
   }
 
   bool Contains(InKeyType)(auto ref InKeyType Key) const
@@ -96,9 +123,9 @@ unittest
   import std.exception;
   import core.exception : AssertError;
 
-  mixin(SetupGlobalAllocatorForTesting!(400));
+  auto TestAllocator = CreateTestAllocator();
 
-  Dictionary!(int, int) Dict;
+  auto Dict = Dictionary!(int, int)(TestAllocator);
 
   Dict[3] = 42;
   Dict[4] = 1337;
@@ -147,7 +174,7 @@ unittest
 
 unittest
 {
-  mixin(SetupGlobalAllocatorForTesting!(1024));
+  auto TestAllocator = CreateTestAllocator();
 
   static struct MyKey
   {
@@ -167,7 +194,7 @@ unittest
     float SomethingElse;
   }
 
-  Dictionary!(MyKey, MyValue) Dict;
+  auto Dict = Dictionary!(MyKey, MyValue)(TestAllocator);
   Dict[MyKey("this")] = MyValue("that", 3.1415f);
 
   assert(Dict[MyKey("this")].Data == "that");
