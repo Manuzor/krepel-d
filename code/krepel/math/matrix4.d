@@ -288,6 +288,26 @@ Vector3 GetUnitAxis(Matrix4 Mat, EAxisType Type)
   return GetScaledAxis(Mat, Type).SafeNormalizedCopy();
 }
 
+Matrix4 CreatePerspectiveMatrix(float HalfFOVY, float Width, float Height, float NearPlane, float FarPlane)
+{
+  return Matrix4([
+    [1.0f/ Tan(HalfFOVY), 0.0f, 0.0f, 0.0f],
+    [0.0f, Width/ Tan(HalfFOVY)/Height, 0.0f, 0.0f],
+    [0.0f, 0.0f, ((NearPlane == FarPlane) ? 1.0f : FarPlane / (FarPlane - NearPlane)), 1.0f],
+    [0.0f, 0.0f, -NearPlane * ((NearPlane == FarPlane) ? 1.0f : FarPlane / (FarPlane - NearPlane)), 0.0f],
+    ]);
+}
+
+Matrix4 CreateOrthogonalMatrix(float Width, float Height, float ZScale, float ZOffset)
+{
+  return Matrix4([
+    [Width ? (1.0f/Width) : 1.0f, 0.0f, 0.0f, 0.0f],
+    [0.0f, Height ? (1.0f/Height), 0.0f, 0.0f],
+    [0.0f, 0.0f, ZScale, 0.0f],
+    [0.0f, 0.0f, ZOffset * ZScale, 1.0f],
+    ]);
+}
+
 /// 4x4 Matrix accessed first by row, then by column
 /// Translation part is stored in the lower row (M[3][0] -> M[3][2])
 align(16) struct Matrix4
