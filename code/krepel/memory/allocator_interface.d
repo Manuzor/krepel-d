@@ -51,7 +51,7 @@ void DeleteUndestructed(Type)(IAllocator Allocator, Type* Instance)
 {
   if(Instance)
   {
-    Allocator.Deallocate((cast(ubyte*)Instance)[0 .. Type.sizeof]);
+    Allocator.Deallocate((cast(void*)Instance)[0 .. Type.sizeof]);
   }
 }
 
@@ -61,7 +61,7 @@ void DeleteUndestructed(Type)(IAllocator Allocator, Type Instance)
 {
   if(Instance)
   {
-    Allocator.Deallocate((cast(ubyte*)Instance)[0 .. Type.sizeof]);
+    Allocator.Deallocate((cast(void*)Instance)[0 .. Type.sizeof]);
   }
 }
 
@@ -122,7 +122,7 @@ Type[] NewUnconstructedArray(Type)(IAllocator Allocator, size_t Count)
 ///       (e.g. StackMemory), this function does nothing.
 void DeleteUndestructed(Type)(IAllocator Allocator, Type[] Array)
 {
-  Allocator.Deallocate(cast(ubyte[])Array);
+  Allocator.Deallocate(cast(void[])Array);
 }
 
 /// Creates a new array of Type's and construct each element of it with the
