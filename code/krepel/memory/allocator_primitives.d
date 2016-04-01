@@ -145,6 +145,8 @@ struct HeapMemory
     debug(HeapMemory) auto RequiredBlockSize = BlockOverhead + RequiredBytes + PaddingToAchieveAnEvenBlockSize + DeadBeefType.sizeof;
     else              auto RequiredBlockSize = BlockOverhead + RequiredBytes + PaddingToAchieveAnEvenBlockSize;
 
+    assert(RequiredBlockSize.IsEven);
+
     return RequiredBlockSize;
   }
 
@@ -186,6 +188,7 @@ struct HeapMemory
     Block.IsAllocated = true;
 
     const RemainingAvailableSize = Block.Size - RequiredBlockSize;
+    assert(RemainingAvailableSize.IsEven);
 
     if(RemainingAvailableSize >= MinimumBlockSize)
     {
@@ -193,7 +196,7 @@ struct HeapMemory
 
       Block.Size = RequiredBlockSize;
       auto NewBlock = NextBlock(Block);
-      NewBlock.Size = AlignedSize(RemainingAvailableSize - 1, 2);
+      NewBlock.Size = RemainingAvailableSize;
       NewBlock.IsAllocated = false;
     }
 
@@ -261,6 +264,8 @@ private:
   /// block is found that has the RequiredBlockSize (first fit).
   BlockData* FindFreeBlockAndMergeAdjacent(BlockData* Block, size_t RequiredBlockSize)
   {
+    assert(RequiredBlockSize.IsEven);
+
     while(IsValidBlockPointer(Block))
     {
       if(!Block.IsAllocated)
