@@ -103,11 +103,12 @@ ARC!Type NewARC(Type, ArgTypes...)(IAllocator Allocator, auto ref ArgTypes Args)
 // Unit Tests
 //
 
-version(unittest) import krepel.memory : CreateTestAllocator;
 
 // NewARC for external reference counting
 unittest
 {
+  import krepel.memory : CreateTestAllocator;
+
   class TestObject
   {
     int Foo = 42;
@@ -149,6 +150,8 @@ unittest
 // NewARC for intrusive reference counting
 unittest
 {
+  import krepel.memory : CreateTestAllocator;
+
   class TestObject
   {
     RefCountPayloadData RefCountPayload;
