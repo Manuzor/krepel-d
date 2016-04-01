@@ -1,16 +1,14 @@
 module krepel.resources.resource_manager;
 
+import krepel.resources.resource;
 import krepel.resources.resource_loader;
+import krepel.resources.resource_mesh;
 import krepel.container;
 import krepel.memory;
 import krepel.string;
 import krepel.system;
 
 
-interface IResource
-{
-
-}
 
 class ResourceManager
 {
@@ -20,7 +18,6 @@ class ResourceManager
     ResourceLoader = Dictionary!(WString, IResourceLoader)(Allocator);
   }
 
-
   Dictionary!(WString, IResourceLoader) ResourceLoader;
 
   void RegisterLoader(IResourceLoader Loader, WString FileExtension)
@@ -29,7 +26,7 @@ class ResourceManager
     ResourceLoader[FileExtension] = Loader;
   }
 
-  IResource LoadResource(WString FileName)
+  Resource LoadResource(WString FileName)
   {
     auto FileExtensionIndex = FileName.FindLast(".");
     if (FileExtensionIndex >= 0)
@@ -38,13 +35,38 @@ class ResourceManager
       if (ResourceLoader.TryGet(FileName[FileExtensionIndex .. $], Loader))
       {
         auto File = OpenFile(Allocator, FileName, FileOpenMode.Read);
-        auto Resource = Loader.Load(Allocator, File);
+        auto Resource = Loader.Load(Allocator, FileName , File);
         CloseFile(Allocator, File);
         return Resource;
       }
     }
 
     return null;
+  }
+
+  void DestroyResource(Resource Resource)
+  {
+    if(Resource !is null)
+    {
+      Resource.Loader.Destroy(Allocator, Resource);
+    }
+  }
+
+  ResourceType Load(ResourceType)(WString FileName)
+    if(is(ResourceType : Resource))
+  {
+    auto Resource = LoadResource(FileName);
+    ResourceType TargetResource = cast(ResourceType)Resource;
+    if(TargetResource is null)
+    {
+      Resource.Loader.Destroy(Allocator, Resource);
+    }
+    return TargetResource;
+  }
+
+  MeshResource LoadMesh(WString FileName)
+  {
+    return Load!MeshResource(FileName);
   }
 
   IAllocator Allocator;

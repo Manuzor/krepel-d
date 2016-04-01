@@ -212,6 +212,27 @@ alias ElementType = std.range.ElementType;
 /// }
 alias Bitfields  = std.bitmanip.bitfields;
 
+/// Get the sequence of template arguments given to Type. Type MUST be a
+/// template.
+///
+/// Example:
+///   // Pseudo code:
+///   assert(TemplateArguments!( Foo!(A, B, C) ) == AliasSequence!(A, B, C));
+template TemplateArguments(Type)
+{
+  static if(is(Type : Type!Inner, Inner...))
+  {
+    alias TemplateArguments = Inner;
+  }
+  else
+  {
+    alias TemplateArguments = AliasSequence!();
+  }
+}
+
+alias ModuleNameOf = std.traits.moduleName;
+alias ParentOf = std.traits.parentOf;
+
 
 //
 // Unit Tests

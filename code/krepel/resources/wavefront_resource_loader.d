@@ -201,10 +201,16 @@ class WavefrontResourceLoader : IResourceLoader
 {
   WaveFrontMesh TempMesh;
 
-  override IResource Load(IAllocator Allocator, IFile File)
+  override void Destroy(IAllocator Allocator, Resource Resource)
+  {
+    MeshResource MeshResource = cast(MeshResource)Resource;
+    Allocator.Delete(MeshResource);
+  }
+
+  override Resource Load(IAllocator Allocator, WString FileName, IFile File)
   {
     TempMesh.Clear();
-    MeshResource Mesh = Allocator.New!(MeshResource,IAllocator)(Allocator);
+    MeshResource Mesh = Allocator.New!MeshResource(Allocator, this, FileName);
     TempMesh = WaveFrontMesh(Allocator);
 
     Lexer.Initialize(Allocator, File);
@@ -323,7 +329,7 @@ unittest
   auto WaveFrontLoader = TestAllocator.New!WavefrontResourceLoader();
   Manager.RegisterLoader(WaveFrontLoader, WString(".obj", TestAllocator));
 
-  MeshResource Result = cast(MeshResource)(Manager.LoadResource(WString("../unittest/Cube.obj", TestAllocator)));
+  MeshResource Result = Manager.LoadMesh(WString("../unittest/Cube.obj", TestAllocator));
   assert(Result !is null);
   assert(Result.Meshes.Count == 1);
   auto SubMesh = Result.Meshes[0];
@@ -331,9 +337,9 @@ unittest
   assert(SubMesh.Name == "Cube");
   assert(SubMesh.Vertices.Count == 24);
   assert(SubMesh.Indices.Count == 36);
-  TestAllocator.Delete(Result);
+  Manager.DestroyResource(Result);
 
-  Result = cast(MeshResource)Manager.LoadResource(WString("../unittest/CubeOnlyIndex.obj", TestAllocator));
+  Result = Manager.LoadMesh(WString("../unittest/CubeOnlyIndex.obj", TestAllocator));
   assert(Result);
   assert(Result.Meshes.Count == 1);
   SubMesh = Result.Meshes[0];
@@ -341,9 +347,9 @@ unittest
   assert(SubMesh.Name == "Cube");
   assert(SubMesh.Vertices.Count == 8);
   assert(SubMesh.Indices.Count == 36);
-  TestAllocator.Delete(Result);
+  Manager.DestroyResource(Result);
 
-  Result = cast(MeshResource)Manager.LoadResource(WString("../unittest/TwoObjects.obj", TestAllocator));
+  Result = Manager.LoadMesh(WString("../unittest/TwoObjects.obj", TestAllocator));
   assert(Result);
   assert(Result.Meshes.Count == 2);
   SubMesh = Result.Meshes[0];
@@ -352,9 +358,9 @@ unittest
   SubMesh = Result.Meshes[1];
   assert(SubMesh);
   assert(SubMesh.Name == "Cube");
-  TestAllocator.Delete(Result);
+  Manager.DestroyResource(Result);
 
-  Result = cast(MeshResource)Manager.LoadResource(WString("../unittest/QuadCube.obj", TestAllocator));
+  Result = Manager.LoadMesh(WString("../unittest/QuadCube.obj", TestAllocator));
   assert(Result);
   assert(Result.Meshes.Count == 1);
   SubMesh = Result.Meshes[0];
@@ -362,5 +368,8 @@ unittest
   assert(SubMesh.Name == "Cube");
   assert(SubMesh.Indices.Count == 36);
   assert(SubMesh.Vertices.Count == 24);
-  TestAllocator.Delete(Result);
+  Manager.DestroyResource(Result);
+
+  TestAllocator.Delete(WaveFrontLoader);
+  TestAllocator.Delete(Manager);
 }
