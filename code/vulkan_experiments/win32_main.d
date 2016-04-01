@@ -49,10 +49,20 @@ auto Verify(VkResult Result)
   return Result;
 }
 
+void Win32SetupConsole(const(char)* Title)
+{
+  static import core.stdc.stdio;
+
+  AllocConsole();
+  AttachConsole(GetCurrentProcessId());
+  core.stdc.stdio.freopen("CON".ptr, "w".ptr, core.stdc.stdio.stdout);
+  SetConsoleTitleA(Title);
+}
+
 int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
               LPSTR CommandLine, int ShowCode)
 {
-  //MessageBoxA(null, "Hello World?", "Hello", MB_OK);
+  debug Win32SetupConsole("Krepel Console".ptr);
 
   const MemorySize = 6.GiB;
   auto RawMemory = VirtualAlloc(null,
@@ -74,9 +84,7 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
     Log = null;
   }
 
-  // Note(Manu): There's no point to add the stdout log sink since stdout
-  // isn't attached to anything in a windows application. We add the VS log
-  // sink instead.
+  debug Log.Sinks ~= ToDelegate(&StdoutLogSink);
   Log.Sinks ~= ToDelegate(&VisualStudioLogSink);
 
   Log.Info("=== Beginning of Log");
