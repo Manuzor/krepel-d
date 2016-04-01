@@ -39,7 +39,7 @@ enum D3DCOMPILE_ALL_RESOURCES_BOUND                = 1 << 21;
 enum D3DCOMPILE_EFFECT_CHILD_EFFECT              = 1 << 0;
 enum D3DCOMPILE_EFFECT_ALLOW_SLOW_OPS            = 1 << 1;
 
-alias D3D_COMPILE_STANDARD_FILE_INCLUDE = () => cast(ID3DInclude)(cast(void*)null + 1);
+@property auto D3D_COMPILE_STANDARD_FILE_INCLUDE() { return cast(ID3DInclude)(cast(void*)null + 1); }
 
 enum D3DCOMPILE_SECDATA_MERGE_UAV_SLOTS         = 0x00000001;
 enum D3DCOMPILE_SECDATA_PRESERVE_TEMPLATE_SLOTS = 0x00000002;

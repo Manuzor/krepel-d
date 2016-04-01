@@ -4,6 +4,7 @@ version(Windows):
 import krepel;
 import krepel.win32;
 import krepel.math;
+import krepel.string;
 
 import krepel.win32.directx.dxgi;
 import krepel.win32.directx.d3d11;
@@ -46,6 +47,16 @@ int WinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
 
 __gshared bool GlobalRunning;
 
+void Win32SetupConsole(in char* Title)
+{
+  static import core.stdc.stdio;
+
+  AllocConsole();
+  AttachConsole(GetCurrentProcessId());
+  core.stdc.stdio.freopen("CON", "w", core.stdc.stdio.stdout);
+  SetConsoleTitleA(Title);
+}
+
 int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
               LPSTR CommandLine, int ShowCode)
 {
@@ -71,15 +82,16 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
     Log = null;
   }
 
-  // Note(Manu): There's no point to add the stdout log sink since stdout
-  // isn't attached to anything in a windows application. We add the VS log
-  // sink instead.
+  debug Win32SetupConsole("Krepel Console - Win32 Experiments".ptr);
+
+  Log.Sinks ~= ToDelegate(&StdoutLogSink);
   Log.Sinks ~= ToDelegate(&VisualStudioLogSink);
 
   Log.Info("=== Beginning of Log");
   scope(exit) Log.Info("=== End of Log");
 
-  auto State = MainAllocator.NewARC!D3D11State();
+  auto State = MainAllocator.NewARC!DxState();
+  State.Allocator = MainAllocator;
   State.ProcessInstance = Instance;
 
   WNDCLASSA WindowClass;
@@ -107,9 +119,93 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
     if(State.WindowHandle)
     {
       version(DXGI_RuntimeLinking)  LoadDXGI();
-      version(D3D11_RuntimeLinking) LoadD3D11();
+      version(D3D11_RuntimeLinking)
+      {
+        LoadD3D11();
+        LoadD3D11ShaderCompiler();
+      }
 
       State.InitDevice();
+
+      auto VertexShaderCode = State.LoadAndCompileDxShader(WString("shader/first.hlsl", State.Allocator),
+                                                           UString("VSMain", State.Allocator),
+                                                           UString("vs_5_0", State.Allocator));
+
+      ID3D11VertexShader VertexShader;
+      scope(exit) if(VertexShader) VertexShader.Release();
+      if(FAILED(State.Device.CreateVertexShader(VertexShaderCode.Blob.GetBufferPointer(),
+                                                VertexShaderCode.Blob.GetBufferSize(),
+                                                null,
+                                                &VertexShader)))
+      {
+        Log.Failure("Failed to create vertex shader.");
+      }
+
+      D3D11_INPUT_ELEMENT_DESC[1] Layout =
+      [
+        D3D11_INPUT_ELEMENT_DESC( "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 ),
+      ];
+
+      ID3D11InputLayout VertexShaderLayout;
+      scope(exit) if(VertexShaderLayout) VertexShaderLayout.Release();
+      if(FAILED(State.Device.CreateInputLayout(Layout.ptr,
+                                               cast(UINT)Layout.length,
+                                               VertexShaderCode.Blob.GetBufferPointer(),
+                                               VertexShaderCode.Blob.GetBufferSize(),
+                                               &VertexShaderLayout)))
+      {
+        Log.Failure("Failed to create input layout.");
+      }
+
+      State.ImmediateContext.IASetInputLayout(VertexShaderLayout);
+
+      auto PixelShaderCode = State.LoadAndCompileDxShader(WString("shader/first.hlsl", State.Allocator),
+                                                          UString("PSMain", State.Allocator),
+                                                          UString("ps_5_0", State.Allocator));
+
+      ID3D11PixelShader PixelShader;
+      scope(exit) if(PixelShader) PixelShader.Release();
+      if(FAILED(State.Device.CreatePixelShader(PixelShaderCode.Blob.GetBufferPointer(),
+                                               PixelShaderCode.Blob.GetBufferSize(),
+                                               null,
+                                               &PixelShader)))
+      {
+        Log.Failure("Failed to create pixel shader.");
+      }
+
+      static struct SimpleVertex
+      {
+        Vector3 Position;
+      }
+
+      SimpleVertex[3] Vertices =
+      [
+        SimpleVertex(Vector3( 0.0f,  0.5f,  0.5f)),
+        SimpleVertex(Vector3( 0.5f, -0.5f,  0.5f)),
+        SimpleVertex(Vector3(-0.5f, -0.5f,  0.5f)),
+      ];
+
+      D3D11_BUFFER_DESC VertexBufferDesc;
+      with(VertexBufferDesc)
+      {
+        Usage = D3D11_USAGE_DEFAULT;
+        ByteWidth = cast(UINT)Vertices.ByteCount;
+        BindFlags = D3D11_BIND_VERTEX_BUFFER;
+        CPUAccessFlags = 0;
+      }
+      D3D11_SUBRESOURCE_DATA InitData;
+      InitData.pSysMem = Vertices.ptr;
+
+      ID3D11Buffer VertexBuffer;
+      if(FAILED(State.Device.CreateBuffer(&VertexBufferDesc, &InitData, &VertexBuffer)))
+      {
+        Log.Failure("Failed to create vertex buffer.");
+      }
+
+      UINT Stride = SimpleVertex.sizeof;
+      UINT Offset = 0;
+      State.ImmediateContext.IASetVertexBuffers(0, 1, &VertexBuffer, &Stride, &Offset);
+      State.ImmediateContext.IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
       version(XInput_RuntimeLinking) LoadXInput();
 
@@ -127,6 +223,9 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
 
         auto CornflowerBlue = Vector4(100 / 255.0f, 149 / 255.0f, 237 / 255.0f, 1.0f);
         State.ImmediateContext.ClearRenderTargetView(State.RenderTargetView, CornflowerBlue.Data);
+        State.ImmediateContext.VSSetShader(VertexShader, null, 0);
+        State.ImmediateContext.PSSetShader(PixelShader, null, 0);
+        State.ImmediateContext.Draw(3, 0);
         State.SwapChain.Present(0, 0);
       }
     }
@@ -225,24 +324,36 @@ LRESULT Win32MainWindowCallback(HWND Window, UINT Message,
   return Result;
 }
 
-class D3D11State
+class DxState
 {
-  RefCountPayloadData RefCountPayload;
+  mixin RefCountSupport;
 
+  IAllocator Allocator;
   HINSTANCE ProcessInstance;
   HWND WindowHandle;
   D3D_DRIVER_TYPE DriverType;
   D3D_FEATURE_LEVEL FeatureLevel;
-  ID3D11Device D3DDevice;
-  ID3D11Device1 D3DDevice1;
+  ID3D11Device Device;
+  ID3D11Device1 Device1;
   ID3D11DeviceContext ImmediateContext;
   ID3D11DeviceContext1 ImmediateContext1;
   IDXGISwapChain SwapChain;
   IDXGISwapChain1 SwapChain1;
   ID3D11RenderTargetView RenderTargetView;
+
+  ~this()
+  {
+    if(Device) ReleaseAndNullify(Device);
+    if(Device1) ReleaseAndNullify(Device1);
+    if(ImmediateContext) ReleaseAndNullify(ImmediateContext);
+    if(ImmediateContext1) ReleaseAndNullify(ImmediateContext1);
+    if(SwapChain) ReleaseAndNullify(SwapChain);
+    if(SwapChain1) ReleaseAndNullify(SwapChain1);
+    if(RenderTargetView) ReleaseAndNullify(RenderTargetView);
+  }
 }
 
-bool InitDevice(D3D11State State)
+bool InitDevice(DxState State)
 {
   HRESULT Result;
 
@@ -274,7 +385,7 @@ bool InitDevice(D3D11State State)
     Result = D3D11CreateDevice(null, DriverType, null, CreateDeviceFlags,
                                FeatureLevels.ptr, cast(UINT)FeatureLevels.length,
                                D3D11_SDK_VERSION,
-                               &State.D3DDevice, &State.FeatureLevel, &State.ImmediateContext);
+                               &State.Device, &State.FeatureLevel, &State.ImmediateContext);
     if(Result == E_INVALIDARG)
     {
       // DirectX 11.0 platforms will not recognize D3D_FEATURE_LEVEL_11_1 so
@@ -283,7 +394,7 @@ bool InitDevice(D3D11State State)
       Result = D3D11CreateDevice(null, DriverType, null, CreateDeviceFlags,
                                  TrimmedFeatureLevels.ptr, cast(UINT)TrimmedFeatureLevels.length,
                                  D3D11_SDK_VERSION,
-                                 &State.D3DDevice, &State.FeatureLevel, &State.ImmediateContext);
+                                 &State.Device, &State.FeatureLevel, &State.ImmediateContext);
     }
 
     if(SUCCEEDED(Result))
@@ -295,18 +406,19 @@ bool InitDevice(D3D11State State)
 
   // Obtain DXGI factory from device.
   IDXGIFactory1 DXGIFactory;
+  scope(exit) if(DXGIFactory) DXGIFactory.Release();
   {
     IDXGIDevice DXGIDevice;
-    Result = State.D3DDevice.QueryInterface(uuidof!IDXGIDevice, cast(void**)&DXGIDevice);
+    scope(exit) if(DXGIDevice) DXGIDevice.Release();
+    Result = State.Device.QueryInterface(uuidof!IDXGIDevice, cast(void**)&DXGIDevice);
     if(SUCCEEDED(Result))
     {
-      scope(exit) DXGIDevice.Release();
 
       IDXGIAdapter Adapter;
+      scope(exit) if(Adapter) Adapter.Release();
       DXGIDevice.GetAdapter(&Adapter);
       if(SUCCEEDED(Result))
       {
-        scope(exit) Adapter.Release();
 
         Result = Adapter.GetParent(uuidof!IDXGIFactory1, cast(void**)&DXGIFactory);
       }
@@ -315,15 +427,13 @@ bool InitDevice(D3D11State State)
   if(FAILED(Result))
     return false;
 
-  scope(exit) DXGIFactory.Release();
-
   IDXGIFactory2 DXGIFactory2;
+  scope(exit) if(DXGIFactory2) DXGIFactory2.Release();
   Result = DXGIFactory.QueryInterface(uuidof!IDXGIFactory2, cast(void**)&DXGIFactory2);
   if(DXGIFactory2)
   {
-    scope(exit) DXGIFactory2.Release();
 
-    Result = State.D3DDevice.QueryInterface(uuidof!ID3D11Device1, cast(void**)&State.D3DDevice1);
+    Result = State.Device.QueryInterface(uuidof!ID3D11Device1, cast(void**)&State.Device1);
     if(SUCCEEDED(Result))
     {
       State.ImmediateContext.QueryInterface(uuidof!ID3D11DeviceContext1, cast(void**)&State.ImmediateContext1);
@@ -340,7 +450,7 @@ bool InitDevice(D3D11State State)
       BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
       BufferCount = 1;
 
-      Result = DXGIFactory2.CreateSwapChainForHwnd(State.D3DDevice, State.WindowHandle, &SwapChainDesc, null, null, &State.SwapChain1);
+      Result = DXGIFactory2.CreateSwapChainForHwnd(State.Device, State.WindowHandle, &SwapChainDesc, null, null, &State.SwapChain1);
       if(SUCCEEDED(Result))
       {
         Result = State.SwapChain1.QueryInterface(uuidof!IDXGISwapChain, cast(void**)&State.SwapChain);
@@ -366,7 +476,7 @@ bool InitDevice(D3D11State State)
       Windowed = TRUE;
     }
 
-    Result = DXGIFactory.CreateSwapChain(State.D3DDevice, &SwapChainDesc, &State.SwapChain);
+    Result = DXGIFactory.CreateSwapChain(State.Device, &SwapChainDesc, &State.SwapChain);
   }
 
   DXGIFactory.MakeWindowAssociation(State.WindowHandle, DXGI_MWA_NO_ALT_ENTER);
@@ -374,12 +484,11 @@ bool InitDevice(D3D11State State)
   if(FAILED(Result)) return false;
 
   ID3D11Texture2D BackBuffer;
+  scope(exit) if(BackBuffer) BackBuffer.Release();
   Result = State.SwapChain.GetBuffer(0, uuidof!ID3D11Texture2D, cast(void**)&BackBuffer);
   if(FAILED(Result)) return false;
 
-  scope(exit) BackBuffer.Release();
-
-  State.D3DDevice.CreateRenderTargetView(BackBuffer, null, &State.RenderTargetView);
+  State.Device.CreateRenderTargetView(BackBuffer, null, &State.RenderTargetView);
 
   if(FAILED(Result)) return false;
 
@@ -388,6 +497,8 @@ bool InitDevice(D3D11State State)
   D3D11_VIEWPORT ViewPort;
   with(ViewPort)
   {
+    TopLeftX = 0.0f;
+    TopLeftY = 0.0f;
     Width = cast(FLOAT)WindowWidth;
     Height = cast(FLOAT)WindowHeight;
     MinDepth = 0.0f;
@@ -397,4 +508,57 @@ bool InitDevice(D3D11State State)
   State.ImmediateContext.RSSetViewports(1, &ViewPort);
 
   return true;
+}
+
+void ReleaseAndNullify(Type)(Type Instance)
+  if(__traits(compiles, { Instance.Release(); Instance = null; }))
+{
+  Instance.Release();
+  Instance = null;
+}
+
+class DxShaderCode
+{
+  mixin RefCountSupport;
+
+  ID3DBlob Blob;
+
+  ~this()
+  {
+    ReleaseAndNullify(Blob);
+  }
+}
+
+ARC!DxShaderCode LoadAndCompileDxShader(DxState State, WString FileName, UString EntryPoint, UString Profile)
+{
+  UINT Flags = D3DCOMPILE_ENABLE_STRICTNESS;
+  debug Flags |= D3DCOMPILE_DEBUG;
+
+  ID3DBlob ShaderBlob;
+  ID3DBlob ErrorBlob;
+  scope(exit) if(ErrorBlob) ErrorBlob.Release();
+
+  if(FAILED(D3DCompileFromFile(FileName.ptr,
+                               null,
+                               D3D_COMPILE_STANDARD_FILE_INCLUDE,
+                               EntryPoint.ptr,
+                               Profile.ptr,
+                               Flags,
+                               cast(UINT)0,
+                               &ShaderBlob,
+                               &ErrorBlob
+                               )))
+  {
+    auto RawMessage = cast(char*)ErrorBlob.GetBufferPointer();
+    auto MessageSize = ErrorBlob.GetBufferSize();
+    auto Message = RawMessage[0 .. MessageSize];
+    Log.Failure("Failed to compile shader: %s", Message);
+    return typeof(return)();
+  }
+
+  Log.Info("Shader compiled successfully!");
+
+  auto Result = State.Allocator.NewARC!DxShaderCode();
+  Result.Blob = ShaderBlob;
+  return Result;
 }

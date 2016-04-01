@@ -99,6 +99,11 @@ ARC!Type NewARC(Type, ArgTypes...)(IAllocator Allocator, auto ref ArgTypes Args)
   return Result;
 }
 
+mixin template RefCountSupport()
+{
+  RefCountPayloadData RefCountPayload;
+}
+
 //
 // Unit Tests
 //
