@@ -294,12 +294,27 @@ void CreateInstance(VulkanState State)
     apiVersion = VK_MAKE_VERSION(1, 0, 4);
   }
 
-  const(char)*[1] Layers = [ "VK_LAYER_LUNARG_standard_validation".ptr ];
+  enum VK_KHR_WIN32_SURFACE_EXTENSION_NAME = "VK_KHR_win32_surface";
+
+  const(char)*[2] Extensions =
+  [
+    VK_KHR_SURFACE_EXTENSION_NAME.ptr,
+    VK_KHR_WIN32_SURFACE_EXTENSION_NAME.ptr,
+  ];
+
+  const(char)*[1] Layers =
+  [
+    "VK_LAYER_LUNARG_standard_validation".ptr,
+  ];
 
   VkInstanceCreateInfo CreateInfo;
   with(CreateInfo)
   {
     pApplicationInfo = &ApplicationInfo;
+
+    enabledExtensionCount = Extensions.length;
+    ppEnabledExtensionNames = Extensions.ptr;
+
     enabledLayerCount = Layers.length;
     ppEnabledLayerNames = Layers.ptr;
   }
@@ -335,7 +350,7 @@ void LoadPhysicalDevices(VulkanState State)
 
     vkEnumeratePhysicalDevices(State.Instance, &DeviceCount, Devices.ptr).Verify;
 
-    foreach(ref Device; Devices)
+    foreach(Device; Devices)
     {
       VkPhysicalDeviceProperties DeviceProperties;
       vkGetPhysicalDeviceProperties(Device, &DeviceProperties);
