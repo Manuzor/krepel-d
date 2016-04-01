@@ -33,6 +33,7 @@ Type* NewUnconstructed(Type)(IAllocator Allocator)
 Type NewUnconstructed(Type)(IAllocator Allocator)
   if(is(Type == class))
 {
+  static assert(!__traits(isAbstractClass, Type), "Cannot instantiate abstract class.");
   enum Size = Meta.ClassInstanceSizeOf!Type;
   enum Alignment = Meta.ClassInstanceAlignmentOf!Type;
   auto Raw = Allocator.Allocate(Size, Alignment);
@@ -74,16 +75,7 @@ Type* New(Type, ArgTypes...)(IAllocator Allocator, auto ref ArgTypes Args)
 Type New(Type, ArgTypes...)(IAllocator Allocator, auto ref ArgTypes Args)
   if(is(Type == class))
 {
-  static assert(!__traits(isAbstractClass, Type), "Cannot instantiate abstract class.");
-  enum Size = Meta.ClassInstanceSizeOf!Type;
-  enum Alignment = Meta.ClassInstanceAlignmentOf!Type;
-  auto Raw = Allocator.Allocate(Size, Alignment);
-  if(Raw is null) return null;
-  assert(Raw.length >= Type.sizeof);
-  auto Instance = cast(Type)Raw.ptr;
-
-  Construct(Instance, Args);
-  return Instance;
+  return Construct(Allocator.NewUnconstructed!Type(), Args);
 }
 
 /// Destruct the given Instance and free the memory occupied by it.

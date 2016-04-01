@@ -133,6 +133,88 @@ private void BlitInitialData(Type)(Type[] BlitTargets)
 }
 
 
+/// Template for creation of a class 'in-place', e.g. on the stack.
+///
+/// This implementation provides two options: Automatically
+/// constructed/destructed instances and manually managed ones.
+///
+/// Example:
+///   // Create a class on the stack.
+///   class FooClass { int Data = 42; }
+///   auto Foo = InPlace!FooClass.New();
+///   assert(Foo.Data == 42);
+///
+///   // Manually manage construction and destruction.
+///   InPlace!FooClass.Data FooData;
+///   Foo = InPlace!FooClass.Construct(FooData);
+///   assert(Foo.Data == 42);
+template InPlace(Type)
+  if(is(Type == class))
+{
+  import krepel.krepel;
+
+  enum InstanceAlignment = Meta.ClassInstanceAlignmentOf!Type;
+  enum InstanceSize = Meta.ClassInstanceSizeOf!Type;
+
+  struct _Data(Flag!"SelfDestruct" SelfDestruct)
+  {
+    size_t _Offset;
+    void[InstanceSize + InstanceAlignment] _Memory;
+
+    @property inout(Type) _Payload() inout
+    {
+      auto RawPointer = _Memory.ptr + _Offset;
+      auto Result = cast(inout(Type))RawPointer;
+      return Result;
+    }
+
+    @disable this(this);
+
+    static if(SelfDestruct)
+    {
+      ~this()
+      {
+        .Destruct(_Payload);
+      }
+    }
+
+    alias _Payload this;
+  }
+
+  /// Use this to manually manage construction/destruction of the data.
+  alias Data = _Data!(No.SelfDestruct);
+
+  template IsSomeData(DataType)
+  {
+    static if(is(DataType == _Data!(Yes.SelfDestruct)) || is(DataType == _Data!(No.SelfDestruct)))
+      enum IsSomeData = true;
+    else
+      enum IsSomeData = false;
+  }
+
+  Type Construct(DataType, ArgTypes...)(ref DataType SomeData, auto ref ArgTypes Args)
+    if(IsSomeData!DataType)
+  {
+    auto BasePtr = SomeData._Memory.ptr;
+    auto AlignedPtr = AlignedPointer(BasePtr, InstanceAlignment);
+    SomeData._Offset = AlignedPtr - BasePtr;
+    return .Construct(cast(Type)SomeData, Args);
+  }
+
+  void Destruct(DataType)(ref DataType SomeData)
+  {
+    .Destruct(cast(Type)SomeData);
+  }
+
+  auto New(ArgTypes...)(auto ref ArgTypes Args)
+  {
+    _Data!(Yes.SelfDestruct) Result;
+    Construct(Result, Args);
+    return Result;
+  }
+}
+
+
 //
 // Unit Tests
 //
@@ -242,4 +324,54 @@ unittest
   assert(FooDataDestructionCount == 1);
   assert(BarDataDestructionCount == 1);
   assert(BazDataDestructionCount == 1);
+}
+
+// InPlace
+unittest
+{
+  static class FooClass
+  {
+    int Data = 42;
+
+    this(int* Message)
+    {
+      (*Message)++;
+    }
+
+    ~this()
+    {
+      Data = 1337;
+    }
+  }
+
+  FooClass Foo;
+  {
+    int Message;
+    auto WrappedFoo = InPlace!FooClass.New(&Message);
+    Foo = WrappedFoo;
+    assert(Message == 1);
+    assert(Foo.Data == 42);
+  }
+  assert(Foo.Data == 1337);
+
+  {
+    int Message;
+    InPlace!FooClass.Data WrappedFoo;
+    Foo = WrappedFoo;
+    InPlace!FooClass.Construct(WrappedFoo, &Message);
+    assert(Message == 1);
+    assert(WrappedFoo.Data == 42);
+
+    InPlace!FooClass.Destruct(WrappedFoo);
+    assert(WrappedFoo.Data == 1337);
+
+    // Construct it again...
+    InPlace!FooClass.Construct(WrappedFoo, &Message);
+    assert(Message == 2);
+    assert(WrappedFoo.Data == 42);
+
+    // ... but don't destruct anymore to prove this kind of data does not
+    // destruct itself at the end of the scope.
+  }
+  assert(Foo.Data == 42);
 }
