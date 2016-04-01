@@ -1,12 +1,10 @@
-// Wraps XInput.
-module krepel.win32.xinput_wrapper;
+module directx.xinput;
+
 version(Windows):
 
-import core.sys.windows.w32api;
-import core.sys.windows.windef;
+import core.sys.windows.windows;
 
 // Enforce Windows 10
-import std.conv;
 static assert(_WIN32_WINNT >= 0x604, "Only Windows 10 and higher are supported.");
 
 //
@@ -152,13 +150,13 @@ enum XINPUT_KEYSTROKE_REPEAT   = 0x0004;
 //
 struct XINPUT_GAMEPAD
 {
-    WORD   wButtons;
-    BYTE   bLeftTrigger;
-    BYTE   bRightTrigger;
-    SHORT  sThumbLX;
-    SHORT  sThumbLY;
-    SHORT  sThumbRX;
-    SHORT  sThumbRY;
+  WORD   wButtons;
+  BYTE   bLeftTrigger;
+  BYTE   bRightTrigger;
+  SHORT  sThumbLX;
+  SHORT  sThumbLY;
+  SHORT  sThumbRX;
+  SHORT  sThumbRY;
 }
 alias PXINPUT_GAMEPAD = XINPUT_GAMEPAD*;
 
@@ -208,55 +206,118 @@ alias PXINPUT_KEYSTROKE = XINPUT_KEYSTROKE*;
 // XInput APIs
 //
 
-// Make sure these are only seen internally to make things more convient on the user-side.
-// These functions are actually dynamically loaded in krepel.win32.xinput;
-package(krepel.win32):
-extern(Windows):
+extern(Windows) @nogc nothrow
+{
+  alias PFN_XInputGetState = DWORD function
+  (
+    DWORD          dwUserIndex,  // Index of the gamer associated with the device
+    XINPUT_STATE*  pState        // Receives the current state
+  );
 
-DWORD XInputGetState
-(
-  DWORD          dwUserIndex,  // Index of the gamer associated with the device
-  XINPUT_STATE*  pState        // Receives the current state
-);
+  alias PFN_XInputSetState = DWORD function
+  (
+    DWORD              dwUserIndex,  // Index of the gamer associated with the device
+    XINPUT_VIBRATION*  pVibration    // The vibration information to send to the controller
+  );
 
-DWORD XInputSetState
-(
-  DWORD              dwUserIndex,  // Index of the gamer associated with the device
-  XINPUT_VIBRATION*  pVibration    // The vibration information to send to the controller
-);
+  alias PFN_XInputGetCapabilities = DWORD function
+  (
+    DWORD                 dwUserIndex,   // Index of the gamer associated with the device
+    DWORD                 dwFlags,       // Input flags that identify the device type
+    XINPUT_CAPABILITIES*  pCapabilities  // Receives the capabilities
+  );
 
-DWORD XInputGetCapabilities
-(
-  DWORD                 dwUserIndex,   // Index of the gamer associated with the device
-  DWORD                 dwFlags,       // Input flags that identify the device type
-  XINPUT_CAPABILITIES*  pCapabilities  // Receives the capabilities
-);
+  alias PFN_XInputEnable = DWORD function
+  (
+    BOOL  enable     // [in] Indicates whether xinput is enabled or disabled.
+  );
 
-deprecated
-DWORD XInputEnable
-(
-  BOOL  enable     // [in] Indicates whether xinput is enabled or disabled.
-);
+  alias PFN_XInputGetAudioDeviceIds = DWORD function
+  (
+    DWORD   dwUserIndex,        // Index of the gamer associated with the device
+    LPWSTR  pRenderDeviceId,    // Windows Core Audio device ID string for render (speakers)
+    UINT*   pRenderCount,       // Size of render device ID string buffer (in wide-chars)
+    LPWSTR  pCaptureDeviceId,   // Windows Core Audio device ID string for capture (microphone)
+    UINT*   pCaptureCount       // Size of capture device ID string buffer (in wide-chars)
+  );
 
-DWORD XInputGetAudioDeviceIds
-(
-  DWORD   dwUserIndex,        // Index of the gamer associated with the device
-  LPWSTR  pRenderDeviceId,    // Windows Core Audio device ID string for render (speakers)
-  UINT*   pRenderCount,       // Size of render device ID string buffer (in wide-chars)
-  LPWSTR  pCaptureDeviceId,   // Windows Core Audio device ID string for capture (microphone)
-  UINT*   pCaptureCount       // Size of capture device ID string buffer (in wide-chars)
-);
+  alias PFN_XInputGetBatteryInformation = DWORD function
+  (
+    DWORD                        dwUserIndex,        // Index of the gamer associated with the device
+    BYTE                         devType,            // Which device on this user index
+    XINPUT_BATTERY_INFORMATION*  pBatteryInformation // Contains the level and types of batteries
+  );
 
-DWORD XInputGetBatteryInformation
-(
-  DWORD                        dwUserIndex,        // Index of the gamer associated with the device
-  BYTE                         devType,            // Which device on this user index
-  XINPUT_BATTERY_INFORMATION*  pBatteryInformation // Contains the level and types of batteries
-);
+  alias PFN_XInputGetKeystroke = DWORD function
+  (
+    DWORD              dwUserIndex,  // Index of the gamer associated with the device
+    DWORD              dwReserved,   // Reserved for future use
+    PXINPUT_KEYSTROKE  pKeystroke    // Pointer to an XINPUT_KEYSTROKE structure that receives an input event.
+  );
 
-DWORD XInputGetKeystroke
-(
-  DWORD              dwUserIndex,  // Index of the gamer associated with the device
-  DWORD              dwReserved,   // Reserved for future use
-  PXINPUT_KEYSTROKE  pKeystroke    // Pointer to an XINPUT_KEYSTROKE structure that receives an input event.
-);
+  version(XInput_RuntimeLinking)
+  {
+    __gshared
+    {
+      private enum DefaultStubReturnValue = ERROR_DEVICE_NOT_CONNECTED;
+
+      PFN_XInputGetState XInputGetState = (dwUserIndex, pState) => DefaultStubReturnValue;
+      PFN_XInputSetState XInputSetState = (dwUserIndex, pVibration) => DefaultStubReturnValue;
+      PFN_XInputGetCapabilities XInputGetCapabilities = (dwUserIndex, dwFlags, pCapabilities) => DefaultStubReturnValue;
+      deprecated PFN_XInputEnable XInputEnable = (enable) => DefaultStubReturnValue;
+      PFN_XInputGetAudioDeviceIds XInputGetAudioDeviceIds = (dwUserIndex, pRenderDeviceId, pRenderCount, pCaptureDeviceId, pCaptureCount) => DefaultStubReturnValue;
+      PFN_XInputGetBatteryInformation XInputGetBatteryInformation = (dwUserIndex, devType, pBatteryInformation) => DefaultStubReturnValue;
+      PFN_XInputGetKeystroke XInputGetKeystroke = (dwUserIndex, dwReserved, pKeystroke) => DefaultStubReturnValue;
+    }
+  }
+  else
+  {
+    DWORD XInputGetState
+    (
+      DWORD          dwUserIndex,  // Index of the gamer associated with the device
+      XINPUT_STATE*  pState        // Receives the current state
+    );
+
+    DWORD XInputSetState
+    (
+      DWORD              dwUserIndex,  // Index of the gamer associated with the device
+      XINPUT_VIBRATION*  pVibration    // The vibration information to send to the controller
+    );
+
+    DWORD XInputGetCapabilities
+    (
+      DWORD                 dwUserIndex,   // Index of the gamer associated with the device
+      DWORD                 dwFlags,       // Input flags that identify the device type
+      XINPUT_CAPABILITIES*  pCapabilities  // Receives the capabilities
+    );
+
+    deprecated
+    DWORD XInputEnable
+    (
+      BOOL  enable     // [in] Indicates whether xinput is enabled or disabled.
+    );
+
+    DWORD XInputGetAudioDeviceIds
+    (
+      DWORD   dwUserIndex,        // Index of the gamer associated with the device
+      LPWSTR  pRenderDeviceId,    // Windows Core Audio device ID string for render (speakers)
+      UINT*   pRenderCount,       // Size of render device ID string buffer (in wide-chars)
+      LPWSTR  pCaptureDeviceId,   // Windows Core Audio device ID string for capture (microphone)
+      UINT*   pCaptureCount       // Size of capture device ID string buffer (in wide-chars)
+    );
+
+    DWORD XInputGetBatteryInformation
+    (
+      DWORD                        dwUserIndex,        // Index of the gamer associated with the device
+      BYTE                         devType,            // Which device on this user index
+      XINPUT_BATTERY_INFORMATION*  pBatteryInformation // Contains the level and types of batteries
+    );
+
+    DWORD XInputGetKeystroke
+    (
+      DWORD              dwUserIndex,  // Index of the gamer associated with the device
+      DWORD              dwReserved,   // Reserved for future use
+      PXINPUT_KEYSTROKE  pKeystroke    // Pointer to an XINPUT_KEYSTROKE structure that receives an input event.
+    );
+  }
+}
