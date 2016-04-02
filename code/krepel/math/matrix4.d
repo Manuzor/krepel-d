@@ -2,6 +2,7 @@ module krepel.math.matrix4;
 
 import krepel.math.vector3;
 import krepel.math.vector4;
+import krepel.math.quaternion;
 import krepel.math.math;
 
 @safe:
@@ -302,10 +303,50 @@ Matrix4 CreateOrthogonalMatrix(float Width, float Height, float ZScale, float ZO
 {
   return Matrix4([
     [Width ? (1.0f/Width) : 1.0f, 0.0f, 0.0f, 0.0f],
-    [0.0f, Height ? (1.0f/Height), 0.0f, 0.0f],
+    [0.0f, Height ? (1.0f/Height) : 1.0f, 0.0f, 0.0f],
     [0.0f, 0.0f, ZScale, 0.0f],
-    [0.0f, 0.0f, ZOffset * ZScale, 1.0f],
+    [0.0f, 0.0f, ZOffset * ZScale, 1.0f]
     ]);
+}
+
+Matrix4 CreateMatrixFromScaleRotateTranslate(Vector3 Position, Quaternion Rotation, Vector3 Scale = Vector3.UnitScaleVector)
+{
+  Matrix4 Result;
+
+  const float X2 = Rotation.X + Rotation.X;
+  const float Y2 = Rotation.Y + Rotation.Y;
+  const float Z2 = Rotation.Z + Rotation.Z;
+
+  const float XX2 = Rotation.X * X2;
+  const float YY2 = Rotation.Y * Y2;
+  const float ZZ2 = Rotation.Z * Z2;
+  const float XY2 = Rotation.X * Y2;
+  const float WZ2 = Rotation.W * Z2;
+  const float YZ2 = Rotation.Y * Z2;
+  const float WX2 = Rotation.W * X2;
+  const float XZ2 = Rotation.X * Z2;
+  const float WY2 = Rotation.W * Y2;
+
+  Result[0][0] = (1.0f - (YY2 + ZZ2)) * Scale.X;
+  Result[0][1] = (XY2 + WZ2) * Scale.X;
+  Result[0][2] = (XZ2 - WY2) * Scale.X;
+  Result[1][0] = (XY2 - WZ2) * Scale.Y;
+  Result[1][1] = (1.0f - (XX2 + ZZ2)) * Scale.Y;
+  Result[1][2] = (YZ2 + WX2) * Scale.Y;
+  Result[2][0] = (XZ2 + WY2) * Scale.Z;
+  Result[2][1] = (YZ2 - WX2) * Scale.Z;
+  Result[2][2] = (1.0f - (XX2 + YY2)) * Scale.Z;
+
+  Result.M[0][3] = 0.0f;
+  Result.M[1][3] = 0.0f;
+  Result.M[2][3] = 0.0f;
+  Result.M[3][3] = 1.0f;
+
+  Result[3][0] = Position.X;
+  Result[3][1] = Position.Y;
+  Result[3][2] = Position.Z;
+
+  return Result;
 }
 
 /// 4x4 Matrix accessed first by row, then by column
@@ -571,6 +612,17 @@ unittest
   Matrix = Matrix4(Vector3.ForwardVector, Vector3.RightVector, Vector3.UpVector, Vector3(10, 20, 50));
   assert(Matrix.IsInvertible);
   assert(Matrix * Matrix.SafeInvert() == Matrix4.Identity);
+}
+
+// Transform Matrix
+unittest
+{
+  const Transform = CreateMatrixFromScaleRotateTranslate(Vector3(1,2,3), Quaternion.Identity, Vector3(2,2,2));
+  const Input = Vector3(10,20,30);
+  const ResultPosition = Transform.TransformPosition(Input);
+  const ResultVector = Transform.TransformVector(Input);
+  assert(ResultPosition == Vector3(21,42,63));
+  assert(ResultVector == Vector3(20,40,60));
 }
 
 // opIndex
