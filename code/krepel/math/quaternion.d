@@ -49,64 +49,44 @@ float Length(Quaternion Quat)
 
 Matrix4 ToRotationMatrix(Quaternion Quat)
 {
-  const float XX = Quat.X * Quat.X;
-  const float YY = Quat.Y * Quat.Y;
-  const float ZZ = Quat.Z * Quat.Z;
-  const float WW = Quat.W * Quat.W;
-  const float XY = 2 * Quat.X * Quat.Y;
-  const float XZ = 2 * Quat.X * Quat.Z;
-  const float XW = 2 * Quat.X * Quat.W;
-  const float YZ = 2 * Quat.Y * Quat.Z;
-  const float YW = 2 * Quat.Y * Quat.W;
-  const float ZW = 2 * Quat.Z * Quat.W;
+  const float X2 = Quat.X + Quat.X;
+  const float Y2 = Quat.Y + Quat.Y;
+  const float Z2 = Quat.Z + Quat.Z;
+
+  const float XX = Quat.X * X2;
+  const float XY = Quat.X * Y2;
+  const float XZ = Quat.X * Z2;
+
+  const float YY = Quat.Y * Y2;
+  const float YZ = Quat.Y * Z2;
+  const float ZZ = Quat.Z * Z2;
+
+  const float WX = Quat.W * X2;
+  const float WY = Quat.W * Y2;
+  const float WZ = Quat.W * Z2;
 
   return Matrix4([
-    [WW + XX - YY - ZZ, XY + ZW, XZ - YW, 0.0f],
-    [XY - ZW, WW - XX + YY - ZZ, YZ + XW, 0.0f],
-    [XZ + YW, YZ - XW, WW - XX - YY + ZZ, 0.0f],
+    [1.0f - (YY + ZZ), XY + WZ, XZ - WY, 0.0f],
+    [XY - WZ, 1.0f - (XX + ZZ), YZ + WX, 0.0f],
+    [XZ + WY, YZ - WX, 1.0f - (XX + YY), 0.0f],
     [0.0f, 0.0f, 0.0f, 1.0f]
   ]);
 }
 
 Vector3 TransformVector(Quaternion Quat, Vector3 Direction)
 {
-  const float XX = Quat.X * Quat.X;
-  const float YY = Quat.Y * Quat.Y;
-  const float ZZ = Quat.Z * Quat.Z;
-  const float WW = Quat.W * Quat.W;
-  const float XY = 2 * Quat.X * Quat.Y;
-  const float XZ = 2 * Quat.X * Quat.Z;
-  const float XW = 2 * Quat.X * Quat.W;
-  const float YZ = 2 * Quat.Y * Quat.Z;
-  const float YW = 2 * Quat.Y * Quat.W;
-  const float ZW = 2 * Quat.Z * Quat.W;
-
-  return Vector3(
-    (WW + XX - YY - ZZ) * Direction.X + (XY - ZW) * Direction.Y + (XZ + YW) * Direction.Z,
-    (XY + ZW) * Direction.X + (WW - XX + YY - ZZ) * Direction.Y + (YZ - XW) * Direction.Z,
-    (XZ - YW) * Direction.X + (YZ + XW) * Direction.Y + (WW - XX - YY + ZZ) * Direction.Z);
+  const Q = Vector3(Quat.X, Quat.Y, Quat.Z);
+  const T = 2.0f * Q.Cross(Direction);
+  return Direction + (Quat.W * T) + Q.Cross(T);
 }
 
 /// Rotation of the Vector
 /// The W component of the vector will be unchanged
 Vector4 TransformVector(Quaternion Quat, Vector4 Direction)
 {
-  const float XX = Quat.X * Quat.X;
-  const float YY = Quat.Y * Quat.Y;
-  const float ZZ = Quat.Z * Quat.Z;
-  const float WW = Quat.W * Quat.W;
-  const float XY = 2 * Quat.X * Quat.Y;
-  const float XZ = 2 * Quat.X * Quat.Z;
-  const float XW = 2 * Quat.X * Quat.W;
-  const float YZ = 2 * Quat.Y * Quat.Z;
-  const float YW = 2 * Quat.Y * Quat.W;
-  const float ZW = 2 * Quat.Z * Quat.W;
-
-  return Vector4(
-    (WW + XX - YY - ZZ) * Direction.X + (XY - ZW) * Direction.Y + (XZ + YW) * Direction.Z,
-    (XY + ZW) * Direction.X + (WW - XX + YY - ZZ) * Direction.Y + (YZ - XW) * Direction.Z,
-    (XZ - YW) * Direction.X + (YZ + XW) * Direction.Y + (WW - XX - YY + ZZ) * Direction.Z,
-    Direction.W);
+  const Q = Vector3(Quat.X, Quat.Y, Quat.Z);
+  const T = 2.0f * Q.Cross(Direction.XYZ);
+  return Vector4(Direction.XYZ + (Quat.W * T) + Q.Cross(T), Direction.W);
 }
 
 /// Inverse Rotation of the Vector, using the Inverse Quaternion of the given one.
@@ -114,22 +94,9 @@ Vector4 TransformVector(Quaternion Quat, Vector4 Direction)
 /// the given Vector in Counter-Clockwise Direction
 Vector3 InverseTransformVector(Quaternion Quat, Vector3 Direction)
 {
-  Quat.Invert();
-  const float XX = Quat.X * Quat.X;
-  const float YY = Quat.Y * Quat.Y;
-  const float ZZ = Quat.Z * Quat.Z;
-  const float WW = Quat.W * Quat.W;
-  const float XY = 2 * Quat.X * Quat.Y;
-  const float XZ = 2 * Quat.X * Quat.Z;
-  const float XW = 2 * Quat.X * Quat.W;
-  const float YZ = 2 * Quat.Y * Quat.Z;
-  const float YW = 2 * Quat.Y * Quat.W;
-  const float ZW = 2 * Quat.Z * Quat.W;
-
-  return Vector3(
-    (WW + XX - YY - ZZ) * Direction.X + (XY - ZW) * Direction.Y + (XZ + YW) * Direction.Z,
-    (XY + ZW) * Direction.X + (WW - XX + YY - ZZ) * Direction.Y + (YZ - XW) * Direction.Z,
-    (XZ - YW) * Direction.X + (YZ + XW) * Direction.Y + (WW - XX - YY + ZZ) * Direction.Z);
+  const Q = Vector3(-Quat.X, -Quat.Y, -Quat.Z);
+  const T = 2.0f * Q.Cross(Direction);
+  return Direction + (Quat.W * T) + Q.Cross(T);
 }
 
 /// Inverse Rotation of the Vector, using the Inverse Quaternion of the given one.
@@ -138,23 +105,9 @@ Vector3 InverseTransformVector(Quaternion Quat, Vector3 Direction)
 /// The W component of the vector will be unchanged
 Vector4 InverseTransformVector(Quaternion Quat, Vector4 Direction)
 {
-  Quat.Invert();
-  const float XX = Quat.X * Quat.X;
-  const float YY = Quat.Y * Quat.Y;
-  const float ZZ = Quat.Z * Quat.Z;
-  const float WW = Quat.W * Quat.W;
-  const float XY = 2 * Quat.X * Quat.Y;
-  const float XZ = 2 * Quat.X * Quat.Z;
-  const float XW = 2 * Quat.X * Quat.W;
-  const float YZ = 2 * Quat.Y * Quat.Z;
-  const float YW = 2 * Quat.Y * Quat.W;
-  const float ZW = 2 * Quat.Z * Quat.W;
-
-  return Vector4(
-    (WW + XX - YY - ZZ) * Direction.X + (XY - ZW) * Direction.Y + (XZ + YW) * Direction.Z,
-    (XY + ZW) * Direction.X + (WW - XX + YY - ZZ) * Direction.Y + (YZ - XW) * Direction.Z,
-    (XZ - YW) * Direction.X + (YZ + XW) * Direction.Y + (WW - XX - YY + ZZ) * Direction.Z,
-    Direction.W);
+  const Q = Vector3(-Quat.X, -Quat.Y, -Quat.Z);
+  const T = 2.0f * Q.Cross(Direction.XYZ);
+  return Vector4(Direction.XYZ + (Quat.W * T) + Q.Cross(T), Direction.W);
 }
 
 Quaternion SafeNormalizedCopy(Quaternion Quat, float Epsilon = 1e-4f)
