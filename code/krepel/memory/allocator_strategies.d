@@ -91,10 +91,10 @@ struct AutoHeapAllocator
     if(RequiredBlockSize > NewHeapSize)
     {
       NewHeapSize = RequiredBlockSize;
-      Log.Warning("Allocation requested more memory than the current heap size"
-                  "(%s) can take. A new heap of size %s will be created to"
-                  "accomodate for this unusual request. It is advised to"
-                  "review whether the current heap size is sufficient and that"
+      Log.Warning("Allocation requested more memory than the current heap size "
+                  "(%s) can take. A new heap of size %s will be created to "
+                  "accomodate for this unusual request. It is advised to "
+                  "review whether the current heap size is sufficient and that "
                   "the correct type of allocator is used.", HeapSize, NewHeapSize);
     }
     auto NewHeapMemory = Allocator.Allocate(NewHeapSize, 1);
@@ -174,7 +174,7 @@ struct HybridAllocator(P, S)
 version(unittest)
 {
   /// Returns a struct that wraps a AutoHeapAllocator that automatically uses SystemMemory.
-  auto CreateTestAllocator(size_t HeapSize = 4.KiB)
+  auto CreateTestAllocator(size_t HeapSize = 1.MiB)
   {
     static struct TestAllocatorData
     {
