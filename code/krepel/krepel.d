@@ -70,6 +70,13 @@ alias Yes  = std.typecons.Yes;
 alias No   = std.typecons.No;
 alias Flag = std.typecons.Flag;
 
+void Swap(TypeA, TypeB)(ref TypeA A, ref TypeB B)
+{
+  auto SavedA = A;
+  A = B;
+  B = SavedA;
+}
+
 version(none)
 void main()
 {

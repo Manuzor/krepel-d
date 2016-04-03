@@ -46,6 +46,7 @@ class SDLNode
   //
   // Node properties
   //
+  bool IsAnonymous;
   SDLIdentifier Namespace;
   SDLIdentifier Name;
   Array!SDLLiteral Values;
@@ -286,13 +287,15 @@ SourceData ParseUntil(alias Predicate)(ref SourceData Source, ref ParsingContext
 }
 
 SourceData ParseNested(ref SourceData Source, ref ParsingContext Context,
-                       string OpeningSequence, string ClosingSequence, int Depth = 1)
+                       string OpeningSequence, string ClosingSequence,
+                       bool* OutFoundClosingSequence = null, int Depth = 1)
 {
   const MaxNum = Source.length;
   size_t NumToAdvance;
+  string String;
   while(NumToAdvance < MaxNum)
   {
-    auto String = Source[NumToAdvance .. MaxNum];
+    String = Source[NumToAdvance .. MaxNum];
     if(String.StartsWith(OpeningSequence))
     {
       NumToAdvance += OpeningSequence.length;
@@ -310,6 +313,9 @@ SourceData ParseNested(ref SourceData Source, ref ParsingContext Context,
       NumToAdvance++;
     }
   }
+
+  // It's possible the Source was exhausted before we found a closing sequence.
+  if(OutFoundClosingSequence) *OutFoundClosingSequence = String.StartsWith(ClosingSequence);
 
   auto Result = Source.AdvanceBy(NumToAdvance);
   Source.AdvanceBy(Min(Source.length, ClosingSequence.length));
@@ -367,19 +373,24 @@ bool Parse(SDLDocument Document, string SourceString, ref ParsingContext Context
 
 bool Parse(SDLDocument Document, ref SourceData Source, ref ParsingContext Context)
 {
-  if(!Document.ParseNode(Source, Context, &Document.FirstChild))
+  return Document.ParseInnerNodes(Source, Context, &Document.FirstChild);
+}
+
+bool ParseInnerNodes(SDLDocument Document, ref SourceData Source, ref ParsingContext Context,
+                     SDLNode* FirstNode)
+{
+  if(FirstNode is null)
   {
-    if(Context.Log)
-    {
-      Context.Log.Warning("%s(%s,%s) Unable to parse SDL document.",
-                         Context.Origin,
-                         Source.StartLocation.Line,
-                         Source.StartLocation.Column);
-    }
+    debug assert(false, "Need first node to parse inner nodes.");
+    else return false;
+  }
+
+  if(!Document.ParseNode(Source, Context, FirstNode))
+  {
     return false;
   }
 
-  SDLNode PreviousNode = Document.FirstChild;
+  SDLNode PreviousNode = *FirstNode;
   SDLNode NewNode;
   while(Document.ParseNode(Source, Context, &NewNode))
   {
@@ -472,51 +483,34 @@ bool ParseNode(SDLDocument Document,
   if(Source.empty) return false;
 
   auto Node = Document.Allocator.New!SDLNode(Document);
+  scope(exit) if(Node) Document.Allocator.Delete(Node);
 
-  SDLIdentifier Identifier;
-  if(Document.ParseIdentifier(Source, Context, &Identifier))
+  //
+  // Parse Node Name and Namespace
+  //
+  if(!Document.ParseNamespaceAndName(Source, Context, &Node.Namespace, &Node.Name))
   {
-    //Source.SkipWhiteSpaceAndComments(Context, No.ConsumeNewLine);
-
-    if(Source.empty)
-    {
-      Node.Name = Identifier;
-    }
-    else
-    {
-      auto CurrentChar = Source.front;
-      if(CurrentChar == ':')
-      {
-        Node.Namespace = Identifier;
-        if(Document.ParseIdentifier(Source, Context, &Identifier))
-        {
-          Node.Name = Identifier;
-        }
-        else
-        {
-          Node.Name = "content";
-        }
-      }
-      else if(CurrentChar == '=')
-      {
-        if(Context.Log)
-        {
-          Context.Log.Warning("%s(%s,%s): Anonymous node must have at least 1 value.",
-                              Context.Origin,
-                              Source.StartLocation.Line,
-                              Source.StartLocation.Column);
-        }
-        return false;
-      }
-      else
-      {
-        Node.Name = Identifier;
-      }
-    }
-  }
-  else
-  {
+    assert(Node.Namespace.empty);
     Node.Name = "content";
+    Node.IsAnonymous = true;
+  }
+
+  //Source.SkipWhiteSpaceAndComments(Context, No.ConsumeNewLine);
+
+  //
+  // Protect against anonymous nodes that only contain attributes.
+  //
+  if(Source.length && Source.front == '=')
+  {
+    if(Context.Log)
+    {
+      Context.Log.Warning("%s(%s,%s): Anonymous node must have at least 1 value. "
+                          "It appears you've only given it attributes.",
+                          Context.Origin,
+                          Source.StartLocation.Line,
+                          Source.StartLocation.Column);
+    }
+    return false;
   }
 
   //
@@ -537,19 +531,26 @@ bool ParseNode(SDLDocument Document,
   //
   while(true)
   {
-    if(!Document.ParseIdentifier(Source, Context, &Identifier))
+    SDLAttribute Attribute;
+
+    if(!Document.ParseAttribute(Source, Context, &Attribute))
     {
       // There are no more attributes.
       break;
     }
 
-    //Source.SkipWhiteSpaceAndComments(Context, No.ConsumeNewLine);
+    Node.Attributes ~= Attribute;
+  }
 
-    if(Source.front != '=')
+  // Check for validity by trying to parse a literal here. If it succeeds, the
+  // document is malformed.
+  {
+    auto _ = Source;
+    if(Document.ParseLiteral(_, Context, null))
     {
       if(Context.Log)
       {
-        Context.Log.Warning("%s(%s,%s): Expected an attribute here.",
+        Context.Log.Warning("%s(%s,%s): Unexpected literal",
                             Context.Origin,
                             Source.StartLocation.Line,
                             Source.StartLocation.Column);
@@ -563,11 +564,29 @@ bool ParseNode(SDLDocument Document,
 
   if(Source.length && Source.front == '{')
   {
-    // TODO(Manu): Parse children.
+    Source.AdvanceBy(1);
+    bool FoundClosingBrace;
+    auto ChildSource = Source.ParseNested(Context, "{", "}", &FoundClosingBrace);
+
+    if(!FoundClosingBrace && Context.Log)
+    {
+      Context.Log.Warning("%s(%s,%s): The list of child nodes is not closed properly with curly braces.",
+                          Context.Origin,
+                          OriginalSource.StartLocation.Line,
+                          OriginalSource.StartLocation.Column);
+    }
+
+    if(!Document.ParseInnerNodes(ChildSource, Context, &Node.FirstChild))
+    {
+      // TODO(Manu): What to do if there are no inner nodes? Ignore it?
+    }
   }
 
-  if(OutNode) *OutNode = Node;
-  else Document.Allocator.Delete(Node);
+  if(OutNode)
+  {
+    *OutNode = Node;
+    Node = null;
+  }
   OriginalSource = Source;
   return true;
 }
@@ -612,7 +631,7 @@ bool ParseLiteral(SDLDocument Document,
 
     if(Word.front.IsDigit || Word.front == '.')
     {
-
+      // TODO(Manu)
     }
     else if(Word == "true" || Word == "on")
     {
@@ -643,6 +662,116 @@ bool ParseLiteral(SDLDocument Document,
   }
 
   if(OutLiteral) *OutLiteral = Result;
+  OriginalSource = Source;
+  return true;
+}
+
+bool ParseAttribute(SDLDocument Document,
+                    ref SourceData OriginalSource,
+                    ref ParsingContext Context,
+                    SDLAttribute* OutAttribute)
+{
+  auto Source = OriginalSource;
+  SDLAttribute Result;
+
+  //
+  // Parse the namespace and the name
+  //
+  if(!Document.ParseNamespaceAndName(Source, Context, &Result.Namespace, &Result.Name))
+  {
+    return false;
+  }
+
+  //Source.SkipWhiteSpaceAndComments(Context, No.ConsumeNewLine);
+
+  if(Source.empty || Source.IsAtSemanticLineDelimiter(Context))
+  {
+    goto MalformedAttribute;
+  }
+
+  if(Source.front != '=')
+  {
+    if(Context.Log)
+    {
+      Context.Log.Warning("%s(%s,%s): Expected an attribute (key-value pair) here.",
+                          Context.Origin,
+                          Source.StartLocation.Line,
+                          Source.StartLocation.Column);
+    }
+    return false;
+  }
+
+  // Skip the '=' character.
+  Source.AdvanceBy(1);
+
+  //Source.SkipWhiteSpaceAndComments(Context, No.ConsumeNewLine);
+
+  if(Source.empty || Source.IsAtSemanticLineDelimiter(Context))
+  {
+    goto MalformedAttribute;
+  }
+
+  //
+  // Parse the value
+  //
+  if(!Document.ParseLiteral(Source, Context, &Result.Value))
+  {
+    goto MalformedAttribute;
+  }
+
+  if(OutAttribute) *OutAttribute = Result;
+  OriginalSource = Source;
+  return true;
+
+MalformedAttribute:
+  if(Context.Log)
+  {
+    Context.Log.Warning("%s(%s,%s): Malformed attribute.",
+                        Context.Origin,
+                        Source.StartLocation.Line,
+                        Source.StartLocation.Column);
+  }
+  return false;
+}
+
+bool ParseNamespaceAndName(SDLDocument Document,
+                           ref SourceData OriginalSource,
+                           ref ParsingContext Context,
+                           SDLIdentifier* OutNamespace,
+                           SDLIdentifier* OutName)
+{
+  auto Source = OriginalSource;
+
+  SDLIdentifier Identifier;
+  if(!Document.ParseIdentifier(Source, Context, &Identifier))
+  {
+    // TODO(Manu): Logging.
+    return false;
+  }
+
+  //Source.SkipWhiteSpaceAndComments(Context, No.ConsumeNewLine);
+
+  if(Source.empty || Source.front != ':')
+  {
+    if(OutName) *OutName = Identifier;
+    OriginalSource = Source;
+    return true;
+  }
+
+  assert(Source.front == ':');
+  Source.AdvanceBy(1);
+
+  //Source.SkipWhiteSpaceAndComments(Context, No.ConsumeNewLine);
+
+  SDLIdentifier SecondIdentifier;
+  if(!Document.ParseIdentifier(Source, Context, &SecondIdentifier))
+  {
+    // TODO(Manu): Logging.
+    return false;
+  }
+
+  if(OutNamespace) *OutNamespace = Identifier;
+  if(OutName) *OutName = SecondIdentifier;
   OriginalSource = Source;
   return true;
 }
@@ -804,6 +933,31 @@ unittest
   assert(Node.Values[0].String == "bar", Node.Values[0].String);
 }
 
+// Parse simple document with attributes
+unittest
+{
+  SystemMemory System;
+  auto Stack = StackMemory(System.Allocate(2.MiB, 1));
+  scope(exit) System.Deallocate(Stack.Memory);
+  auto StackAllocator = Wrap(Stack);
+
+  auto Context = ParsingContext("SDL Test 1", .Log);
+
+  auto Document = StackAllocator.New!SDLDocument(StackAllocator);
+  Document.Parse(`foo "bar" baz="qux"`, Context);
+
+  auto Node = Document.FirstChild;
+  assert(Node);
+  assert(Node.Name == "foo");
+  assert(Node.Values.length == 1);
+  assert(Node.Values[0].Type == SDLLiteralType.String);
+  assert(Node.Values[0].String == "bar", Node.Values[0].String);
+  assert(Node.Attributes.length == 1);
+  assert(Node.Attributes[0].Name == "baz", Node.Attributes[0].Name);
+  assert(Node.Attributes[0].Value.Type == SDLLiteralType.String);
+  assert(Node.Attributes[0].Value.String == "qux", Node.Attributes[0].Value.String);
+}
+
 // Parse document with multiple nodes
 unittest
 {
@@ -834,4 +988,46 @@ unittest
   assert(Node.Values.length == 1);
   assert(Node.Values[0].Type == SDLLiteralType.String);
   assert(Node.Values[0].String == "qux", Node.Values[0].String);
+}
+
+// Parse document with child nodes
+unittest
+{
+  SystemMemory System;
+  auto Stack = StackMemory(System.Allocate(2.MiB, 1));
+  scope(exit) System.Deallocate(Stack.Memory);
+  auto StackAllocator = Wrap(Stack);
+
+  auto Context = ParsingContext("SDL Test 1", .Log);
+
+  auto Document = StackAllocator.New!SDLDocument(StackAllocator);
+  auto Source = q"(
+    foo "bar" {
+      baz "qux" {
+        baaz "quux"
+      }
+    }
+  )";
+  Document.Parse(Source, Context);
+
+  auto Node = Document.FirstChild;
+  assert(Node);
+  assert(Node.Name == "foo");
+  assert(Node.Values.length == 1);
+  assert(Node.Values[0].Type == SDLLiteralType.String);
+  assert(Node.Values[0].String == "bar", Node.Values[0].String);
+
+  Node = Node.FirstChild;
+  assert(Node);
+  assert(Node.Name == "baz");
+  assert(Node.Values.length == 1);
+  assert(Node.Values[0].Type == SDLLiteralType.String);
+  assert(Node.Values[0].String == "qux", Node.Values[0].String);
+
+  Node = Node.FirstChild;
+  assert(Node);
+  assert(Node.Name == "baaz");
+  assert(Node.Values.length == 1);
+  assert(Node.Values[0].Type == SDLLiteralType.String);
+  assert(Node.Values[0].String == "quux", Node.Values[0].String);
 }
