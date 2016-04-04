@@ -1,8 +1,8 @@
 module krepel.win32.win32file;
 
 import core.sys.windows.windows;
+import krepel;
 import krepel.system.ifile;
-import krepel.memory;
 import krepel.win32;
 import krepel.container;
 
@@ -34,7 +34,12 @@ class Win32File : IFile
       FILE_ATTRIBUTE_NORMAL,
       null
       );
-    assert(NewHandle != INVALID_HANDLE_VALUE);
+    if(NewHandle == INVALID_HANDLE_VALUE)
+    {
+      Log.Warning("Unable to open file: %s", Path.ByUTF!char);
+      debug assert(false, "Unable to open file");
+      else return;
+    }
 
     BY_HANDLE_FILE_INFORMATION FileInfo;
     if(GetFileInformationByHandle(NewHandle, &FileInfo))
