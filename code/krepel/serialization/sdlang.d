@@ -1,4 +1,4 @@
-module krepel.config.sdlang;
+module krepel.serialization.sdlang;
 
 import krepel;
 import krepel.string : UString;
