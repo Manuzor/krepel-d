@@ -82,13 +82,9 @@ struct SDLLiteral
   union
   {
     string String;
-    dchar  Character;
     long   Integer;
     real   Real;
     bool   Boolean;
-    void*  Date;     // TODO(Manu)
-    void*  DateTime; // TODO(Manu)
-    void*  TimeSpan; // TODO(Manu)
     void*  Binary;   // TODO(Manu)
   }
 
@@ -96,14 +92,6 @@ struct SDLLiteral
   {
     assert(Type == SDLLiteralType.String, "Expected a String value.");
     return String;
-  }
-
-  auto opCast(To)() inout
-    if(is(Meta.IsSomeChar!To))
-  {
-    import std.conv : to;
-    assert(Type == SDLLiteralType.Character, "Expected a Character value.");
-    return Character.to!To();
   }
 
   auto opCast(To)() inout
@@ -129,27 +117,15 @@ struct SDLLiteral
   }
 }
 
-bool IsNull(in ref SDLLiteral Value)
-{
-  return Value.Type == SDLLiteralType.Null;
-}
-
 enum SDLLiteralType
 {
   INVALID,
 
   String,
-  Character,
   Integer,
   Real,
-  Double,
-  Decimal,
   Boolean,
-  Date,
-  DateTime,
-  TimeSpan,
   Binary,
-  Null,
 }
 
 //
@@ -679,10 +655,6 @@ bool ParseLiteral(SDLDocument Document,
     {
       Result.Type = SDLLiteralType.Boolean;
       Result.Boolean = false;
-    }
-    else if(Word == "null")
-    {
-      Result.Type = SDLLiteralType.Null;
     }
     else
     {
