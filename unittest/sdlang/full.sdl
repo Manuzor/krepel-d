@@ -53,3 +53,12 @@ This is
 what you get
 when you support multi-line comments
 in a whitespace sensitive language. */ answer=42
+
+// More involved node
+foo 1 2 "bar" baz="qux" {
+  inner { 0 1 2 }
+  "anon value"
+  "anon value with nesting" {
+    another-foo "bar" 1337 -92 "baz" qux="baaz"
+  }
+}

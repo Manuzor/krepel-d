@@ -670,7 +670,7 @@ bool ParseLiteral(SDLDocument Document,
   {
     auto Word = Source.ParseUntil!(Str => Str.front.IsWhite)(Context);
 
-    if(Word.front.IsDigit || Word.front == '.')
+    if(Word.front.IsDigit || Word.front == '.' || Word.front == '+' || Word.front == '-')
     {
       Result.Type = SDLLiteralType.Number;
       Result.NumberSource = Word;
@@ -1189,12 +1189,14 @@ unittest
   assert(Node.Name == "foo");
   assert(Node.Values.IsEmpty);
   assert(Node.Attributes.IsEmpty);
-  auto Child = Node.FirstChild;
-  assert(Child);
-  assert(Child.Name == "bar");
-  assert(Child.Values.Count == 1);
-  assert(cast(string)Child.Values[0] == "baz");
-  assert(Child.Attributes.IsEmpty == 1);
+  {
+    auto Child = Node.FirstChild;
+    assert(Child);
+    assert(Child.Name == "bar");
+    assert(Child.Values.Count == 1);
+    assert(cast(string)Child.Values[0] == "baz");
+    assert(Child.Attributes.IsEmpty == 1);
+  }
 
   /+
     foo /*
@@ -1210,4 +1212,79 @@ unittest
   assert(Node.Attributes.length == 1);
   assert(Node.Attributes[0].Name == "answer");
   assert(cast(int)Node.Attributes[0].Value == 42);
+
+  /+
+    foo 1 2 "bar" baz="qux" {
+      inner { 0 1 2 }
+      "anon value"
+      "anon value with nesting" {
+        another-foo "bar" 1337 -92 "baz" qux="baaz"
+      }
+    }
+  +/
+  Node = Node.Next;
+  assert(Node);
+  assert(Node.Name == "foo");
+  assert(Node.Values.Count == 3);
+  assert(cast(int)Node.Values[0] == 1);
+  assert(cast(int)Node.Values[1] == 2);
+  assert(cast(string)Node.Values[2] == "bar");
+  assert(Node.Attributes.Count == 1);
+  assert(Node.Attributes[0].Name == "baz");
+  assert(cast(string)Node.Attributes[0].Value == "qux");
+  {
+    // inner { 0 1 2 }
+    auto Child = Node.FirstChild;
+    assert(Child);
+    assert(Child.Name == "inner");
+    assert(Child.Values.Count == 0);
+    assert(Child.Attributes.Count == 0);
+    {
+      auto ChildsChild = Child.FirstChild;
+      assert(ChildsChild);
+      assert(ChildsChild.IsAnonymous);
+      assert(ChildsChild.Values.Count == 3);
+      assert(cast(int)ChildsChild.Values[0] == 0);
+      assert(cast(int)ChildsChild.Values[1] == 1);
+      assert(cast(int)ChildsChild.Values[2] == 2);
+      assert(ChildsChild.Attributes.IsEmpty);
+    }
+
+    // "anon value"
+    Child = Child.Next;
+    assert(Child);
+    assert(Child.IsAnonymous);
+    assert(Child.Values.Count == 1);
+    assert(cast(string)Child.Values[0] == "anon value");
+    assert(Child.Attributes.IsEmpty);
+
+    /+
+      "anon value with nesting" {
+        another-foo "bar" 1337 -92 "baz" qux="baaz"
+      }
+    +/
+    Child = Child.Next;
+    assert(Child);
+    assert(Child.IsAnonymous);
+    assert(Child.Name == "content");
+    assert(Child.Values.Count == 1);
+    assert(cast(string)Child.Values[0] == "anon value with nesting");
+    assert(Child.Attributes.IsEmpty);
+    {
+      // another-foo "bar" 1337 -92 "baz" qux="baaz"
+      auto ChildsChild = Child.FirstChild;
+      assert(ChildsChild);
+      assert(ChildsChild.Name == "another-foo");
+      assert(ChildsChild.Values.Count == 4);
+      assert(cast(string)ChildsChild.Values[0] == "bar");
+      assert(cast(int)ChildsChild.Values[1] == 1337);
+      assert(cast(int)ChildsChild.Values[2] == -92);
+      assert(cast(string)ChildsChild.Values[3] == "baz");
+      assert(ChildsChild.Attributes.Count == 1);
+      assert(ChildsChild.Attributes[0].Name == "qux");
+      assert(cast(string)ChildsChild.Attributes[0].Value == "baaz");
+    }
+  }
+
+  assert(Node.Next is null);
 }
