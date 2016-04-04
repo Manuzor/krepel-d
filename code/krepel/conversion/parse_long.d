@@ -1,9 +1,18 @@
 module krepel.conversion.parse_long;
 
+import krepel : Flag, Yes, No;
 import krepel.string;
 import krepel.conversion.conversion;
 
-long ParseLong(Source)(ref Source String, long ValueOnError = long.min)
+struct ParseLongResult
+{
+  Flag!"Success" Success;
+  long Value;
+
+  alias Value this;
+}
+
+ParseLongResult ParseLong(Source)(ref Source String, long ValueOnError = long.min)
 {
   String = TrimStart(String);
 
@@ -11,7 +20,7 @@ long ParseLong(Source)(ref Source String, long ValueOnError = long.min)
 
   if(String.length == 0)
   {
-    return ValueOnError;
+    return ParseLongResult(No.Success, ValueOnError);
   }
 
   switch(String[0])
@@ -40,20 +49,20 @@ long ParseLong(Source)(ref Source String, long ValueOnError = long.min)
 
   if (!HasNumericalPart)
   {
-    return ValueOnError;
+    return ParseLongResult(No.Success, ValueOnError);
   }
 
-  long Value = NumericalPart;
-
-  return Sign ? -Value : Value;
+  long Value = Sign ? -NumericalPart : NumericalPart;
+  return ParseLongResult(Yes.Success, Value);
 }
 
 version(unittest)
 void TestLong(string String, long Expected, int ExpectedRangeLength)
 {
   auto Range = String[];
-  float Value;
-  Value = ParseLong(Range);
+  auto Result = ParseLong(Range);
+  assert(Result.Success);
+  float Value = Result;
   assert(Value == Expected);
   assert(Range.length == ExpectedRangeLength);
 }
@@ -73,7 +82,8 @@ unittest
 
   auto String = "ABC";
   auto Range = String[];
-  long Value = ParseLong(Range);
+  auto Value = ParseLong(Range);
+  assert(!Value.Success);
   assert(Value == long.min);
   assert(Range.length == 3);
 }
