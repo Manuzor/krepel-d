@@ -129,26 +129,26 @@ struct WavefrontLexer
   bool ParseVertexDefinition(out WaveFrontVertexDefinition VertexDefinition, ref char[] Range)
   {
     assert(CurrentLineType == WavefrontLineType.Face);
-    VertexDefinition.VertexIndex = ParseLong(Range, 0) - 1;
+    VertexDefinition.VertexIndex = ParseInteger!long(Range, 0) - 1;
     if (Find(Range, "/") == 0)
     {
       auto FindResult = Find(Range, "/", 1);
       if (FindResult != 1)
       {
         Range = Range[1..$];
-        VertexDefinition.TextureIndex = ParseLong(Range, 0) - 1;
+        VertexDefinition.TextureIndex = ParseInteger!long(Range, 0) - 1;
 
         FindResult = Find(Range, "/", 0);
         if (FindResult == 0)
         {
           Range = Range[1..$];
-          VertexDefinition.NormalIndex = ParseLong(Range, 0) - 1;
+          VertexDefinition.NormalIndex = ParseInteger!long(Range, 0) - 1;
         }
       }
       else if(FindResult == 1)
       {
         Range = Range[2..$];
-        VertexDefinition.NormalIndex = ParseLong(Range, 0) - 1;
+        VertexDefinition.NormalIndex = ParseInteger!long(Range, 0) - 1;
       }
     }
     return true;
