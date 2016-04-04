@@ -1203,10 +1203,11 @@ unittest
     when you support multi-line comments
     in a whitespace sensitive language. */ bar="baz"
   +/
-  Node = Document.FirstChild;
+  Node = Node.Next;
   assert(Node);
   assert(Node.Name == "foo");
-  assert(Node.Values.Count == 1);
-  assert(cast(string)Node.Values[0] == "bar");
-  assert(Node.Attributes.IsEmpty);
+  assert(Node.Values.IsEmpty);
+  assert(Node.Attributes.length == 1);
+  assert(Node.Attributes[0].Name == "answer");
+  assert(cast(int)Node.Attributes[0].Value == 42);
 }

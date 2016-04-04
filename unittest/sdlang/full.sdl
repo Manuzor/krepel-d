@@ -52,4 +52,4 @@ foo /*
 This is
 what you get
 when you support multi-line comments
-in a whitespace sensitive language. */ bar="baz"
+in a whitespace sensitive language. */ answer=42
