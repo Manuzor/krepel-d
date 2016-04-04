@@ -118,3 +118,19 @@ unittest
   CloseFile(SomeAllocator, File);
 
 }
+
+/// Size
+unittest
+{
+  import krepel.container;
+  import krepel.memory;
+  import krepel.system.ifile;
+
+  StaticStackMemory!1024 SomeStack;
+  auto SomeAllocator = Wrap(SomeStack);
+
+  IFile File = OpenFile(SomeAllocator, "../unittest/FileTest.txt");
+  assert(File.Size == 15);
+  CloseFile(SomeAllocator, File);
+  assert(File.Size == 0);
+}

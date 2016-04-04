@@ -12,6 +12,7 @@ class Win32File : IFile
 {
 
   HANDLE FileHandle = INVALID_HANDLE_VALUE;
+  ulong FileSize;
 
   void OpenFile(const wchar[] Path, FileOpenMode Mode)
   {
@@ -34,6 +35,19 @@ class Win32File : IFile
       null
       );
     assert(NewHandle != INVALID_HANDLE_VALUE);
+
+    BY_HANDLE_FILE_INFORMATION FileInfo;
+    if(GetFileInformationByHandle(NewHandle, &FileInfo))
+    {
+      LARGE_INTEGER Size;
+      Size.HighPart = FileInfo.nFileSizeHigh;
+      Size.LowPart = FileInfo.nFileSizeLow;
+      FileSize = Size.QuadPart;
+
+      // TODO(Manu): Expose creation time etc?
+      // TODO(Manu): Fail if file infos can't be retrieved?
+    }
+
     FileHandle = NewHandle;
   }
 
@@ -42,6 +56,7 @@ class Win32File : IFile
     auto Result = CloseHandle(FileHandle);
     assert(Result != 0);
     FileHandle = INVALID_HANDLE_VALUE;
+    FileSize = 0;
   }
 
   override ulong Read(void[] Region)
@@ -143,5 +158,10 @@ class Win32File : IFile
     assert(Result);
 
     return NewPosition.QuadPart;
+  }
+
+  @property override ulong Size() const
+  {
+    return FileSize;
   }
 }
