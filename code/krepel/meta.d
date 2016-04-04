@@ -188,6 +188,7 @@ template HasDestructor(Type)
 
 alias IsArray                  = std.traits.isArray;
 alias IsIntegral               = std.traits.isIntegral;
+alias IsFloatingPoint          = std.traits.isFloatingPoint;
 alias IsPointer                = std.traits.isPointer;
 alias ClassInstanceAlignmentOf = std.traits.classInstanceAlignment;
 

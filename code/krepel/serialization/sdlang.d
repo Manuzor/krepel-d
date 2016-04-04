@@ -4,6 +4,7 @@ import krepel;
 import krepel.string : UString;
 import krepel.container;
 import krepel.memory.reference_counting;
+import krepel.system;
 
 /// Class that contains and manages the (parsed) content of an SDL document.
 class SDLDocument
@@ -81,19 +82,56 @@ struct SDLLiteral
   union
   {
     string String;
-    char   Character;
-    int    Int32;
-    long   Int64;
-    float  Float;
-    double Double;
-    //cent   Decimal; // TODO(Manu): Not implemented in DMD.
+    dchar  Character;
+    long   Integer;
+    real   Real;
     bool   Boolean;
     void*  Date;     // TODO(Manu)
     void*  DateTime; // TODO(Manu)
     void*  TimeSpan; // TODO(Manu)
     void*  Binary;   // TODO(Manu)
-    typeof(null) Null;
   }
+
+  auto opCast(To : string)() inout
+  {
+    assert(Type == SDLLiteralType.String, "Expected a String value.");
+    return String;
+  }
+
+  auto opCast(To)() inout
+    if(is(Meta.IsSomeChar!To))
+  {
+    import std.conv : to;
+    assert(Type == SDLLiteralType.Character, "Expected a Character value.");
+    return Character.to!To();
+  }
+
+  auto opCast(To)() inout
+    if(is(Meta.IsIntegral!To))
+  {
+    import std.conv : to;
+    assert(Type == SDLLiteralType.Integer, "Expected a Integer value.");
+    return Integer.to!To();
+  }
+
+  auto opCast(To)() inout
+    if(is(Meta.IsFloatingPoint!To))
+  {
+    import std.conv : to;
+    assert(Type == SDLLiteralType.Real, "Expected a Real value.");
+    return Real.to!To();
+  }
+
+  auto opCast(To : bool)() inout
+  {
+    assert(Type == SDLLiteralType.Boolean, "Expected a Boolean value.");
+    return Boolean;
+  }
+}
+
+bool IsNull(in ref SDLLiteral Value)
+{
+  return Value.Type == SDLLiteralType.Null;
 }
 
 enum SDLLiteralType
@@ -102,9 +140,8 @@ enum SDLLiteralType
 
   String,
   Character,
-  Int32,
-  Int64,
-  Float,
+  Integer,
+  Real,
   Double,
   Decimal,
   Boolean,
@@ -362,16 +399,16 @@ struct ParsingContext
 }
 
 /// Convenience overload to accept a plain string instead of SourceData.
-bool Parse(SDLDocument Document, string SourceString, ref ParsingContext Context)
+bool ParseDocumentFromString(SDLDocument Document, string SourceString, ref ParsingContext Context)
 {
   auto Source = SourceData(SourceString);
   with(Source.StartLocation) { Line = 1; Column = 1; SourceIndex = 0; }
   with(Source.EndLocation)   { Line = 0; Column = 0; SourceIndex = SourceString.length; }
 
-  return Document.Parse(Source, Context);
+  return Document.ParseDocumentFromSource(Source, Context);
 }
 
-bool Parse(SDLDocument Document, ref SourceData Source, ref ParsingContext Context)
+bool ParseDocumentFromSource(SDLDocument Document, ref SourceData Source, ref ParsingContext Context)
 {
   return Document.ParseInnerNodes(Source, Context, &Document.FirstChild);
 }
@@ -646,7 +683,6 @@ bool ParseLiteral(SDLDocument Document,
     else if(Word == "null")
     {
       Result.Type = SDLLiteralType.Null;
-      Result.Null = null;
     }
     else
     {
@@ -923,7 +959,7 @@ unittest
   auto Context = ParsingContext("SDL Test 1", .Log);
 
   auto Document = StackAllocator.New!SDLDocument(StackAllocator);
-  Document.Parse(`foo "bar"`, Context);
+  Document.ParseDocumentFromString(`foo "bar"`, Context);
 
   auto Node = Document.FirstChild;
   assert(Node);
@@ -944,7 +980,7 @@ unittest
   auto Context = ParsingContext("SDL Test 1", .Log);
 
   auto Document = StackAllocator.New!SDLDocument(StackAllocator);
-  Document.Parse(`foo "bar" baz="qux"`, Context);
+  Document.ParseDocumentFromString(`foo "bar" baz="qux"`, Context);
 
   auto Node = Document.FirstChild;
   assert(Node);
@@ -973,7 +1009,7 @@ unittest
     foo "bar"
     baz "qux"
   )";
-  Document.Parse(Source, Context);
+  Document.ParseDocumentFromString(Source, Context);
 
   auto Node = Document.FirstChild;
   assert(Node);
@@ -1008,7 +1044,7 @@ unittest
       }
     }
   )";
-  Document.Parse(Source, Context);
+  Document.ParseDocumentFromString(Source, Context);
 
   auto Node = Document.FirstChild;
   assert(Node);
@@ -1030,4 +1066,126 @@ unittest
   assert(Node.Values.length == 1);
   assert(Node.Values[0].Type == SDLLiteralType.String);
   assert(Node.Values[0].String == "quux", Node.Values[0].String);
+}
+
+/// Parse document from file.
+unittest
+{
+  SystemMemory System;
+  auto Stack = StackMemory(System.Allocate(2.MiB, 1));
+  scope(exit) System.Deallocate(Stack.Memory);
+  auto StackAllocator = Wrap(Stack);
+
+  auto FileName = "../unittest/sdlang/full.sdl"w;
+  auto File = OpenFile(StackAllocator, FileName);
+  scope(exit) CloseFile(StackAllocator, File);
+
+  // TODO(Manu): Once we have WString => UString conversion, use the filename
+  // as context.
+  auto Context = ParsingContext("Full", .Log);
+  auto Document = StackAllocator.New!SDLDocument(StackAllocator);
+  auto SourceString = StackAllocator.NewArray!char(File.Size);
+  auto BytesRead = File.Read(SourceString);
+  assert(BytesRead == SourceString.length);
+  assert(Document.ParseDocumentFromString(cast(string)SourceString, Context), SourceString);
+
+
+  // foo "bar"
+  auto Node = Document.FirstChild;
+  assert(Node);
+  assert(Node.Name == "foo");
+  assert(Node.Values.Count == 1);
+  assert(cast(string)Node.Values[0] == "bar");
+  assert(Node.Attributes.IsEmpty);
+
+  // foo "bar" "baz"
+  Node = Node.Next;
+  assert(Node);
+  assert(Node.Name == "foo");
+  assert(Node.Values.Count == 2);
+  assert(cast(string)Node.Values[0] == "bar");
+  assert(cast(string)Node.Values[1] == "baz");
+  assert(Node.Attributes.IsEmpty);
+
+  // foo "bar" baz="qux"
+  Node = Node.Next;
+  assert(Node);
+  assert(Node.Name == "foo");
+  assert(Node.Values.Count == 1);
+  assert(cast(string)Node.Values[0] == "bar");
+  assert(Node.Attributes.Count == 1);
+  assert(Node.Attributes[0].Name == "baz");
+  assert(cast(string)Node.Attributes[0].Value == "qux");
+
+  // foo "bar" baz="qux" baaz="quux"
+  Node = Node.Next;
+  assert(Node);
+  assert(Node.Name == "foo");
+  assert(Node.Values.Count == 1);
+  assert(cast(string)Node.Values[0] == "bar");
+  assert(Node.Attributes.Count == 2);
+  assert(Node.Attributes[0].Name == "baz");
+  assert(cast(string)Node.Attributes[0].Value == "qux");
+  assert(Node.Attributes[1].Name == "baaz");
+  assert(cast(string)Node.Attributes[1].Value == "quux");
+
+  // foo bar="baz"
+  Node = Node.Next;
+  assert(Node);
+  assert(Node.Name == "foo");
+  assert(Node.Values.IsEmpty);
+  assert(Node.Attributes.Count == 1);
+  assert(Node.Attributes[0].Name == "bar");
+  assert(cast(string)Node.Attributes[0].Value == "baz");
+
+  // "foo"
+  Node = Node.Next;
+  assert(Node);
+  assert(Node.IsAnonymous);
+  assert(Node.Name == "content");
+  assert(Node.Values.Count == 1);
+  assert(cast(string)Node.Values[0] == "foo");
+  assert(Node.Attributes.IsEmpty == 1);
+
+  // "foo" bar="baz"
+  Node = Node.Next;
+  assert(Node);
+  assert(Node.IsAnonymous);
+  assert(Node.Name == "content");
+  assert(Node.Values.Count == 1);
+  assert(cast(string)Node.Values[0] == "foo");
+  assert(Node.Attributes.Count == 1);
+  assert(Node.Attributes[0].Name == "bar");
+  assert(cast(string)Node.Attributes[0].Value == "baz");
+
+  /*
+    foo {
+      baz "baz"
+    }
+  */
+  Node = Node.Next;
+  assert(Node);
+  assert(Node.Name == "foo");
+  assert(Node.Values.IsEmpty);
+  assert(Node.Attributes.IsEmpty);
+  auto Child = Node.FirstChild;
+  assert(Child);
+  assert(Child.Name == "bar");
+  assert(Child.Values.Count == 1);
+  assert(cast(string)Child.Values[0] == "baz");
+  assert(Child.Attributes.IsEmpty == 1);
+
+  /+
+    foo /*
+    This is
+    what you get
+    when you support multi-line comments
+    in a whitespace sensitive language. */ bar="baz"
+  +/
+  Node = Document.FirstChild;
+  assert(Node);
+  assert(Node.Name == "foo");
+  assert(Node.Values.Count == 1);
+  assert(cast(string)Node.Values[0] == "bar");
+  assert(Node.Attributes.IsEmpty);
 }
