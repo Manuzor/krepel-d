@@ -82,38 +82,55 @@ struct SDLLiteral
   union
   {
     string String;
-    long   Integer;
-    real   Real;
+    string NumberSource;
+    double Real;
     bool   Boolean;
     void*  Binary;   // TODO(Manu)
   }
 
-  auto opCast(To : string)() inout
+  auto opCast(To)() const
   {
-    assert(Type == SDLLiteralType.String, "Expected a String value.");
-    return String;
-  }
+    //pragma(msg, "Casting SDL literal to: " ~ To.stringof);
 
-  auto opCast(To)() inout
-    if(is(Meta.IsIntegral!To))
-  {
-    import std.conv : to;
-    assert(Type == SDLLiteralType.Integer, "Expected a Integer value.");
-    return Integer.to!To();
-  }
+    static if(is(To == string))
+    {
+      assert(Type == SDLLiteralType.String, "Cannot convert this value to " ~ To.stringof);
+      return String;
+    }
+    else static if(Meta.IsNumeric!To)
+    {
+      assert(Type == SDLLiteralType.Number, "Cannot convert this value to " ~ To.stringof);
+      auto Source = NumberSource[];
 
-  auto opCast(To)() inout
-    if(is(Meta.IsFloatingPoint!To))
-  {
-    import std.conv : to;
-    assert(Type == SDLLiteralType.Real, "Expected a Real value.");
-    return Real.to!To();
-  }
+      static if(Meta.IsIntegral!To)
+      {
+        import krepel.conversion.parse_integer;
+        auto ParseResult = ParseInteger!long(Source);
+        assert(ParseResult.Success);
+        return cast(To)ParseResult;
+      }
+      else static if(Meta.IsFloatingPoint!To)
+      {
+        import krepel.conversion.parse_float;
 
-  auto opCast(To : bool)() inout
-  {
-    assert(Type == SDLLiteralType.Boolean, "Expected a Boolean value.");
-    return Boolean;
+        auto ParseResult = ParseFloat(Source);
+        assert(ParseResult.Success);
+        return cast(To)ParseResult;
+      }
+      else
+      {
+        static assert(0, "Unsupported numeric type: " ~ To.stringof);
+      }
+    }
+    else static if(is(To == bool))
+    {
+      assert(Type == SDLLiteralType.Boolean, "Cannot convert this value to " ~ To.stringof);
+      return Boolean;
+    }
+    else
+    {
+      static assert(0, "Cannot convert an SDL literal to " ~ To.stringof);
+    }
   }
 }
 
@@ -122,8 +139,7 @@ enum SDLLiteralType
   INVALID,
 
   String,
-  Integer,
-  Real,
+  Number,
   Boolean,
   Binary,
 }
@@ -635,8 +651,20 @@ bool ParseLiteral(SDLDocument Document,
   }
   else if(CurrentChar == '[')
   {
-    Result.Type = SDLLiteralType.Binary;
     // TODO(Manu): Result.Binary = ???;
+    if(Context.Log)
+    {
+      Context.Log.Warning("%s(%s,%s): Binary values are not supported for now.",
+                          Context.Origin,
+                          Source.StartLocation.Line,
+                          Source.StartLocation.Column);
+    }
+
+    Source.AdvanceBy(1);
+    auto String = Source.ParseUntil!(Str => Str.front == ']')(Context);
+
+    Result.Type = SDLLiteralType.Binary;
+    Result.Binary = null;
   }
   else
   {
@@ -644,7 +672,8 @@ bool ParseLiteral(SDLDocument Document,
 
     if(Word.front.IsDigit || Word.front == '.')
     {
-      // TODO(Manu)
+      Result.Type = SDLLiteralType.Number;
+      Result.NumberSource = Word;
     }
     else if(Word == "true" || Word == "on")
     {
@@ -856,7 +885,7 @@ text)", 0);
 // ParseUntil
 unittest
 {
-  auto Context = ParsingContext("SDL Test 1", .Log);
+  auto Context = ParsingContext("SDL Test 2", .Log);
 
   {
     auto Source = MakeSourceDataForTesting(`foo "bar"`, 0);
@@ -872,7 +901,7 @@ unittest
 // ParseNested
 unittest
 {
-  auto Context = ParsingContext("SDL Test 1", .Log);
+  auto Context = ParsingContext("SDL Test 3", .Log);
 
   {
     auto Source = MakeSourceDataForTesting(`foo { bar }; baz`, 5);
@@ -897,7 +926,7 @@ unittest
 // ParseEscaped
 unittest
 {
-  auto Context = ParsingContext("SDL Test 1", .Log);
+  auto Context = ParsingContext("SDL Test 4", .Log);
 
   {
     auto Source = MakeSourceDataForTesting(`foo "bar" "baz"`, 5);
@@ -928,7 +957,7 @@ unittest
   scope(exit) System.Deallocate(Stack.Memory);
   auto StackAllocator = Wrap(Stack);
 
-  auto Context = ParsingContext("SDL Test 1", .Log);
+  auto Context = ParsingContext("SDL Test 5", .Log);
 
   auto Document = StackAllocator.New!SDLDocument(StackAllocator);
   Document.ParseDocumentFromString(`foo "bar"`, Context);
@@ -949,7 +978,7 @@ unittest
   scope(exit) System.Deallocate(Stack.Memory);
   auto StackAllocator = Wrap(Stack);
 
-  auto Context = ParsingContext("SDL Test 1", .Log);
+  auto Context = ParsingContext("SDL Test 6", .Log);
 
   auto Document = StackAllocator.New!SDLDocument(StackAllocator);
   Document.ParseDocumentFromString(`foo "bar" baz="qux"`, Context);
@@ -974,7 +1003,7 @@ unittest
   scope(exit) System.Deallocate(Stack.Memory);
   auto StackAllocator = Wrap(Stack);
 
-  auto Context = ParsingContext("SDL Test 1", .Log);
+  auto Context = ParsingContext("SDL Test 7", .Log);
 
   auto Document = StackAllocator.New!SDLDocument(StackAllocator);
   auto Source = q"(
@@ -1006,7 +1035,7 @@ unittest
   scope(exit) System.Deallocate(Stack.Memory);
   auto StackAllocator = Wrap(Stack);
 
-  auto Context = ParsingContext("SDL Test 1", .Log);
+  auto Context = ParsingContext("SDL Test 8", .Log);
 
   auto Document = StackAllocator.New!SDLDocument(StackAllocator);
   auto Source = q"(
@@ -1038,6 +1067,26 @@ unittest
   assert(Node.Values.length == 1);
   assert(Node.Values[0].Type == SDLLiteralType.String);
   assert(Node.Values[0].String == "quux", Node.Values[0].String);
+}
+
+unittest
+{
+  SystemMemory System;
+  auto Stack = StackMemory(System.Allocate(2.MiB, 1));
+  scope(exit) System.Deallocate(Stack.Memory);
+  auto StackAllocator = Wrap(Stack);
+
+  auto Context = ParsingContext("SDL Test 9", .Log);
+
+  auto Document = StackAllocator.New!SDLDocument(StackAllocator);
+  Document.ParseDocumentFromString(`answer 42`, Context);
+
+  auto Node = Document.FirstChild;
+  assert(Node);
+  assert(Node.Name == "answer");
+  assert(Node.Values.length == 1);
+  assert(Node.Values[0].Type == SDLLiteralType.Number);
+  assert(cast(int)Node.Values[0] == 42, Node.Values[0].NumberSource);
 }
 
 /// Parse document from file.
