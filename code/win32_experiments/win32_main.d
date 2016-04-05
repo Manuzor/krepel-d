@@ -114,14 +114,32 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
 
       version(XInput_RuntimeLinking) LoadXInput();
 
-      InputState Input;
+      auto Queue = InputQueue(MainAllocator);
+
       GlobalRunning = true;
 
       while(GlobalRunning)
       {
-        Win32ProcessPendingMessages(&Input);
+        scope(exit) Queue.Clear();
+        Win32ProcessPendingMessages(Queue);
 
-        if(Input.Keyboard.KeyW.IsDown) Log.Info("W is down!");
+        foreach(ref Input; Queue)
+        {
+          final switch(Input.Type)
+          {
+            case InputType.Button:
+            {
+              Log.Info("Button %s is %s", Input.Id, Input.Button.IsDown ? "down" : "up");
+            } break;
+            case InputType.Axis:
+            {
+              Log.Info("Axis %s has value %f", Input.Id, Input.Axis.Value);
+            } break;
+          }
+        }
+
+        //if(SystemInput[Keyboard.W].IsDown) Log.Info("W is down!");
+        //if(SystemInput[Keyboard.W].Button.IsDown) Log.Info("W is down!");
 
         XINPUT_STATE ControllerState;
         if(XInputGetState(0, &ControllerState) == ERROR_SUCCESS)
@@ -139,7 +157,7 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
   return 0;
 }
 
-void Win32ProcessPendingMessages(InputState* Input)
+void Win32ProcessPendingMessages(ref InputQueue Queue)
 {
   import win32_experiments.win32_vkmap;
 
@@ -159,23 +177,23 @@ void Win32ProcessPendingMessages(InputState* Input)
       case WM_KEYUP:
       {
         auto VKCode = Message.wParam;
-        auto KeyProps = Win32MapVirtualKeyToKrepelKey(VKCode);
-        auto Key = Input.Keyboard[KeyProps.Id];
+        auto KeyName = Win32MapVirtualKeyToKrepelKey(VKCode);
 
-        if(Key is null) break;
-
+        InputButton Key;
         Key.IsDown = (Message.lParam & (1 << 31)) == 0;
         //Key.WasDown = (Message.lParam & (1 << 30)) != 0;
         //Key.RepeatCount = cast(ushort)(Message.LParam & 0xFFFF);
 
-        if(VKCode == VK_SPACE)
-        {
-          Log.Info("Space");
-        }
-        else if(VKCode == VK_ESCAPE)
-        {
-          GlobalRunning = false;
-        }
+        Queue ~= InputSource(KeyName, Key);
+
+        //if(VKCode == VK_SPACE)
+        //{
+        //  Log.Info("Space");
+        //}
+        //else if(VKCode == VK_ESCAPE)
+        //{
+        //  GlobalRunning = false;
+        //}
 
       } break;
 
