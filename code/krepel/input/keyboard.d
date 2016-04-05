@@ -17,7 +17,7 @@ enum Keyboard
   RightControl = "Keyboard_RightControl",
   RightAlt     = "Keyboard_RightAlt",
   RightSystem  = "Keyboard_RightSystem",
-  Context      = "Keyboard_Context",
+  Application  = "Keyboard_Application",
   Backspace    = "Keyboard_Backspace",
   Return       = "Keyboard_Return",
 
@@ -50,11 +50,11 @@ enum Keyboard
   //
   // Numpad
   //
-  Numpad_Divide   = "Keyboard_Numpad_Divide",
+  Numpad_Add      = "Keyboard_Numpad_Add",
+  Numpad_Subtract = "Keyboard_Numpad_Subtract",
   Numpad_Multiply = "Keyboard_Numpad_Multiply",
-  Numpad_Comma    = "Keyboard_Numpad_Comma",
-  Numpad_Plus     = "Keyboard_Numpad_Plus",
-  Numpad_Minus    = "Keyboard_Numpad_Minus",
+  Numpad_Divide   = "Keyboard_Numpad_Divide",
+  Numpad_Decimal  = "Keyboard_Numpad_Decimal",
   Numpad_Enter    = "Keyboard_Numpad_Enter",
 
   Numpad_0 = "Keyboard_Numpad_0",
@@ -71,7 +71,6 @@ enum Keyboard
   //
   // F-Keys
   //
-  F0  = "Keyboard_F0",
   F1  = "Keyboard_F1",
   F2  = "Keyboard_F2",
   F3  = "Keyboard_F3",
@@ -84,6 +83,18 @@ enum Keyboard
   F10 = "Keyboard_F10",
   F11 = "Keyboard_F11",
   F12 = "Keyboard_F12",
+  F13 = "Keyboard_F13",
+  F14 = "Keyboard_F14",
+  F15 = "Keyboard_F15",
+  F16 = "Keyboard_F16",
+  F17 = "Keyboard_F17",
+  F18 = "Keyboard_F18",
+  F19 = "Keyboard_F19",
+  F20 = "Keyboard_F20",
+  F21 = "Keyboard_F21",
+  F22 = "Keyboard_F22",
+  F23 = "Keyboard_F23",
+  F24 = "Keyboard_F24",
 
   //
   // Keys

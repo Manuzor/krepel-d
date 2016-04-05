@@ -4,22 +4,20 @@ import krepel.input.input;
 
 enum Mouse
 {
+  Unknown = "Mouse_Unknown",
+
   //
   // Buttons
   //
-  UnknownButton = "Mouse_UnknownButton",
-
-  LeftButton    = "Mouse_LeftButton",
-  MiddleButton  = "Mouse_MiddleButton",
-  RightButton   = "Mouse_RightButton",
-  X1Button      = "Mouse_X1Button",
-  X2Button      = "Mouse_X2Button",
+  LeftButton   = "Mouse_LeftButton",
+  MiddleButton = "Mouse_MiddleButton",
+  RightButton  = "Mouse_RightButton",
+  ExtraButton1 = "Mouse_ExtraButton1",
+  ExtraButton2 = "Mouse_ExtraButton2",
 
   //
   // Axes
   //
-  UnknownAxis = "Mouse_UnknownAxis",
-
-  XAxis       = "Mouse_XAxis",
-  YAxis       = "Mouse_YAxis",
+  XAxis = "Mouse_XAxis",
+  YAxis = "Mouse_YAxis",
 }

@@ -177,23 +177,26 @@ void Win32ProcessPendingMessages(ref InputQueue Queue)
       case WM_KEYUP:
       {
         auto VKCode = Message.wParam;
-        auto KeyName = Win32MapVirtualKeyToKrepelKey(VKCode);
+        auto WasDown = (Message.lParam & (1 << 30)) != 0;
+        auto IsDown = (Message.lParam & (1 << 31)) == 0;
+
+        if(WasDown == IsDown)
+        {
+          // No change.
+          break;
+        }
+
+        string KeyName = Win32VirtualKeyToInputId(VKCode, Message.lParam);
+
+        if(KeyName is null)
+        {
+          Log.Warning("Unknown virtual key: 0x%x", VKCode);
+          break;
+        }
 
         InputButton Key;
-        Key.IsDown = (Message.lParam & (1 << 31)) == 0;
-        //Key.WasDown = (Message.lParam & (1 << 30)) != 0;
-        //Key.RepeatCount = cast(ushort)(Message.LParam & 0xFFFF);
-
+        Key.IsDown = IsDown;
         Queue ~= InputSource(KeyName, Key);
-
-        //if(VKCode == VK_SPACE)
-        //{
-        //  Log.Info("Space");
-        //}
-        //else if(VKCode == VK_ESCAPE)
-        //{
-        //  GlobalRunning = false;
-        //}
 
       } break;
 
