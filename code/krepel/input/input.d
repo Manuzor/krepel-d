@@ -1,6 +1,7 @@
 module krepel.input.input;
 
 import krepel;
+import krepel.math;
 import krepel.container;
 import krepel.string;
 
@@ -24,12 +25,18 @@ struct InputAxis
 
 struct InputSource
 {
-  InputId Id;
   InputType Type;
+  InputId Id;
   union
   {
     InputButton _Button;
     InputAxis _Axis;
+  }
+
+  this(InputType Type, InputId Id)
+  {
+    this.Type = Type;
+    this.Id = Id;
   }
 
   this(InputId Id, InputButton Button)
@@ -71,4 +78,88 @@ struct InputQueue
   alias Data this;
 }
 
-// TODO(Manu): Input context that handles the action mapping.
+class InputContext
+{
+  // Maps Trigger-source => Target, e.g. Keyboard_Escape => Quit
+  Dictionary!(InputId, InputSource) InputMap;
+  InputContext Parent;
+
+  this(IAllocator Allocator)
+  {
+    InputMap.Allocator = Allocator;
+  }
+
+  auto opIndex(InputId Id)
+  {
+    foreach(ref Input; InputMap.Values)
+    {
+      if(Input.Id == Id)
+      {
+        return &Input;
+      }
+    }
+
+    if(Parent)
+    {
+      return Parent[Id];
+    }
+
+    return null;
+  }
+
+  void RegisterInput(ArgTypes...)(InputSource Input, ArgTypes TriggerIds)
+    if(ArgTypes.length && is(ArgTypes[0] : InputId))
+  {
+    foreach(TriggerId; TriggerIds)
+    {
+      auto Slot = InputMap.Get(TriggerId);
+      if(Slot)
+      {
+        // TODO(Manu): We are overwriting an existing input slot, is that ok?
+        *Slot = Input;
+      }
+      else
+      {
+        InputMap[TriggerId] = Input;
+      }
+    }
+  }
+
+  bool MapInput(ref InputSource Source)
+  {
+    auto Target = InputMap.Get(Source.Id);
+    if(Target is null) return false;
+    final switch(Target.Type)
+    {
+      case InputType.Button:
+      {
+        final switch(Source.Type)
+        {
+          case InputType.Button:
+          {
+            Target.Button = Source.Button;
+          } break;
+          case InputType.Axis:
+          {
+            Target.Button.IsDown = !Source.Axis.Value.NearlyEquals(0);
+          } break;
+        }
+      } break;
+      case InputType.Axis:
+      {
+        final switch(Source.Type)
+        {
+          case InputType.Button:
+          {
+            Target.Axis.Value = Source.Button.IsDown ? 1.0f : 0.0f;
+          } break;
+          case InputType.Axis:
+          {
+            Target.Axis = Source.Axis;
+          } break;
+        }
+      } break;
+    }
+    return true;
+  }
+}

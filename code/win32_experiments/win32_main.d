@@ -114,6 +114,11 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
 
       version(XInput_RuntimeLinking) LoadXInput();
 
+      auto SystemInput = MainAllocator.New!InputContext(MainAllocator);
+      scope(exit) MainAllocator.Delete(SystemInput);
+
+      SystemInput.RegisterInput(InputSource(InputType.Button, "MoveForward"), Keyboard.W);
+
       auto Queue = InputQueue(MainAllocator);
 
       GlobalRunning = true;
@@ -125,21 +130,11 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
 
         foreach(ref Input; Queue)
         {
-          final switch(Input.Type)
-          {
-            case InputType.Button:
-            {
-              Log.Info("Button %s is %s", Input.Id, Input.Button.IsDown ? "down" : "up");
-            } break;
-            case InputType.Axis:
-            {
-              Log.Info("Axis %s has value %f", Input.Id, Input.Axis.Value);
-            } break;
-          }
+          SystemInput.MapInput(Input);
         }
 
-        //if(SystemInput[Keyboard.W].IsDown) Log.Info("W is down!");
-        //if(SystemInput[Keyboard.W].Button.IsDown) Log.Info("W is down!");
+        auto ForwardInput = SystemInput["MoveForward"];
+        if(ForwardInput && ForwardInput.Button.IsDown) Log.Info("W is down!");
 
         XINPUT_STATE ControllerState;
         if(XInputGetState(0, &ControllerState) == ERROR_SUCCESS)
@@ -186,7 +181,7 @@ void Win32ProcessPendingMessages(ref InputQueue Queue)
           break;
         }
 
-        string KeyName = Win32VirtualKeyToInputId(VKCode, Message.lParam);
+        auto KeyName = Win32VirtualKeyToInputId(VKCode, Message.lParam);
 
         if(KeyName is null)
         {

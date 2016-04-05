@@ -4,7 +4,7 @@ import krepel.input;
 
 import core.sys.windows.windows;
 
-string Win32VirtualKeyToInputId(WPARAM VKCode, LPARAM lParam)
+InputId Win32VirtualKeyToInputId(WPARAM VKCode, LPARAM lParam)
 {
   const ScanCode = cast(UINT)((lParam & 0x00ff0000) >> 16);
   const IsExtended = (lParam & 0x01000000) != 0;
