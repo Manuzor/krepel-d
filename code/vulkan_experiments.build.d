@@ -31,7 +31,8 @@ void Common(ref BuildContext Context)
   with(Context)
   {
     // Add source files.
-    immutable DirectoriesToSearch = ["krepel", "vulkan", "vulkan_experiments"];
+    // Note(Manu): DirectX is needed because krepel needs it internally.
+    immutable DirectoriesToSearch = ["krepel", "directx", "vulkan", "vulkan_experiments"];
     foreach(SourceDir; DirectoriesToSearch)
     {
       auto AbsoluteSourceDir = buildNormalizedPath(thisDir, SourceDir);
@@ -39,5 +40,7 @@ void Common(ref BuildContext Context)
                .map!(a => a.name)                                      // Use only the name of DirEntry objects.
                .array;                                                 // Convert the range to a proper array.
     }
+
+    BuildArgs ~= "-version=XInput_RuntimeLinking";
   }
 }

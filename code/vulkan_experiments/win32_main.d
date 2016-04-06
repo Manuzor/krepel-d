@@ -3,7 +3,8 @@ version(Windows):
 
 import krepel;
 import krepel.win32;
-import krepel.memory.reference_counting;
+import krepel.win32.directx.xinput;
+import krepel.memory;
 
 
 import std.string : toStringz, fromStringz;
@@ -90,10 +91,7 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
   Log.Info("=== Beginning of Log");
   scope(exit) Log.Info("=== End of Log");
 
-  if(!Win32LoadXInput())
-  {
-    Log.Info("Failed to load XInput.");
-  }
+  version(XInput_RuntimeLinking) LoadXInput();
 
   WNDCLASSA WindowClass;
   with(WindowClass)
@@ -121,6 +119,8 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
     {
       auto State = MainAllocator.NewARC!VulkanState();
       State.Allocator = MainAllocator;
+      State.ProcessHandle = Instance;
+      State.WindowHandle = Window;
 
       State.LoadDLL();
       if(State.DLL)
@@ -247,6 +247,9 @@ class VulkanState
 
   string DLLName;
   HANDLE DLL;
+
+  HINSTANCE ProcessHandle;
+  HWND WindowHandle;
 
   VkInstance Instance;
   VkDevice Device;
