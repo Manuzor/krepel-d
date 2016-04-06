@@ -9,11 +9,6 @@ import core.sys.windows.windows;
 
 private mixin template DEFINE_GUID(ComType, alias IIDString)
 {
-  static if(!is(ComType : IUnknown))
-  {
-    pragma(msg, "Warning: The type " ~ ComType.stringof ~ " does not derive from IUnknown.");
-  }
-
   // Format of a UUID:
   // [0  1  2  3  4  5  6  7]  8  [9  10 11 12] 13 [14 15 16 17] 18 [19 20] [21 22] 23 [24 25] [26 27] [28 29] [30 31] [32 33] [34 35]
   // [x  x  x  x  x  x  x  x]  -  [x  x  x  x ] -  [x  x  x  x ] -  [x  x ] [x  x ]  - [x  x ] [x  x ] [x  x ] [x  x ] [x  x ] [x  x ]
@@ -40,14 +35,6 @@ private mixin template DEFINE_GUID(ComType, alias IIDString)
                IIDString[32 .. 34], // IID.Data4[6] <=> xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxx[xx]xx
                IIDString[34 .. 36], // IID.Data4[7] <=> xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxx[xx]
                ));
-
-  /// Example: uuidof!IDXGIObject
-  ref auto uuidof(T)() if(is(T == ComType)) { mixin("return IID_%s;".format(ComType.stringof)); }
-
-  /// Example:
-  ///   IDXGIObject Object = /* ... */;
-  ///   auto Foo = Object.uuidof;
-  ref auto uuidof(T)(auto ref in T) if(is(T == ComType)) { return uuidof!ComType; }
 }
 
 // Note: Everything below this line is automatically converted and likely to
@@ -305,7 +292,7 @@ extern(Windows):
     UINT MapFlags,
   );
 
-  HRESULT Unmap(  );
+  HRESULT Unmap();
 
 }
 
@@ -391,7 +378,7 @@ extern(Windows):
     IUnknown pConcernedDevice,
   );
 
-  HRESULT WaitForVBlank(  );
+  HRESULT WaitForVBlank();
 
   HRESULT TakeOwnership(
     // [in][annotation("_In_")]
@@ -399,7 +386,7 @@ extern(Windows):
     BOOL Exclusive,
   );
 
-  void ReleaseOwnership(  );
+  void ReleaseOwnership();
 
   HRESULT GetGammaControlCapabilities(
     // [out][annotation("_Out_")]
@@ -565,8 +552,25 @@ extern(Windows):
 
 }
 
-extern(Windows) HRESULT CreateDXGIFactory(REFIID riid, void **ppFactory);
-extern(Windows) HRESULT CreateDXGIFactory1(REFIID riid, void **ppFactory);
+extern(Windows) @nogc nothrow
+{
+  alias PFN_CREATE_DXGI_FACTORY = HRESULT function(REFIID riid, void **ppFactory);
+  alias PFN_CREATE_DXGI_FACTORY_1 = HRESULT function(REFIID riid, void **ppFactory);
+
+  version(DXGI_RuntimeLinking)
+  {
+    __gshared
+    {
+      PFN_CREATE_DXGI_FACTORY CreateDXGIFactory = (REFIID riid, void **ppFactory) => DXGI_ERROR_NOT_CURRENTLY_AVAILABLE;
+      PFN_CREATE_DXGI_FACTORY_1 CreateDXGIFactory1 = (REFIID riid, void **ppFactory) => DXGI_ERROR_NOT_CURRENTLY_AVAILABLE;
+    }
+  }
+  else
+  {
+    HRESULT CreateDXGIFactory(REFIID riid, void **ppFactory);
+    HRESULT CreateDXGIFactory1(REFIID riid, void **ppFactory);
+  }
+}
 
 mixin DEFINE_GUID!(IDXGIDevice, "54ec77fa-1377-44e6-8c32-88fd5f44c84c");
 // [object][uuid("54ec77fa-1377-44e6-8c32-88fd5f44c84c")][local][pointer_default("unique")]
@@ -655,7 +659,7 @@ extern(Windows):
     IDXGIAdapter1* ppAdapter,
   );
 
-  BOOL IsCurrent(  );
+  BOOL IsCurrent();
 
 }
 

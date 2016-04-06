@@ -13,7 +13,7 @@ void Tests(ref BuildContext Context)
   {
     OutFileName = "krepel_tests.exe";
 
-    foreach(SourceDir; ["krepel"])
+    foreach(SourceDir; ["krepel", "directx"])
     {
       auto AbsoluteSourceDir = buildNormalizedPath(thisDir, SourceDir);
       Files ~= dirEntries(AbsoluteSourceDir, "*.d", SpanMode.breadth)  // Gather all *.d files

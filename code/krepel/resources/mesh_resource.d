@@ -28,12 +28,13 @@ class SubMesh
   }
 }
 
-class MeshResource : IResource
+class MeshResource : Resource
 {
   Array!SubMesh Meshes;
 
-  this(IAllocator Allocator)
+  this(IAllocator Allocator, IResourceLoader Loader, WString FileName)
   {
+    super(Loader, FileName);
     Meshes = Array!SubMesh(Allocator);
   }
 }

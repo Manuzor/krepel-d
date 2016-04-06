@@ -2,14 +2,18 @@
 
 setlocal
 
-pushd "%~dp0..\.."
+set ThisDir=%~dp0
+set RepoRoot=%ThisDir%..\..
+set BuildDir=%RepoRoot%\build
+
+pushd "%RepoRoot%"
   echo Building converter...
   call build.bat midltod
 popd
 
-pushd "%~dp0"
+pushd "%ThisDir%"
   set Converter=..\..\build\midltod.exe
-  set Log=ConversionLog.txt
+  set Log=%BuildDir%\midltod.log
 
   echo Converting...
 
@@ -26,6 +30,7 @@ pushd "%~dp0"
   rem "%Converter%" dxgi1_5.idl    dxgi1_5.d    2>> "%Log%"
   rem "%Converter%" d3dcommon.idl  d3dcommon.d  2>> "%Log%"
   rem "%Converter%" d3d11.idl      d3d11.d      2>> "%Log%"
+  rem "%Converter%" d3d11sdklayers.idl  d3d11sdklayers.d  2>> "%Log%"
   rem "%Converter%" d3d11_1.idl    d3d11_1.d    2>> "%Log%"
   rem "%Converter%" d3d11_2.idl    d3d11_2.d    2>> "%Log%"
   rem "%Converter%" d3d11_3.idl    d3d11_3.d    2>> "%Log%"

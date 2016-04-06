@@ -9,11 +9,6 @@ import core.sys.windows.windows;
 
 private mixin template DEFINE_GUID(ComType, alias IIDString)
 {
-  static if(!is(ComType : IUnknown))
-  {
-    pragma(msg, "Warning: The type " ~ ComType.stringof ~ " does not derive from IUnknown.");
-  }
-
   // Format of a UUID:
   // [0  1  2  3  4  5  6  7]  8  [9  10 11 12] 13 [14 15 16 17] 18 [19 20] [21 22] 23 [24 25] [26 27] [28 29] [30 31] [32 33] [34 35]
   // [x  x  x  x  x  x  x  x]  -  [x  x  x  x ] -  [x  x  x  x ] -  [x  x ] [x  x ]  - [x  x ] [x  x ] [x  x ] [x  x ] [x  x ] [x  x ]
@@ -56,6 +51,10 @@ private mixin template DEFINE_GUID(ComType, alias IIDString)
 
 
 import directx.dxgiformat;
+
+// TODO: Remove this once dmd includes directx errors in
+// core.sys.windows.winerror.
+public import directx.dxerror;
 
 struct DXGI_RGB
 {

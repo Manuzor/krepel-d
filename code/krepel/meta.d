@@ -230,6 +230,9 @@ template TemplateArguments(Type)
   }
 }
 
+alias ModuleNameOf = std.traits.moduleName;
+alias ParentOf = std.traits.parentOf;
+
 
 //
 // Unit Tests
