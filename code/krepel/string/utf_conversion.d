@@ -33,24 +33,24 @@ uint ExtractCodePoint(const(char[]) UTFChar)
     case 1U:
       Result = UTFChar[0];
       // Second case is BBBXXXXX BBXXXXXX, so we filter the second byte by 0x3FU.
-      // Then filter the first by 0x1FU and shift it 6 bits to the left, to attaChar it to the second value
+      // Then filter the first by 0x1FU and shift it 6 bits to the left, to attach it to the second value
       break;
     case 2U:
       Result = UTFChar[ 1U ] & 0x3FU; // Extract lower value, filtering continuation part
       Result |= (cast(uint) (UTFChar[ 0U ] & 0x1FU)) << 6U; // Add upper value, filtering 2 byte mark
       break;
       // Third case is BBBBXXXX BBXXXXXX BBXXXXXX, so we filter the third byte by 0x3FU.
-      // Then filter the second by 0x3FU and shift it 6 bits to the left, to attaChar it to the output value
-      // Then filter the first by 0x0FU and shift it 12 bits to the left, to attaChar it to the output value
+      // Then filter the second by 0x3FU and shift it 6 bits to the left, to attach it to the output value
+      // Then filter the first by 0x0FU and shift it 12 bits to the left, to attach it to the output value
     case 3U:
       Result = UTFChar[ 2U ] & 0x3FU;
       Result |= (cast(uint) (UTFChar[ 1U ] & 0x3FU)) << 6U;
       Result |= (cast(uint) (UTFChar[ 0U ] & 0x0FU)) << 12U;
       break;
       // Fourth case is BBBBBXXX BBXXXXXX BBXXXXXX BBXXXXXX, so we filter the fourth byte by 0x3FU.
-      // Then filter the third by 0x3FU and shift it 6 bits to the left, to attaChar it to the output value
-      // Then filter the second by 0x3FU and shift it 12 bits to the left, to attaChar it to the output value
-      // Then filter the first by 0x007U and shift it 18 bits to the left, to attaChar it to the output value
+      // Then filter the third by 0x3FU and shift it 6 bits to the left, to attach it to the output value
+      // Then filter the second by 0x3FU and shift it 12 bits to the left, to attach it to the output value
+      // Then filter the first by 0x007U and shift it 18 bits to the left, to attach it to the output value
     case 4U:
       Result = UTFChar[ 3U ] & 0x3FU;
       Result |= (cast(uint) (UTFChar[ 2U ] & 0x3FU)) << 6U;
