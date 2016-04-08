@@ -245,7 +245,7 @@ struct Quaternion
     this.Data[] = this.opBinary!(Operator)(Quat).Data[];
   }
 
-  Quaternion opBinary(string Operator)(Quaternion Quat)
+  Quaternion opBinary(string Operator)(Quaternion Quat) const
   {
     static if(Operator == "*")
     {
