@@ -495,6 +495,30 @@ UString ToUTF8(WString String, Endian Endiannes = Endian.Little)
   return Result;
 }
 
+WString ToUTF16(UString String, Endian Endiannes = Endian.Little)
+{
+  WString Result = WString(String.Allocator);
+  auto Data = String[][];
+  while(Data.length)
+  {
+    auto Size = CharSize(Data);
+    if (Size)
+    {
+      auto CodePoint = ExtractCodePoint(Data);
+      Data = Data[Size..$];
+      auto UTF16 = UTF16FromCodePoint(CodePoint, Endiannes);
+      Result.Concat(UTF16[0..$]);
+    }
+    // Skip not parseable bytes
+    else
+    {
+      Data = Data[1..$];
+    }
+  }
+
+  return Result;
+}
+
 unittest
 {
   char Test = 'A';
@@ -559,6 +583,17 @@ unittest
   auto UTF8String = UString("TestString", Allocator);
   auto ConvertedString = UTF16String.ToUTF8();
   assert(ConvertedString == UTF8String);
+}
+
+unittest
+{
+  import krepel.memory;
+  auto Allocator = CreateTestAllocator();
+
+  auto UTF16String = WString("TestString", Allocator);
+  auto UTF8String = UString("TestString", Allocator);
+  auto ConvertedString = UTF8String.ToUTF16();
+  assert(ConvertedString == UTF16String);
 }
 
 unittest
