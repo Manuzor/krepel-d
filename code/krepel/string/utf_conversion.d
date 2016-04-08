@@ -154,15 +154,9 @@ auto UTF8FromCodePoint(uint CodePoint)
       return this;
     }
 
-    ConversionResult opSlice(size_t Lower, size_t Upper)
+    char[] opSlice(size_t Lower, size_t Upper)
     {
-      ConversionResult Result = void;
-
-      Result.Buffer[] = Buffer[];
-      Result.LowerIndex = cast(ubyte)Lower;
-      Result.UpperIndex = cast(ubyte)Upper;
-
-      return Result;
+      return Buffer[Lower..Upper];
     }
 
   private:
@@ -389,15 +383,9 @@ auto UTF16FromCodePoint(uint CodePoint, Endian Endiannes)
       return this;
     }
 
-    UTF16ConversionResult opSlice(size_t Lower, size_t Upper)
+    wchar[] opSlice(size_t Lower, size_t Upper)
     {
-      UTF16ConversionResult Result = void;
-
-      Result.Buffer[] = Buffer[];
-      Result.LowerIndex = cast(ubyte)Lower;
-      Result.UpperIndex = cast(ubyte)Upper;
-
-      return Result;
+      return Buffer[Lower..Upper];
     }
 
   private:
@@ -463,11 +451,46 @@ uint ExtractCodePoint(const (wchar[]) UTFChar, Endian Endiannes)
   }
 }
 
-UString ToUTF8(WString String)
+size_t CharCount(UString String)
+{
+  size_t Count = 0;
+  auto Data = String[][];
+  while(Data.length)
+  {
+    auto CharSize = CharSize(Data);
+    if(CharSize)
+    {
+      Count++;
+      Data = Data[CharSize..$];
+    }
+    else
+    {
+      Data = Data[1..$];
+    }
+  }
+  return Count;
+}
+
+UString ToUTF8(WString String, Endian Endiannes = Endian.Little)
 {
   UString Result = UString(String.Allocator);
-
-  //TODO(Marvin): convert per utf-16 encoded char.
+  auto Data = String[][];
+  while(Data.length)
+  {
+    auto Size = CharSize(Data, Endiannes);
+    if (Size)
+    {
+      auto CodePoint = ExtractCodePoint(Data, Endiannes);
+      Data = Data[Size..$];
+      auto UTF8 = UTF8FromCodePoint(CodePoint);
+      Result.Concat(UTF8[0..$]);
+    }
+    // Skip not parseable bytes
+    else
+    {
+      Data = Data[1..$];
+    }
+  }
 
   return Result;
 }
@@ -519,10 +542,31 @@ unittest
   CodePoint = ExtractCodePoint(Test2, Endian.Little);
   Result = UTF16FromCodePoint(CodePoint, Endian.Little);
   assert(CodePoint == 0x24B62);
-  //assert(CodePoint == UTF8CodePoint);
+  assert(CodePoint == UTF8CodePoint);
   assert(Test2.length == Result.length);
   assert(Result.length == 2);
   assert(Test2[0] == Result[0]);
   assert(Test2[1] == Result[1]);
 
+}
+
+unittest
+{
+  import krepel.memory;
+  auto Allocator = CreateTestAllocator();
+
+  auto UTF16String = WString("TestString", Allocator);
+  auto UTF8String = UString("TestString", Allocator);
+  auto ConvertedString = UTF16String.ToUTF8();
+  assert(ConvertedString == UTF8String);
+}
+
+unittest
+{
+  import krepel.memory;
+  auto Allocator = CreateTestAllocator();
+
+  auto String = UString("Tääst", Allocator);
+  assert(String.CharCount == 5);
+  assert(String.Count == 7);
 }

@@ -256,7 +256,7 @@ struct StringBase(CharType)
     return ConcatCopy(OtherString);
   }
 
-  const(CharType[]) opIndex() const
+  const(CharType)[] opIndex() const
   {
     return Data.Data[0..Count];
   }
@@ -283,7 +283,7 @@ struct StringBase(CharType)
     return Count;
   }
 
-  const(CharType[]) opSlice(ulong LeftIndex, ulong RightIndex) const
+  const(CharType)[] opSlice(ulong LeftIndex, ulong RightIndex) const
   {
     return Data.Data[LeftIndex .. RightIndex];
   }
