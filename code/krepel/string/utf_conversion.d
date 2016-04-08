@@ -1,6 +1,7 @@
 module krepel.string.utf_conversion;
 
 import krepel.util;
+import krepel.string;
 
 bool ValidByte(const(char[]) UTFChar)
 {
@@ -63,7 +64,7 @@ uint ExtractCodePoint(const(char[]) UTFChar)
   }
 }
 
-auto FromCodePoint(uint CodePoint)
+auto UTF8FromCodePoint(uint CodePoint)
 {
 
   struct ConversionResult
@@ -76,7 +77,7 @@ auto FromCodePoint(uint CodePoint)
     static const uint FollowBit = 0x80U;
     this(uint CodePoint)
     {
-      ubyte Size = GetCodePointSize(CodePoint);
+      ubyte Size = GetUTF8CodePointSize(CodePoint);
       LowerIndex = 0;
       UpperIndex = 0;
       if(Size != 0U)
@@ -174,7 +175,7 @@ auto FromCodePoint(uint CodePoint)
   return ConversionResult(CodePoint);
 }
 
-ubyte GetCodePointSize(uint CodePoint)
+ubyte GetUTF8CodePointSize(uint CodePoint)
 {
   if(CodePoint < 0x0080U)
   {
@@ -257,15 +258,16 @@ uint ValidChar(const (wchar[]) UTFChar, Endian Endiannes)
   uint NumBytes = CharSize(UTFChar, Endiannes);
 
   wchar Byte1 = UTFChar[0];
-  wchar Byte2 = UTFChar[1];
-  if(Endiannes == Endian.Big)
-  {
-    Byte1 = ByteSwapUShort(Byte1);
-    Byte2 = ByteSwapUShort(Byte2);
-  }
+
 
   if(NumBytes == 2U)
   {
+    wchar Byte2 = UTFChar[1];
+    if(Endiannes == Endian.Big)
+    {
+      Byte1 = ByteSwapUShort(Byte1);
+      Byte2 = ByteSwapUShort(Byte2);
+    }
     Result = Result && (Byte1 >= 0xD800U || Byte1 < 0xDC00) && (Byte2 >= 0xDC00U || Byte2 < 0xE000U);
   }
 
@@ -302,6 +304,112 @@ uint CharSize(const (wchar[]) UTFChar, Endian Endiannes)
     return 2;
   }
 }
+
+ubyte GetUTF16CodePointSize(uint CodePoint)
+{
+  return CodePoint <= 0xFFFF ? 1 : 2;
+}
+
+auto UTF16FromCodePoint(uint CodePoint, Endian Endiannes)
+{
+  struct UTF16ConversionResult
+  {
+    this(uint CodePoint, Endian Endiannes)
+    {
+      const Lower10BitMask = 0x03FF;
+      ubyte Size = GetUTF16CodePointSize(CodePoint);
+      LowerIndex = 0;
+      UpperIndex = 0;
+      if(Size != 0U)
+      {
+        UpperIndex = Size;
+        switch(Size)
+        {
+          case 1:
+          Buffer[0] = cast(wchar)CodePoint;
+          break;
+          case 2:
+          CodePoint -= 0x10000U;
+          Buffer[0] = cast(ushort)(((CodePoint >> 10) & Lower10BitMask) + 0xD800U); // Use lower 10 Bits and add Low Surrogate
+          Buffer[1] = cast(ushort)(((CodePoint) & Lower10BitMask) + 0xDC00U); // Use lower 10 Bits and add High Surrogate
+          break;
+          default:
+          break;
+        }
+        if(Endiannes == Endian.Big)
+        {
+          Buffer[0] = ByteSwapUShort(Buffer[0]);
+          Buffer[1] = ByteSwapUShort(Buffer[1]);
+        }
+      }
+    }
+
+    size_t opDollar()
+    {
+      return length;
+    }
+
+    @property size_t length()
+    {
+      return UpperIndex - LowerIndex;
+    }
+
+    wchar opIndex(size_t Index)
+    {
+      return Buffer[LowerIndex + Index];
+    }
+
+    @property bool empty()
+    {
+      return UpperIndex == LowerIndex;
+    }
+
+    @property wchar front()
+    {
+      return Buffer[LowerIndex];
+    }
+
+    void popFront()
+    {
+      LowerIndex++;
+    }
+
+    @property wchar back()
+    {
+      return Buffer[UpperIndex - 1];
+    }
+
+    void popBack()
+    {
+      UpperIndex--;
+    }
+
+    @property UTF16ConversionResult save()
+    {
+      return this;
+    }
+
+    UTF16ConversionResult opSlice(size_t Lower, size_t Upper)
+    {
+      UTF16ConversionResult Result = void;
+
+      Result.Buffer[] = Buffer[];
+      Result.LowerIndex = cast(ubyte)Lower;
+      Result.UpperIndex = cast(ubyte)Upper;
+
+      return Result;
+    }
+
+  private:
+    wchar[2] Buffer;
+    ubyte LowerIndex;
+    ubyte UpperIndex;
+
+  }
+
+  return UTF16ConversionResult(CodePoint, Endiannes);
+}
+
 
 uint ExtractCodePoint(const (wchar[]) UTFChar, Endian Endiannes)
 {
@@ -343,10 +451,9 @@ uint ExtractCodePoint(const (wchar[]) UTFChar, Endian Endiannes)
         Byte1 = UTFChar[0];
         Byte2 = UTFChar[1];
       }
-      Byte1 -= 0xD800U;
-      Byte2 -= 0xDC00U;
-      Byte1 = cast(wchar)(Byte1 << 10);
-      Result = Byte1 | Byte2;
+      Byte1 -= 0xD800;
+      Byte2 -= 0xDC00;
+      Result = (Byte1<<10) | Byte2;
       Result += 0x10000U;
       break;
     default:
@@ -356,20 +463,65 @@ uint ExtractCodePoint(const (wchar[]) UTFChar, Endian Endiannes)
   }
 }
 
+UString ToUTF8(WString String)
+{
+  UString Result = UString(String.Allocator);
+
+  //TODO(Marvin): convert per utf-16 encoded char.
+
+  return Result;
+}
+
 unittest
 {
   char Test = 'A';
   uint CodePoint = ExtractCodePoint([Test]);
-  auto Result = FromCodePoint(CodePoint);
+  auto Result = UTF8FromCodePoint(CodePoint);
 
   assert(Result.length == 1);
   assert(Test == Result[0]);
 
   auto Test2 = "ü"c;
   CodePoint = ExtractCodePoint(Test2);
-  Result = FromCodePoint(CodePoint);
+  Result = UTF8FromCodePoint(CodePoint);
 
   assert(Test2.length == Result.length);
+  assert(Test2[0] == Result[0]);
+  assert(Test2[1] == Result[1]);
+
+  auto Test3 = "𐐷"c;
+  CodePoint = ExtractCodePoint(Test3);
+  assert(CodePoint == 0x10437U);
+  Result = UTF8FromCodePoint(CodePoint);
+
+  assert(Test3.length == Result.length);
+  assert(Test3.length == 4);
+  assert(Test3[0] == Result[0]);
+  assert(Test3[1] == Result[1]);
+  assert(Test3[2] == Result[2]);
+  assert(Test3[3] == Result[3]);
+
+}
+
+unittest
+{
+  wchar Test = 'A';
+  uint CodePoint = ExtractCodePoint([Test], Endian.Little);
+  auto Result = UTF16FromCodePoint(CodePoint, Endian.Little);
+
+  assert(Result.length == 1);
+  assert(Test == Result[0]);
+
+  auto Test2 = "𤭢"w;
+  auto Test3 = "𤭢"c;
+  auto UTF8CodePoint = ExtractCodePoint(Test3);
+
+  CodePoint = ExtractCodePoint(Test2, Endian.Little);
+  Result = UTF16FromCodePoint(CodePoint, Endian.Little);
+  assert(CodePoint == 0x24B62);
+  //assert(CodePoint == UTF8CodePoint);
+  assert(Test2.length == Result.length);
+  assert(Result.length == 2);
   assert(Test2[0] == Result[0]);
   assert(Test2[1] == Result[1]);
 
