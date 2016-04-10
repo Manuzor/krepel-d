@@ -5,7 +5,7 @@ import krepel.math.quaternion;
 import krepel.math.matrix4;
 import krepel.math.math;
 
-Vector3 TransformVector(in ref Transform Transformation, Vector3 Vec)
+Vector3 TransformDirection(in ref Transform Transformation, Vector3 Vec)
 {
   with(Transformation)
   {
@@ -21,11 +21,11 @@ Vector3 TransformPosition(in ref Transform Transformation, Vector3 Vec)
   }
 }
 
-Vector3 InverseTransformVector(in ref Transform Transformation, Vector3 Vec)
+Vector3 InverseTransformDirection(in ref Transform Transformation, Vector3 Vec)
 {
   with(Transformation)
   {
-    return krepel.math.quaternion.InverseTransformVector(Rotation,Vec) * Scale.Reciprocal(0);
+    return krepel.math.quaternion.InverseTransformDirection(Rotation,Vec) * Scale.Reciprocal(0);
   }
 }
 
@@ -33,7 +33,7 @@ Vector3 InverseTransformPosition(in ref Transform Transformation, Vector3 Vec)
 {
   with(Transformation)
   {
-    return krepel.math.quaternion.InverseTransformVector(Rotation, Vec - Translation) * Scale.Reciprocal(0);
+    return krepel.math.quaternion.InverseTransformDirection(Rotation, Vec - Translation) * Scale.Reciprocal(0);
   }
 }
 
@@ -54,7 +54,7 @@ Transform InversedCopy(in ref Transform InputTransform)
   {
     Result.Rotation = krepel.math.quaternion.InversedCopy(Rotation);
     Result.Scale = Scale.Reciprocal();
-    Result.Translation = krepel.math.quaternion.TransformVector(Result.Rotation, Result.Scale * -Translation);
+    Result.Translation = krepel.math.quaternion.TransformDirection(Result.Rotation, Result.Scale * -Translation);
   }
   return Result;
 }
@@ -76,7 +76,7 @@ struct Transform
     const Quaternion InverseRotation = krepel.math.quaternion.InversedCopy(ParentTransform.Rotation);
 
     Scale = Scale * ReciprocalScale;
-    Translation = krepel.math.quaternion.TransformVector(InverseRotation, (Translation - ParentTransform.Translation)) * ReciprocalScale;
+    Translation = krepel.math.quaternion.TransformDirection(InverseRotation, (Translation - ParentTransform.Translation)) * ReciprocalScale;
     Rotation = InverseRotation * Rotation;
   }
 

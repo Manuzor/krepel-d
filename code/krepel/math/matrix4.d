@@ -188,7 +188,7 @@ bool IsInvertible(Matrix4 Mat)
 
 /// Homogenous transform of a 4 dimensional Vector
 /// @return Result = Vector*Mat
-Vector4 TransformVector(Matrix4 Mat, Vector4 Vector)
+Vector4 TransformDirection(Matrix4 Mat, Vector4 Vector)
 {
   Vector4 Result = void;
 
@@ -204,19 +204,19 @@ Vector4 TransformVector(Matrix4 Mat, Vector4 Vector)
 /// @return Result = Vector.XYZ1*Mat
 Vector3 TransformPosition(Matrix4 Mat, Vector3 Vector)
 {
-  return TransformVector(Mat, Vector.XYZ1).XYZ;
+  return TransformDirection(Mat, Vector.XYZ1).XYZ;
 }
 
 /// Transforms a direction, not taking the translation part of the matrix into account
 /// @return Result = Vector.XYZ0*Mat
-Vector3 TransformVector(Matrix4 Mat, Vector3 Vector)
+Vector3 TransformDirection(Matrix4 Mat, Vector3 Vector)
 {
-  return TransformVector(Mat, Vector.XYZ0).XYZ;
+  return TransformDirection(Mat, Vector.XYZ0).XYZ;
 }
 
 /// Homogenous inverse transform of a 4 dimensional Vector
 /// @return Result = Vector*Mat^-1
-Vector4 InverseTransformVector(Matrix4 Mat, Vector4 Vector)
+Vector4 InverseTransformDirection(Matrix4 Mat, Vector4 Vector)
 {
   Vector4 Result = void;
 
@@ -234,14 +234,14 @@ Vector4 InverseTransformVector(Matrix4 Mat, Vector4 Vector)
 /// @return Result = Vector.XYZ1*Mat^-1
 Vector3 InverseTransformPosition(Matrix4 Mat, Vector3 Vector)
 {
-  return InverseTransformVector(Mat, Vector.XYZ1).XYZ;
+  return InverseTransformDirection(Mat, Vector.XYZ1).XYZ;
 }
 
 /// InverseTransforms a direction, not taking the translation part of the matrix into account
 /// @return Result = Vector.XYZ1*Mat^-1
-Vector3 InverseTransformVector(Matrix4 Mat, Vector3 Vector)
+Vector3 InverseTransformDirection(Matrix4 Mat, Vector3 Vector)
 {
-  return InverseTransformVector(Mat, Vector.XYZ0).XYZ;
+  return InverseTransformDirection(Mat, Vector.XYZ0).XYZ;
 }
 
 /// Returns transposed multiplication of the two matrices
@@ -536,9 +536,9 @@ unittest
   Transformed = Mat.InverseTransformPosition(Transformed);
   assert(Pos == Transformed);
 
-  Transformed = Mat.TransformVector(Vector3.ForwardVector);
+  Transformed = Mat.TransformDirection(Vector3.ForwardVector);
   assert(Transformed == -Vector3.RightVector);
-  Transformed = Mat.InverseTransformVector(Transformed);
+  Transformed = Mat.InverseTransformDirection(Transformed);
   assert(Transformed == Vector3.ForwardVector);
 
   Mat = Matrix4(Vector3.ForwardVector, Vector3.RightVector, Vector3.UpVector, Vector3(10,20,50));
@@ -550,13 +550,13 @@ unittest
   Transformed = Mat.InverseTransformPosition(Transformed);
   assert(Pos == Transformed);
 
-  Transformed = Mat.TransformVector(Vector3.ForwardVector);
+  Transformed = Mat.TransformDirection(Vector3.ForwardVector);
   assert(Transformed == Vector3.ForwardVector);
-  Transformed = Mat.InverseTransformVector(Vector3.ForwardVector);
+  Transformed = Mat.InverseTransformDirection(Vector3.ForwardVector);
   assert(Transformed == Vector3.ForwardVector);
 
-  assert(Mat.TransformVector(Vector4(0,0,0,2)) == Vector4(20, 40, 100, 2));
-  assert(Mat.InverseTransformVector(Mat.TransformVector(Vector4(0,0,0,2))) == Vector4(0, 0, 0, 2));
+  assert(Mat.TransformDirection(Vector4(0,0,0,2)) == Vector4(20, 40, 100, 2));
+  assert(Mat.InverseTransformDirection(Mat.TransformDirection(Vector4(0,0,0,2))) == Vector4(0, 0, 0, 2));
 
 }
 /// Determinant
@@ -633,7 +633,7 @@ unittest
   const Transform = CreateMatrixFromScaleRotateTranslate(Vector3(1,2,3), Quaternion.Identity, Vector3(2,2,2));
   const Input = Vector3(10,20,30);
   const ResultPosition = Transform.TransformPosition(Input);
-  const ResultVector = Transform.TransformVector(Input);
+  const ResultVector = Transform.TransformDirection(Input);
   assert(ResultPosition == Vector3(21,42,63));
   assert(ResultVector == Vector3(20,40,60));
 }
@@ -665,7 +665,7 @@ unittest
 unittest
 {
   auto Mat = CreateLookAtMatrix(Vector3.ZeroVector, Vector3.ForwardVector, Vector3.UpVector);
-  auto Result = Mat.TransformVector(Vector3.ForwardVector);
+  auto Result = Mat.TransformDirection(Vector3.ForwardVector);
   assert(Result == -Vector3.ForwardVector);
   Result = Mat.TransformPosition(Vector3.ForwardVector);
 
