@@ -1,6 +1,6 @@
 #once
 {
-  .ProjectName="krepel_tests"
+  .ProjectName="krepel_tests" ; Run krepel_tests build as default
 
   VCXProject("krepel")
   {

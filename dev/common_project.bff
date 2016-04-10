@@ -1,19 +1,4 @@
 {
-
-  ForEach(.PlatformArchitecture in .BuildArchitectures)
-  {
-    ForEach(.Configuration in .BuildConfigurations)
-    {
-      Exec("$ProjectName$-$PlatformArchitecture$-$Configuration$")
-      {
-        .ExecExecutable = "build.bat"
-        .ExecArguments = "-$Configuration$"
-        .ExecOutput = "build/$ProjectName$.exe"
-        .ExecUseStdOutAsOutput = true
-      }
-    }
-  }
-
   VCXProject("$ProjectName$")
   {
     Using(.CommonDProject)

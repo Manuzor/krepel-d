@@ -13,17 +13,6 @@
 
 #include "dev\common.bff"
 
-.BuildConfigurations =
-{
-  "Debug",
-  ;"Release"
-}
-
-.BuildArchitectures =
-{
-  "x64"
-}
-
 .DebugProjectConfig =
 [
   .Platform = "x64"
