@@ -265,6 +265,11 @@ struct Quaternion
     }
   }
 
+  Vector3 opBinary(string Operator : "*")(Vector3 Vec) const
+  {
+    return TransformVector(this, Vec);
+  }
+
   __gshared immutable Identity = Quaternion();
 }
 
@@ -311,9 +316,11 @@ unittest
   RotateCCW *= RotateCCW;
   Vector3 Result = krepel.math.matrix4.TransformVector(RotateCCW.ToRotationMatrix(),Vector3(1,0,0));
   Vector3 Result2 = RotateCCW.TransformVector(Vector3(1,0,0));
+  Vector3 Result3 = RotateCCW * Vector3(1,0,0);
 
   assert(krepel.math.vector3.NearlyEquals(Result,Vector3(-1,0,0)));
   assert(krepel.math.vector3.NearlyEquals(Result,Result2));
+  assert(krepel.math.vector3.NearlyEquals(Result,Result3));
 }
 
 /// Inversion
