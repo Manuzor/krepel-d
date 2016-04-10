@@ -5,6 +5,39 @@ import krepel.math.quaternion;
 import krepel.math.matrix4;
 import krepel.math.math;
 
+Vector3 TransformVector(in ref Transform Transformation, Vector3 Vec)
+{
+  with(Transformation)
+  {
+    return (Rotation * (Scale * Vec));
+  }
+}
+
+Vector3 TransformPosition(in ref Transform Transformation, Vector3 Vec)
+{
+  with(Transformation)
+  {
+    return (Rotation * (Scale * Vec)) + Translation;
+  }
+}
+
+Vector3 InverseTransformVector(in ref Transform Transformation, Vector3 Vec)
+{
+  with(Transformation)
+  {
+    return krepel.math.quaternion.InverseTransformVector(Rotation,Vec) * Scale.Reciprocal(0);
+  }
+}
+
+Vector3 InverseTransformPosition(in ref Transform Transformation, Vector3 Vec)
+{
+  with(Transformation)
+  {
+    return krepel.math.quaternion.InverseTransformVector(Rotation, Vec - Translation) * Scale.Reciprocal(0);
+  }
+}
+
+
 Transform Concatenate(in ref Transform A, in ref Transform B)
 {
   Transform Result = void;
@@ -21,7 +54,7 @@ Transform InversedCopy(in ref Transform InputTransform)
   {
     Result.Rotation = krepel.math.quaternion.InversedCopy(Rotation);
     Result.Scale = Scale.Reciprocal();
-    Result.Translation = Result.Rotation.TransformVector(Result.Scale * -Translation);
+    Result.Translation = krepel.math.quaternion.TransformVector(Result.Rotation, Result.Scale * -Translation);
   }
   return Result;
 }
@@ -43,7 +76,7 @@ struct Transform
     const Quaternion InverseRotation = krepel.math.quaternion.InversedCopy(ParentTransform.Rotation);
 
     Scale = Scale * ReciprocalScale;
-    Translation = InverseRotation.TransformVector((Translation - ParentTransform.Translation)) * ReciprocalScale;
+    Translation = krepel.math.quaternion.TransformVector(InverseRotation, (Translation - ParentTransform.Translation)) * ReciprocalScale;
     Rotation = InverseRotation * Rotation;
   }
 
