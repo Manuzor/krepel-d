@@ -12,3 +12,12 @@
 *.sublime-workspace
 # Temporary data for unit tests interacting with the file system
 /unittest/tmp
+
+# The generated solution file and associates
+Krepel.sln
+Krepel.sdf
+Krepel.VC.opendb
+.vs/
+
+# FastBuild Database
+*.fdb
