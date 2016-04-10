@@ -3,6 +3,28 @@ module krepel.math.transform;
 import krepel.math.vector3;
 import krepel.math.quaternion;
 import krepel.math.matrix4;
+import krepel.math.math;
+
+Transform Concatenate(in ref Transform A, in ref Transform B)
+{
+  Transform Result = void;
+  Result.Rotation = B.Rotation * A.Rotation;
+  Result.Scale = B.Scale * A.Scale;
+  Result.Translation = B.Rotation * (B.Scale * A.Translation) + B.Translation;
+  return Result;
+}
+
+Transform InversedCopy(in ref Transform InputTransform)
+{
+  Transform Result = void;
+  with(InputTransform)
+  {
+    Result.Rotation = krepel.math.quaternion.InversedCopy(Rotation);
+    Result.Scale = Scale.Reciprocal();
+    Result.Translation = Result.Rotation.TransformVector(Result.Scale * -Translation);
+  }
+  return Result;
+}
 
 struct Transform
 {
@@ -15,23 +37,62 @@ struct Transform
     return CreateMatrixFromScaleRotateTranslate(Translation, Rotation, Scale);
   }
 
-  Transform Inverse()
-  {
-    Transform Result = void;
-    Result.Rotation = Rotation.InversedCopy();
-    Result.Scale = Scale.Reciprocal();
-    Result.Translation = Result.Rotation.TransformVector(Result.Scale * -Translation);
-    return Result;
-  }
-
   void SetRelativeTo(in ref Transform ParentTransform)
   {
     const Vector3 ReciprocalScale = (ParentTransform.Scale.Reciprocal(0.0f));
-    const Quaternion InverseRotation = ParentTransform.Rotation.InversedCopy();
+    const Quaternion InverseRotation = krepel.math.quaternion.InversedCopy(ParentTransform.Rotation);
 
     Scale = Scale * ReciprocalScale;
     Translation = InverseRotation.TransformVector((Translation - ParentTransform.Translation)) * ReciprocalScale;
     Rotation = InverseRotation * Rotation;
   }
 
+  Transform opBinary(string Operator : "*")(in ref Transform Other)
+  {
+    return Concatenate(this, Other);
+  }
+
+  void opOpAssign(string Operator : "*")(in ref Transform Other)
+  {
+    this = Concatenate(this, Other);
+  }
+
+}
+
+
+unittest
+{
+  Transform A = Transform(Vector3(1,2,3), Quaternion.Identity, Vector3(5,4,3));
+  assert(A.Translation == Vector3(1,2,3));
+  assert(A.Rotation == Quaternion.Identity);
+  assert(A.Scale == Vector3(5,4,3));
+}
+
+unittest
+{
+  Transform A = Transform(Vector3(1,2,3), Quaternion.Identity, Vector3.UnitScaleVector);
+  Transform B = Transform(Vector3(5,6,7), Quaternion.Identity, Vector3.UnitScaleVector);
+
+  auto Result = A * B;
+  assert(Result.Translation == Vector3(6,8,10));
+  assert(Result.Rotation == Quaternion.Identity);
+  assert(Result.Scale == Vector3.UnitScaleVector);
+  A = Transform(Vector3(1,2,3), Quaternion(Vector3(0,0,1), -PI/2), Vector3.UnitScaleVector);
+  B = Transform(Vector3(0,0,0), Quaternion(Vector3(0,0,1), PI/2), Vector3.UnitScaleVector);
+
+  Result = A * B;
+  assert(Result.Translation.NearlyEquals(Vector3(-2,1,3)));
+  assert(Result.Rotation.NearlyEquals(Quaternion.Identity));
+  assert(Result.Scale.NearlyEquals(Vector3.UnitScaleVector));
+}
+
+unittest
+{
+  Transform A = Transform(Vector3(1,2,3), Quaternion(Vector3(0,0,1), -PI/2), Vector3(5,6,7));
+  auto B = A.InversedCopy();
+
+  auto Result = A * B;
+  assert(Result.Translation.NearlyEquals(Vector3.ZeroVector));
+  assert(Result.Rotation.NearlyEquals(Quaternion.Identity));
+  assert(Result.Scale.NearlyEquals(Vector3.UnitScaleVector));
 }
