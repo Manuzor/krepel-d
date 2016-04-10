@@ -309,6 +309,19 @@ Matrix4 CreateOrthogonalMatrix(float Width, float Height, float ZScale, float ZO
     ]);
 }
 
+Matrix4 CreateLookAtMatrix(Vector3 Target, Vector3 Position, Vector3 Up = Vector3.UpVector)
+{
+  auto Direction = (Target - Position).SafeNormalizedCopy;
+  Vector3 Right = Direction ^ Up.SafeNormalizedCopy;
+  Up = Right ^ Direction;
+  return Matrix4(
+    Direction,
+    Right,
+    Up,
+    Position
+  );
+}
+
 Matrix4 CreateMatrixFromScaleRotateTranslate(Vector3 Position, Quaternion Rotation, Vector3 Scale = Vector3.UnitScaleVector)
 {
   Matrix4 Result;
@@ -647,4 +660,14 @@ unittest
   Mat[1, 1] = 10;
   assert(Mat[1, 1] == 10);
 
+}
+
+unittest
+{
+  auto Mat = CreateLookAtMatrix(Vector3.ZeroVector, Vector3.ForwardVector, Vector3.UpVector);
+  auto Result = Mat.TransformVector(Vector3.ForwardVector);
+  assert(Result == -Vector3.ForwardVector);
+  Result = Mat.TransformPosition(Vector3.ForwardVector);
+
+  assert(Result == Vector3.ZeroVector);
 }
