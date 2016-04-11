@@ -3063,14 +3063,14 @@ alias VK_DEBUG_REPORT_ERROR_BIT_EXT = VkDebugReportFlagBitsEXT.VK_DEBUG_REPORT_E
 alias VK_DEBUG_REPORT_DEBUG_BIT_EXT = VkDebugReportFlagBitsEXT.VK_DEBUG_REPORT_DEBUG_BIT_EXT;
 
 alias VkDebugReportFlagsEXT = VkFlags;
-alias PFN_vkDebugReportCallbackEXT = VkBool32 function(
+alias PFN_vkDebugReportCallbackEXT = extern(System) VkBool32 function(
     VkDebugReportFlagsEXT                       flags,
     VkDebugReportObjectTypeEXT                  objectType,
     uint64_t                                    object,
     size_t                                      location,
     int32_t                                     messageCode,
-    const char*                                 pLayerPrefix,
-    const char*                                 pMessage,
+    in char*                                    pLayerPrefix,
+    in char*                                    pMessage,
     void*                                       pUserData);
 struct VkDebugReportCallbackCreateInfoEXT {
 	VkStructureType sType = VkStructureType.VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT;

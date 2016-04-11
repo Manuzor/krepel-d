@@ -145,7 +145,7 @@ extern(System) @nogc nothrow {
 	alias PFN_vkDestroySurfaceKHR = void function(VkInstance instance,VkSurfaceKHR surface,const(VkAllocationCallbacks)* pAllocator);
 	alias PFN_vkGetPhysicalDeviceSurfaceSupportKHR = VkResult function(VkPhysicalDevice physicalDevice,uint32_t queueFamilyIndex,VkSurfaceKHR surface,VkBool32* pSupported);
 	alias PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR = VkResult function(VkPhysicalDevice physicalDevice,VkSurfaceKHR surface,VkSurfaceCapabilitiesKHR* pSurfaceCapabilities);
-	alias PFN_vkGetPhysicalDeviceSurfaceFormatsKHR = VkResult function(VkPhysicalDevice physicalDevice,VkSurfaceKHR surface,uint32_t* pSurfaceFormatCount,VkSurfaceFormatKHR* pSurfaceFormats);
+  alias PFN_vkGetPhysicalDeviceSurfaceFormatsKHR = VkResult function(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface, uint32_t* pSurfaceFormatCount, VkSurfaceFormatKHR* pSurfaceFormats);
 	alias PFN_vkGetPhysicalDeviceSurfacePresentModesKHR = VkResult function(VkPhysicalDevice physicalDevice,VkSurfaceKHR surface,uint32_t* pPresentModeCount,VkPresentModeKHR* pPresentModes);
 	alias PFN_vkCreateSwapchainKHR = VkResult function(VkDevice device,const(VkSwapchainCreateInfoKHR)* pCreateInfo,const(VkAllocationCallbacks)* pAllocator,VkSwapchainKHR* pSwapchain);
 	alias PFN_vkDestroySwapchainKHR = void function(VkDevice device,VkSwapchainKHR swapchain,const(VkAllocationCallbacks)* pAllocator);

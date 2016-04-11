@@ -138,6 +138,7 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
         Log.Info("Using Vulkan DLL %s", State.DLLName);
 
         State.Initialize();
+
         State.Prepare();
         assert(State.Instance);
         scope(exit) State.Destroy();
@@ -259,6 +260,7 @@ class VulkanState
   VkPhysicalDevice PhysicalDevice;
   VkPhysicalDeviceProperties PhysicalDeviceProperties;
   VkPhysicalDeviceMemoryProperties PhysicalDeviceMemoryProperties;
+  VkQueueFamilyProperties[] QueueFamilyProperties;
 
   VkDevice Device;
 
@@ -306,6 +308,11 @@ class VulkanState
 
   uint Width = 1200;
   uint Height = 720;
+
+  //
+  // Debugging
+  //
+  VkDebugReportCallbackEXT DebugReportCallback;
 }
 
 struct SwapChainData
@@ -379,7 +386,7 @@ void Initialize(VulkanState State)
     pEngineName = "Krepel".ptr,
     engineVersion = VK_MAKE_VERSION(0, 0, 1);
 
-    //apiVersion = VK_MAKE_VERSION(1, 0, 5);
+    apiVersion = VK_MAKE_VERSION(1, 0, 5);
   }
 
   enum VK_KHR_WIN32_SURFACE_EXTENSION_NAME = "VK_KHR_win32_surface";
@@ -391,19 +398,19 @@ void Initialize(VulkanState State)
     VK_EXT_DEBUG_REPORT_EXTENSION_NAME.ptr,
   ];
 
-  const(char)*[9] Layers =
+  const(char)*[1] Layers =
   [
-    //"VK_LAYER_LUNARG_standard_validation".ptr,
+    "VK_LAYER_LUNARG_standard_validation".ptr,
 
-    "VK_LAYER_GOOGLE_threading".ptr,
-    "VK_LAYER_LUNARG_mem_tracker".ptr,
-    "VK_LAYER_LUNARG_object_tracker".ptr,
-    "VK_LAYER_LUNARG_draw_state".ptr,
-    "VK_LAYER_LUNARG_param_checker".ptr,
-    "VK_LAYER_LUNARG_swapchain".ptr,
-    "VK_LAYER_LUNARG_device_limits".ptr,
-    "VK_LAYER_LUNARG_image".ptr,
-    "VK_LAYER_GOOGLE_unique_objects".ptr,
+    //"VK_LAYER_GOOGLE_threading".ptr,
+    //"VK_LAYER_LUNARG_mem_tracker".ptr,
+    //"VK_LAYER_LUNARG_object_tracker".ptr,
+    //"VK_LAYER_LUNARG_draw_state".ptr,
+    //"VK_LAYER_LUNARG_param_checker".ptr,
+    //"VK_LAYER_LUNARG_swapchain".ptr,
+    //"VK_LAYER_LUNARG_device_limits".ptr,
+    //"VK_LAYER_LUNARG_image".ptr,
+    //"VK_LAYER_GOOGLE_unique_objects".ptr,
   ];
 
   VkInstanceCreateInfo CreateInfo;
@@ -422,7 +429,8 @@ void Initialize(VulkanState State)
   assert(State.Instance);
 
   LoadAllInstanceFunctions(.vkGetInstanceProcAddr, State.Instance);
-  //DVulkanLoader.loadAllFunctions(Instance);
+
+  State.SetupDebugging();
 
   // Try loading vkGetDeviceProcAddr
   .vkGetDeviceProcAddr = LoadInstanceFunction(.vkGetInstanceProcAddr,
@@ -438,30 +446,53 @@ void Initialize(VulkanState State)
   vkEnumeratePhysicalDevices(State.Instance, &DeviceCount, null).Verify;
   if(DeviceCount)
   {
+    //
+    // Note(Manu): Enumerating physical devices is disabled for now because it
+    // appears to yield undeterministic results when called often.
+    //
+    //  Log.Info("All physical Vulkan devices:");
+    //  foreach(Index, GPU; PhysicalDevices)
+    //  {
+    //    Log.Info("Properties of Physical Device #%d:", Index);
+    //    LogPhysicalDeviceProperties(GPU);
+    //  }
+
     auto PhysicalDevices = G.Allocator.NewArray!VkPhysicalDevice(DeviceCount);
     scope(success) G.Allocator.Delete(PhysicalDevices);
 
     vkEnumeratePhysicalDevices(State.Instance, &DeviceCount, PhysicalDevices.ptr).Verify;
 
-    Log.Info("All physical Vulkan devices:");
-    foreach(Index, Device; PhysicalDevices)
-    {
-      VkPhysicalDeviceProperties DeviceProperties;
-      vkGetPhysicalDeviceProperties(Device, &DeviceProperties);
-      Log.Info("  Device %d: %s", Index, DeviceProperties.deviceName.ptr.fromStringz);
-      Log.Info("  API Version: %s.%s.%s",
-               VK_VERSION_MAJOR(DeviceProperties.apiVersion),
-               VK_VERSION_MINOR(DeviceProperties.apiVersion),
-               VK_VERSION_PATCH(DeviceProperties.apiVersion));
-    }
-
-    // TODO(Manu): Choose vulkan device somehow?
-
+    // TODO(Manu): Choose Vulkan GPU somehow?
     const DeviceIndex = 0;
     State.PhysicalDevice = PhysicalDevices[DeviceIndex];
+
     vkGetPhysicalDeviceProperties(State.PhysicalDevice, &State.PhysicalDeviceProperties);
     vkGetPhysicalDeviceMemoryProperties(State.PhysicalDevice, &State.PhysicalDeviceMemoryProperties);
-    Log.Info("Using physical device %d: %s", DeviceIndex, fromStringz(State.PhysicalDeviceProperties.deviceName.ptr));
+
+    uint QueueCount;
+    vkGetPhysicalDeviceQueueFamilyProperties(State.PhysicalDevice, &QueueCount, null);
+    State.QueueFamilyProperties = G.Allocator.NewArray!VkQueueFamilyProperties(QueueCount);
+    assert(State.QueueFamilyProperties.length == QueueCount);
+
+    vkGetPhysicalDeviceQueueFamilyProperties(State.PhysicalDevice, &QueueCount, State.QueueFamilyProperties.ptr);
+
+
+    Log.Info("Using physical device %d:", DeviceIndex);
+    Log.Info("  GPU Name: %s", State.PhysicalDeviceProperties.deviceName.ptr.fromStringz);
+    Log.Info("  Vulkan API Version: %d.%d.%d",
+             VK_VERSION_MAJOR(State.PhysicalDeviceProperties.apiVersion),
+             VK_VERSION_MINOR(State.PhysicalDeviceProperties.apiVersion),
+             VK_VERSION_PATCH(State.PhysicalDeviceProperties.apiVersion));
+    Log.Info("  Driver Version: %d.%d.%d",
+             VK_VERSION_MAJOR(State.PhysicalDeviceProperties.apiVersion),
+             VK_VERSION_MINOR(State.PhysicalDeviceProperties.apiVersion),
+             VK_VERSION_PATCH(State.PhysicalDeviceProperties.apiVersion));
+    Log.Info("  Vendor ID: %d", State.PhysicalDeviceProperties.vendorID);
+    Log.Info("  Device ID: %d", State.PhysicalDeviceProperties.deviceID);
+    Log.Info("  Device Type: %s", State.PhysicalDeviceProperties.deviceType);
+    // TODO(Manu): State.PhysicalDeviceProperties.pipelineCacheUUID
+    // TODO(Manu): State.PhysicalDeviceProperties.limits
+    Log.Info("  Number of available queues: %u", State.QueueFamilyProperties.length);
   }
   else
   {
@@ -470,20 +501,12 @@ void Initialize(VulkanState State)
   }
 
   uint GraphicsQueueIndex;
-  uint QueueCount;
-  vkGetPhysicalDeviceQueueFamilyProperties(State.PhysicalDevice, &QueueCount, null);
-
-  auto QueueProperties = G.Allocator.NewArray!VkQueueFamilyProperties(QueueCount);
-  scope(success) G.Allocator.Delete(QueueProperties);
-
-  vkGetPhysicalDeviceQueueFamilyProperties(State.PhysicalDevice, &QueueCount, QueueProperties.ptr);
-
-  foreach(ref Queue; QueueProperties)
+  foreach(ref QueueProperties; State.QueueFamilyProperties)
   {
-    if(Queue.queueFlags & VK_QUEUE_GRAPHICS_BIT) break;
+    if(QueueProperties.queueFlags & VK_QUEUE_GRAPHICS_BIT) break;
     GraphicsQueueIndex++;
   }
-  assert(GraphicsQueueIndex < QueueCount);
+  assert(GraphicsQueueIndex < State.QueueFamilyProperties.length);
 
   float[1] QueuePriorities = [ 0.0f ];
   VkDeviceQueueCreateInfo QueueDesc;
@@ -507,7 +530,10 @@ void Initialize(VulkanState State)
   with(State)
   {
     SwapChain.Instance = State.Instance;
+    SwapChain.PhysicalDevice = State.PhysicalDevice;
     SwapChain.Device = State.Device;
+
+    State.InitializeSurface();
   }
 
   // Is default initialized for now.
@@ -527,29 +553,6 @@ void Initialize(VulkanState State)
 
 void Prepare(VulkanState State)
 {
-  //
-  // Setup Debugging
-  //
-  if(false && vkCreateDebugReportCallbackEXT)
-  {
-    VkDebugReportCallbackCreateInfoEXT DebugDesc;
-    with(DebugDesc)
-    {
-      pfnCallback = &DebugMessageCallback;
-      flags = VK_DEBUG_REPORT_ERROR_BIT_EXT | VK_DEBUG_REPORT_WARNING_BIT_EXT;
-    }
-    VkDebugReportCallbackEXT DebugReportCallback;
-    vkCreateDebugReportCallbackEXT(
-      State.Instance,
-      &DebugDesc,
-      null,
-      &DebugReportCallback).Verify;
-  }
-  else
-  {
-    Log.Warning("Unable to set up debugging: vkCreateDebugReportCallbackEXT is null");
-  }
-
   //
   // Create Command Pool
   //
@@ -840,7 +843,8 @@ VkResult CreateDevice(VulkanState State, VkDeviceQueueCreateInfo RequestedQueues
 {
   const(char)*[1] EnabledExtensions =
   [
-    VK_KHR_SWAPCHAIN_EXTENSION_NAME.ptr
+    VK_KHR_SWAPCHAIN_EXTENSION_NAME.ptr,
+    //"VK_NV_glsl_shader".ptr,
   ];
 
   VkDeviceCreateInfo DeviceDesc;
@@ -880,39 +884,31 @@ VkFormat ChooseDepthFormat(VkPhysicalDevice PhysicalDevice)
   return VK_FORMAT_UNDEFINED;
 }
 
-void InitializeSurface(ref SwapChainData SwapChain, HINSTANCE ProcessHandle, HWND WindowHandle)
+void InitializeSurface(VulkanState State)
 {
   VkWin32SurfaceCreateInfoKHR SufraceDesc;
   with(SufraceDesc)
   {
-    hinstance = ProcessHandle;
-    hwnd = WindowHandle;
+    hinstance = State.ProcessHandle;
+    hwnd = State.WindowHandle;
   }
-  vkCreateWin32SurfaceKHR(SwapChain.Instance, &SufraceDesc, null, &SwapChain.Surface).Verify;
+  vkCreateWin32SurfaceKHR(State.Instance, &SufraceDesc, null, &State.SwapChain.Surface).Verify;
 
-  uint QueueCount;
-  vkGetPhysicalDeviceQueueFamilyProperties(SwapChain.PhysicalDevice, &QueueCount, null);
-
-  auto QueueProperties = G.Allocator.NewArray!VkQueueFamilyProperties(QueueCount);
-  scope(success) G.Allocator.Delete(QueueProperties);
-
-  vkGetPhysicalDeviceQueueFamilyProperties(SwapChain.PhysicalDevice, &QueueCount, QueueProperties.ptr);
-
-  auto SupportsPresenting = G.Allocator.NewArray!VkBool32(QueueCount);
+  auto SupportsPresenting = G.Allocator.NewArray!VkBool32(State.QueueFamilyProperties.length);
   scope(success) G.Allocator.Delete(SupportsPresenting);
 
   // Find presenter queues.
-  foreach(uint Index, Element; SupportsPresenting)
+  foreach(uint Index, ref Element; SupportsPresenting)
   {
-    vkGetPhysicalDeviceSurfaceSupportKHR(SwapChain.PhysicalDevice, Index, SwapChain.Surface, &Element);
+    vkGetPhysicalDeviceSurfaceSupportKHR(State.PhysicalDevice, Index, State.SwapChain.Surface, &Element);
   }
 
   uint GraphicsQueueNodeIndex = uint.max;
   uint PresentQueueNodeIndex = uint.max;
 
-  foreach(uint Index; 0 .. QueueCount)
+  foreach(uint Index, ref QueueProperties; State.QueueFamilyProperties)
   {
-    if(QueueProperties[Index].queueFlags & VK_QUEUE_GRAPHICS_BIT)
+    if(QueueProperties.queueFlags & VK_QUEUE_GRAPHICS_BIT)
     {
       if(GraphicsQueueNodeIndex == uint.max)
       {
@@ -944,7 +940,7 @@ void InitializeSurface(ref SwapChainData SwapChain, HINSTANCE ProcessHandle, HWN
 
   if(GraphicsQueueNodeIndex == uint.max || PresentQueueNodeIndex == uint.max)
   {
-    Log.Failure("Unable to find grapchis and/or present queue.");
+    Log.Failure("Unable to find graphics and/or present queue.");
     return;
   }
 
@@ -955,10 +951,10 @@ void InitializeSurface(ref SwapChainData SwapChain, HINSTANCE ProcessHandle, HWN
     return;
   }
 
-  SwapChain.QueueNodeIndex = GraphicsQueueNodeIndex;
+  State.SwapChain.QueueNodeIndex = GraphicsQueueNodeIndex;
 
   uint FormatCount;
-  vkGetPhysicalDeviceSurfaceFormatsKHR(SwapChain.PhysicalDevice, SwapChain.Surface, &FormatCount, null).Verify;
+  vkGetPhysicalDeviceSurfaceFormatsKHR(State.PhysicalDevice, State.SwapChain.Surface, &FormatCount, null).Verify;
   assert(FormatCount > 0);
 
   auto SurfaceFormats = G.Allocator.NewArray!VkSurfaceFormatKHR(FormatCount);
@@ -970,7 +966,7 @@ void InitializeSurface(ref SwapChainData SwapChain, HINSTANCE ProcessHandle, HWN
   {
     // If there's only 1 format, which is VK_FORMAT_UNDEFINED, it means
     // there's no preferred format.
-    SwapChain.ColorFormat = VK_FORMAT_B8G8R8A8_UNORM;
+    State.SwapChain.ColorFormat = VK_FORMAT_B8G8R8A8_UNORM;
   }
   else
   {
@@ -978,10 +974,10 @@ void InitializeSurface(ref SwapChainData SwapChain, HINSTANCE ProcessHandle, HWN
     // is desired, SurfaceFormats must be searched for the best match.
     ChosenFormat = 0;
 
-    SwapChain.ColorFormat = SurfaceFormats[ChosenFormat].format;
+    State.SwapChain.ColorFormat = SurfaceFormats[ChosenFormat].format;
   }
 
-  SwapChain.ColorSpace = SurfaceFormats[ChosenFormat].colorSpace;
+  State.SwapChain.ColorSpace = SurfaceFormats[ChosenFormat].colorSpace;
 }
 
 void CreateSwapChain(ref SwapChainData SwapChain,
@@ -1086,12 +1082,12 @@ void CreateSwapChain(ref SwapChainData SwapChain,
   vkGetSwapchainImagesKHR(SwapChain.Device, SwapChain.SwapChainHandle, &SwapChain.ImageCount, null).Verify;
   assert(SwapChain.ImageCount);
 
-  if(SwapChain.Images.ptr) G.Allocator.Delete(SwapChain.Images);
+  //if(SwapChain.Images.ptr) G.Allocator.Delete(SwapChain.Images);
   SwapChain.Images = G.Allocator.NewArray!VkImage(SwapChain.ImageCount);
 
   vkGetSwapchainImagesKHR(SwapChain.Device, SwapChain.SwapChainHandle, &SwapChain.ImageCount, SwapChain.Images.ptr).Verify;
 
-  if(SwapChain.Buffers.ptr) G.Allocator.Delete(SwapChain.Buffers);
+  //if(SwapChain.Buffers.ptr) G.Allocator.Delete(SwapChain.Buffers);
   SwapChain.Buffers = G.Allocator.NewArray!(SwapChain.Buffer)(SwapChain.ImageCount);
 
   foreach(Index; 0 .. SwapChain.ImageCount)
@@ -1271,14 +1267,36 @@ VkBool32 GetMemoryType(VkPhysicalDeviceMemoryProperties PhysicalDeviceMemoryProp
   return false;
 }
 
-VkBool32 DebugMessageCallback(
+void SetupDebugging(VulkanState State)
+{
+  if(vkCreateDebugReportCallbackEXT is null)
+  {
+    Log.Warning("Unable to set up debugging: vkCreateDebugReportCallbackEXT is null");
+    return;
+  }
+
+  VkDebugReportCallbackCreateInfoEXT DebugSetupInfo;
+  with(DebugSetupInfo)
+  {
+    pfnCallback = &DebugMessageCallback;
+    flags = VK_DEBUG_REPORT_ERROR_BIT_EXT | VK_DEBUG_REPORT_WARNING_BIT_EXT;
+  }
+  VkDebugReportCallbackEXT DebugReportCallback;
+  vkCreateDebugReportCallbackEXT(
+    State.Instance,
+    &DebugSetupInfo,
+    null,
+    &State.DebugReportCallback).Verify;
+}
+
+extern(Windows) VkBool32 DebugMessageCallback(
   VkDebugReportFlagsEXT Flags,
   VkDebugReportObjectTypeEXT ObjectType,
   ulong SourceObject,
   size_t Location,
   int MessageCode,
-  const char* LayerPrefix,
-  const char* Message,
+  in char* LayerPrefix,
+  in char* Message,
   void* UserData)
 {
   if(Flags & VK_DEBUG_REPORT_ERROR_BIT_EXT)
