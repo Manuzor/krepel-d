@@ -90,6 +90,8 @@ struct Transform
     this = Concatenate(this, Other);
   }
 
+  __gshared immutable Identity = Transform(Vector3.ZeroVector, Quaternion.Identity, Vector3.UnitScaleVector);
+
 }
 
 
