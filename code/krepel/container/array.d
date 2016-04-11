@@ -195,7 +195,7 @@ struct Array(T)
     }
   }
 
-  void opOpAssign(string Op : "~", ArgType)(in auto ref ArgType Arg)
+  void opOpAssign(string Op : "~", ArgType)(auto ref ArgType Arg)
   {
     PushBack(Arg);
   }
