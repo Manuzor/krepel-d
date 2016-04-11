@@ -44,11 +44,16 @@ class RefCountWrapper(Type)
   alias _Wrapped this;
 }
 
+mixin template RefCountSupport()
+{
+  RefCountPayloadData RefCountPayload;
+}
+
 /// Pointer-like wrapper for reference-counted objects.
 struct ARC(Type)
+  if(SupportsRefCounting!Type)
 {
-  static if(SupportsRefCounting!Type) alias StoredType = Type;
-  else                                alias StoredType = RefCountWrapper!Type;
+  alias StoredType = Type;
 
   StoredType _StoredInstance;
   @property inout(Type) _Instance() inout { return _StoredInstance; }
@@ -105,6 +110,7 @@ ARC!Type NewARC(Type, ArgTypes...)(IAllocator Allocator, auto ref ArgTypes Args)
 
 
 // NewARC for external reference counting
+version(none)
 unittest
 {
   import krepel.memory : CreateTestAllocator;
