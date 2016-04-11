@@ -1,0 +1,16 @@
+.DFileType = [
+  .FileType = "D"
+  .Pattern = "*\\*.d"
+]
+
+.ProjectBuildCommon=
+[
+  .ProjectBuildCommand = "cd ^$(SolutionDir) &amp; build.bat -^$(Configuration) ^$(ProjectName)"
+  .ProjectRebuildCommand = "cd ^$(SolutionDir) &amp; build.bat -^$(Configuration) ^$(ProjectName)"
+  .ProjectCleanCommand = "cd ^$(SolutionDir) &amp; build.bat clean"
+]
+
+.CommonDProject=
+[
+  .PlatformToolset="v140"
+]

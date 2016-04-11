@@ -1,0 +1,5 @@
+# Let git automatically classify files as 'text'.
+* text=auto
+
+*.bat eol=crlf
+*.idl eol=crlf

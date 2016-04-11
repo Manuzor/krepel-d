@@ -1,0 +1,12 @@
+{
+  VCXProject("$ProjectName$")
+  {
+    Using(.CommonDProject)
+    Using(.ProjectBuildCommon)
+    .ProjectOutput="workspace/$ProjectName$.vcxproj"
+    .Output="..\build\$ProjectName$.exe"
+    .OutputDirectory="build"
+    .ProjectBasePath="."
+  }
+  ^Projects + "$ProjectName$"
+}

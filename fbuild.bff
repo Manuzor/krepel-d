@@ -1,0 +1,50 @@
+.IncludeFiles =
+{
+  "krepel",
+  ;"clean"
+}
+
+.GenericConfigs=
+{
+  "krepel_tests",
+  "win32_experiments",
+  "win32_experiments_tests",
+}
+
+#include "dev\common.bff"
+
+.DebugProjectConfig =
+[
+  .Platform = "x64"
+  .Config = "Debug"
+]
+
+.ReleaseProjectConfig =
+[
+  .Platform = "x64"
+  .Config = "Release"
+]
+
+.ProjectConfigs={.DebugProjectConfig, .ReleaseProjectConfig}
+
+.Projects = {}
+
+ForEach(.GenericConfig in .GenericConfigs)
+{
+  .ProjectName = .GenericConfig
+  #include "dev\common_project.bff"
+}
+
+ForEach(.File in .IncludeFiles)
+{
+  #include "dev\$File$.bff"
+}
+
+VSSolution("solution")
+{
+  .SolutionOutput = "Krepel.sln"
+  .SolutionProjects = .Projects
+  .SolutionConfigs = .ProjectConfigs
+  .SolutionBuildProject = "krepel_tests"
+
+}
