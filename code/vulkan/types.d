@@ -23,7 +23,7 @@ uint VK_VERSION_PATCH(uint ver) {
 	return ver & 0xfff;
 }
 
-enum VK_NULL_HANDLE = 0;
+enum VK_NULL_HANDLE = null;
 
 enum VK_DEFINE_HANDLE(string name) = "struct "~name~"_handle; alias "~name~" = "~name~"_handle*;";
 
@@ -3086,3 +3086,22 @@ enum VK_NV_EXTENSION_1_SPEC_VERSION = 0;
 enum VK_NV_EXTENSION_1_EXTENSION_NAME = "VK_NV_extension_1";
 enum VK_IMG_FILTER_CUBIC_SPEC_VERSION = 1;
 enum VK_IMG_FILTER_CUBIC_EXTENSION_NAME = "VK_IMG_filter_cubic";
+
+version(Windows)
+{
+  import core.sys.windows.windows;
+
+  enum VK_KHR_WIN32_SURFACE_SPEC_VERSION = 5;
+  enum VK_KHR_WIN32_SURFACE_EXTENSION_NAME = "VK_KHR_win32_surface";
+
+  alias VkWin32SurfaceCreateFlagsKHR = VkFlags;
+
+  struct VkWin32SurfaceCreateInfoKHR
+  {
+    VkStructureType                 sType = VkStructureType.VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
+    const(void)*                    pNext;
+    VkWin32SurfaceCreateFlagsKHR    flags;
+    HINSTANCE                       hinstance;
+    HWND                            hwnd;
+  };
+}

@@ -163,6 +163,12 @@ extern(System) @nogc nothrow {
 	alias PFN_vkCreateDebugReportCallbackEXT = VkResult function(VkInstance instance,const(VkDebugReportCallbackCreateInfoEXT)* pCreateInfo,const(VkAllocationCallbacks)* pAllocator,VkDebugReportCallbackEXT* pCallback);
 	alias PFN_vkDestroyDebugReportCallbackEXT = void function(VkInstance instance,VkDebugReportCallbackEXT callback,const(VkAllocationCallbacks)* pAllocator);
 	alias PFN_vkDebugReportMessageEXT = void function(VkInstance instance,VkDebugReportFlagsEXT flags,VkDebugReportObjectTypeEXT objectType,uint64_t object,size_t location,int32_t messageCode,const(char)* pLayerPrefix,const(char)* pMessage);
+
+  version(Windows)
+  {
+    alias PFN_vkCreateWin32SurfaceKHR = VkResult function(VkInstance instance, const VkWin32SurfaceCreateInfoKHR* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkSurfaceKHR* pSurface);
+    alias PFN_vkGetPhysicalDeviceWin32PresentationSupportKHR = VkBool32 function(VkPhysicalDevice physicalDevice, uint32_t queueFamilyIndex);
+  }
 }
 __gshared {
 	PFN_vkAcquireNextImageKHR vkAcquireNextImageKHR;
@@ -323,6 +329,12 @@ __gshared {
 	PFN_vkUnmapMemory vkUnmapMemory;
 	PFN_vkUpdateDescriptorSets vkUpdateDescriptorSets;
 	PFN_vkWaitForFences vkWaitForFences;
+
+  version(Windows)
+  {
+    PFN_vkCreateWin32SurfaceKHR vkCreateWin32SurfaceKHR;
+    PFN_vkGetPhysicalDeviceWin32PresentationSupportKHR vkGetPhysicalDeviceWin32PresentationSupportKHR;
+  }
 }
 
 struct DVulkanLoader {
@@ -493,9 +505,15 @@ struct DVulkanLoader {
 		vkUnmapMemory = cast(typeof(vkUnmapMemory)) vkGetInstanceProcAddr(instance, "vkUnmapMemory");
 		vkUpdateDescriptorSets = cast(typeof(vkUpdateDescriptorSets)) vkGetInstanceProcAddr(instance, "vkUpdateDescriptorSets");
 		vkWaitForFences = cast(typeof(vkWaitForFences)) vkGetInstanceProcAddr(instance, "vkWaitForFences");
+
+    version(Windows)
+    {
+      vkCreateWin32SurfaceKHR = cast(typeof(vkCreateWin32SurfaceKHR))vkGetInstanceProcAddr(instance, "vkCreateWin32SurfaceKHR");
+      vkGetPhysicalDeviceWin32PresentationSupportKHR = cast(typeof(vkGetPhysicalDeviceWin32PresentationSupportKHR))vkGetInstanceProcAddr(instance, "vkGetPhysicalDeviceWin32PresentationSupportKHR");
+    }
 	}
 
-	void loadAllFunctions(VkDevice device) {
+	static void loadAllFunctions(VkDevice device) {
 		assert(vkGetDeviceProcAddr !is null, "reload(VkDevice) must be called after reload(VkInstance)");
 
 		vkAcquireNextImageKHR = cast(typeof(vkAcquireNextImageKHR)) vkGetDeviceProcAddr(device, "vkAcquireNextImageKHR");
