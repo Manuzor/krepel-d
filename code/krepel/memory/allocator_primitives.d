@@ -84,14 +84,13 @@ struct HeapMemory
   debug(HeapMemory) @property bool IsInitialized() const { return cast(bool)FirstBlock; }
 
   /// The number of bytes needed by a block header.
-  enum BlockOverhead = size_t.sizeof;
+  enum BlockOverhead = BlockData.sizeof;
 
   /// The number of bytes required to make use of a block in the case the user
   /// requests 1 byte of memory with an alignment of 1.
   enum MinimumBlockSize = BlockOverhead + 1;
 
   mixin CommonMemoryImplementation;
-  mixin Contains_DefaultImplementation!Memory;
 
 
   this(void[] AvailableMemory)
@@ -123,7 +122,7 @@ struct HeapMemory
 
   void Deinitialize() { FirstBlock = null; }
 
-  auto CalculateRequiredBlockSize(size_t RequestedBytes, size_t Alignment = 0)
+  auto CalculateRequiredBlockSize(size_t RequestedBytes, size_t Alignment = 0) const
   {
     debug(HeapMemory)
     {
@@ -212,15 +211,29 @@ struct HeapMemory
   bool Deallocate(void[] MemoryToDeallocate)
   {
     if(!MemoryToDeallocate) return false;
+    if(!Contains(MemoryToDeallocate)) return false;
 
     ubyte PaddingSize = *cast(ubyte*)(MemoryToDeallocate.ptr - 1);
     auto Block = cast(BlockData*)(MemoryToDeallocate.ptr - PaddingSize - BlockData.sizeof);
 
-    if(!IsValidBlockPointer(Block)) return false;
+    assert(IsValidBlockPointer(Block));
+
+    assert(Block.Size.IsEven);
+    //assert(Block.Size > 0);
 
     Block.IsAllocated = false;
 
     return true;
+  }
+
+  bool Contains(in void[] SomeRegion) const
+  {
+    const MemberBegin = FirstBlock;
+    const MemberEnd = Memory.ptr + Memory.length;
+    const RegionBegin = SomeRegion.ptr;
+    const RegionEnd = SomeRegion.ptr + SomeRegion.length;
+    return MemberBegin <= RegionBegin && // Lower bound
+           RegionEnd <= MemberEnd;       // Upper bound
   }
 
 private:
@@ -238,6 +251,7 @@ private:
     @property void Size(size_t NewBlockSize)
     {
       assert(NewBlockSize.IsEven);
+      assert(NewBlockSize > 0);
       // Preserve the allocation bit (first bit).
       HeaderData = NewBlockSize | (HeaderData & 1);
     }
@@ -254,19 +268,35 @@ private:
   BlockData* FirstBlock;
 
   /// Gets the next block pointer to the "right" of the given block.
-  BlockData* NextBlock(BlockData* Block)
+  static BlockData* NextBlock(BlockData* Block)
   {
     assert(Block);
     return cast(BlockData*)(cast(void*)Block + Block.Size);
   }
 
+  auto IterateBlocks(BlockData* Start) const
+  {
+    static struct BlockRange
+    {
+      BlockData* Current;
+      const BlockData* End;
+
+      @property bool empty() const { return Current >= End; }
+      @property BlockData* front() { return Current; }
+      void popFront() { Current = NextBlock(Current); }
+    }
+
+    return BlockRange(Start, cast(BlockData*)(Memory.ptr + Memory.length));
+  }
+
+
   /// Traverses all blocks, merging free adjacent blocks together, until a
   /// block is found that has the RequiredBlockSize (first fit).
-  BlockData* FindFreeBlockAndMergeAdjacent(BlockData* Block, size_t RequiredBlockSize)
+  BlockData* FindFreeBlockAndMergeAdjacent(BlockData* Start, size_t RequiredBlockSize)
   {
     assert(RequiredBlockSize.IsEven);
 
-    while(IsValidBlockPointer(Block))
+    foreach(Block; IterateBlocks(Start))
     {
       if(!Block.IsAllocated)
       {
@@ -276,30 +306,40 @@ private:
           return Block;
         }
       }
-
-      Block = NextBlock(Block);
     }
 
     return null;
   }
 
-  /// A valid block pointer is a block that is not null and belongs to this heap's memory.
-  bool IsValidBlockPointer(BlockData* Block)
+  /// Marches through the entire heap memory to ensure the given $(D Block) is
+  /// actually a block pointer of this heap. No validation for the contents of
+  /// the block are made. is valid.
+  ///
+  /// Remarks: This function can be very slow.
+  bool IsValidBlockPointer(BlockData* Block) const
   {
-    return Block &&
-           cast(void*)Block - Memory.ptr <= Memory.length - MinimumBlockSize;
-  }
+    if(Block is null) return false;
 
-  void MergeAdjacentFreeBlocks(BlockData* Block)
-  {
-    auto NewBlockSize = Block.Size;
-    auto NeighborBlock = NextBlock(Block);
-    while(IsValidBlockPointer(NeighborBlock) && !NeighborBlock.IsAllocated)
+    foreach(ValidBlock; IterateBlocks(Block))
     {
-      NewBlockSize += NeighborBlock.Size;
-      NeighborBlock = NextBlock(NeighborBlock);
+      if(Block is ValidBlock) return true;
     }
 
+    return false;
+  }
+
+  /// Assumes $(D Block) is free and a valid block pointer.
+  void MergeAdjacentFreeBlocks(BlockData* Block)
+  {
+    size_t NewBlockSize;
+    foreach(NeighborBlock; IterateBlocks(Block))
+    {
+      if(NeighborBlock.IsAllocated) break; // Stop merging.
+      NewBlockSize += NeighborBlock.Size;
+    }
+
+    // If we managed to merge some blocks, "expand" the given Block by
+    // updating its size.
     if(NewBlockSize != Block.Size)
     {
       assert(NewBlockSize > Block.Size, "We are supposed to merge free "
@@ -394,18 +434,21 @@ mixin template CommonMemoryImplementation()
   alias ThisIsAMemoryType = typeof(this);
 
   private import krepel.memory.allocator_interface : MinimalAllocatorWrapper;
-  package ubyte[Meta.ClassInstanceSizeOf!MinimalAllocatorWrapper] WrapperMemory = void;
+  package void[Meta.ClassInstanceSizeOf!MinimalAllocatorWrapper] WrapperMemory = void;
 }
 
 /// Adds the Contains() function to a memory type so it can be asked whether a
 /// given memory region belongs to them.
 mixin template Contains_DefaultImplementation(alias Member)
 {
-  bool Contains(const void[] SomeRegion) const
+  bool Contains(in void[] SomeRegion) const
   {
-    bool IsWithinLeftBound  = SomeRegion.ptr >= Member.ptr;
-    bool IsWithinRightBound = SomeRegion.ptr + SomeRegion.length <= Member.ptr + Member.length;
-    return IsWithinLeftBound && IsWithinRightBound;
+    const MemberBegin = Member.ptr;
+    const MemberEnd = Member.ptr + Member.length;
+    const RegionBegin = SomeRegion.ptr;
+    const RegionEnd = SomeRegion.ptr + SomeRegion.length;
+    return MemberBegin <= RegionBegin && // Lower bound
+           RegionEnd <= MemberEnd;       // Upper bound
   }
 }
 
@@ -476,6 +519,108 @@ unittest
   auto Block3 = Heap.Allocate(16);
   assert(Block3.ptr == Block1.ptr);
   assert(Block3.length == 16);
+}
+
+// More Heap Memory
+unittest
+{
+  ubyte[1.KiB] Buffer = void;
+  foreach(Index, ref Byte; Buffer)
+  {
+    Byte = cast(ubyte)Index;
+  }
+
+  auto Heap = HeapMemory(Buffer[]);
+
+  static struct AllocationInfo
+  {
+    bool IsAllocated;
+    size_t Size;
+    size_t Alignment;
+    void[] Memory;
+    void[] BlockMemory;
+
+    @property size_t Padding() const { return *(cast(ubyte*)Memory.ptr - 1); }
+    @property size_t Overhead() const { return HeapMemory.BlockOverhead + Padding; }
+  }
+
+  AllocationInfo TestAllocate(ref HeapMemory Heap, size_t Size, size_t Alignment)
+  {
+    AllocationInfo Result;
+    Result.IsAllocated = true;
+    Result.Size = Size;
+    Result.Alignment = Alignment;
+    auto BlockSize = Heap.CalculateRequiredBlockSize(Size, Alignment);
+    Result.Memory = Heap.Allocate(Size, Alignment);
+    Result.BlockMemory = (Result.Memory.ptr - Result.Overhead)[0 .. BlockSize];
+    return Result;
+  }
+
+  void TestDeallocate(ref HeapMemory Heap, ref AllocationInfo Info)
+  {
+    assert(Info.IsAllocated);
+
+    Heap.Deallocate(Info.Memory);
+    Info.IsAllocated = false;
+  }
+
+  auto FirstAllocation = TestAllocate(Heap, 10, 8);
+  assert(FirstAllocation.Memory.length == FirstAllocation.Size);
+  assert(cast(ulong)FirstAllocation.Memory.ptr % FirstAllocation.Alignment == 0, "Pointer is not aligned to a multiple of the given alignment.");
+  foreach(Index, Byte; cast(ubyte[])FirstAllocation.Memory)
+  {
+    const Number = FirstAllocation.Overhead + Index;
+    assert(Byte == cast(ubyte)Number);
+  }
+
+  // Back up some crucial data.
+  auto FirstMemory = FirstAllocation.Memory;
+  auto FirstBlockMemory = FirstAllocation.BlockMemory;
+  void[512] FirstBlockMemoryBackupBuffer = void;
+  auto FirstBlockMemoryBackup = FirstBlockMemoryBackupBuffer[0 .. FirstBlockMemory.length];
+  FirstBlockMemoryBackup[] = FirstBlockMemory[];
+
+  TestDeallocate(Heap, FirstAllocation);
+
+  FirstAllocation = TestAllocate(Heap, FirstAllocation.Size, FirstAllocation.Alignment);
+
+  // Compare the new data with the backed-up version and ensure they're identical.
+  assert(FirstAllocation.Memory is FirstMemory);
+  assert(FirstAllocation.BlockMemory is FirstBlockMemory);
+  assert(FirstAllocation.BlockMemory == FirstBlockMemoryBackup, "Contents should not have changed.");
+
+  auto SecondAllocation = TestAllocate(Heap, 13, 32);
+  assert(SecondAllocation.Memory.length == SecondAllocation.Size);
+  assert(cast(ulong)SecondAllocation.Memory.ptr % SecondAllocation.Alignment == 0);
+  for(size_t Index = 0; Index < SecondAllocation.Size; Index++)
+  {
+    const Base = FirstAllocation.BlockMemory.length + SecondAllocation.Overhead;
+    const Number = Base + Index;
+    const Byte = *cast(ubyte*)&SecondAllocation.Memory[Index];
+    //io.writefln("Comparing Index %d: %d == %d", Index, Byte, Number);
+    assert(Byte == cast(ubyte)Number);
+  }
+
+  // Make sure the data of the second allocation stays the same.
+  for(size_t Index = 0; Index < FirstAllocation.Size; Index++)
+  {
+    const Number = FirstAllocation.Overhead + Index;
+    const Byte = *cast(ubyte*)&FirstAllocation.Memory[Index];
+    assert(Byte == cast(ubyte)Number);
+  }
+
+  // Back up block data.
+  FirstMemory = FirstAllocation.Memory;
+  FirstBlockMemory = FirstAllocation.BlockMemory;
+  FirstBlockMemoryBackup[] = FirstBlockMemory[];
+  auto SecondMemory = SecondAllocation.Memory;
+  auto SecondBlockMemory = SecondAllocation.BlockMemory;
+  void[512] SecondBlockMemoryBackupBuffer = void;
+  auto SecondBlockMemoryBackup = SecondBlockMemoryBackupBuffer[0 .. SecondBlockMemory.length];
+  SecondBlockMemoryBackup[] = SecondBlockMemory[];
+
+  TestDeallocate(Heap, SecondAllocation);
+  assert(FirstAllocation.BlockMemory == FirstBlockMemoryBackup);
 }
 
 // Dynamic stack allocation

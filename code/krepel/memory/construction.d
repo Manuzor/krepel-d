@@ -20,7 +20,7 @@ Type* Construct(Type, ArgTypes...)(void[] RawMemory, auto ref ArgTypes Args)
 Type Construct(Type, ArgTypes...)(Type Instance, auto ref ArgTypes Args)
   if(is(Type == class))
 {
-  void[] RawMemory = (cast(void*)Instance)[0 .. Meta.ClassInstanceSizeOf!Type];
+  void[] RawMemory = (Instance.AsPointerTo!void)[0 .. Meta.ClassInstanceSizeOf!Type];
   return Construct!Type(RawMemory, Args);
 }
 
@@ -123,7 +123,7 @@ private void BlitInitialData(Type)(Type[] BlitTargets)
   foreach(ref Target; BlitTargets)
   {
     static if(is(Type == class))
-      auto RawTarget = (cast(ubyte*) Target)[0 .. Meta.ClassInstanceSizeOf!Type];
+      auto RawTarget = (Target.AsPointerTo!ubyte)[0 .. Meta.ClassInstanceSizeOf!Type];
     else
       auto RawTarget = (cast(ubyte*)&Target)[0 .. Type.sizeof];
 
