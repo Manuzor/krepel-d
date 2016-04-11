@@ -603,5 +603,5 @@ unittest
 
   auto String = UString("Tääst", Allocator);
   assert(String.CharCount == 5);
-  assert(String.Count == 7);
+  assert(String.ByteCount == 7);
 }
