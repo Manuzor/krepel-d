@@ -24,7 +24,7 @@ Type* NewUnconstructed(Type)(IAllocator Allocator)
 {
   auto Raw = Allocator.Allocate(Type.sizeof, Type.alignof);
   if(Raw is null) return null;
-  assert(Raw.length >= Type.sizeof);
+  assert(Raw.length == Type.sizeof);
   auto Instance = cast(Type*)Raw.ptr;
   return Instance;
 }
@@ -38,7 +38,7 @@ Type NewUnconstructed(Type)(IAllocator Allocator)
   enum Alignment = Meta.ClassInstanceAlignmentOf!Type;
   auto Raw = Allocator.Allocate(Size, Alignment);
   if(Raw is null) return null;
-  assert(Raw.length >= Type.sizeof);
+  assert(Raw.length == Size);
   auto Instance = cast(Type)Raw.ptr;
   return Instance;
 }
