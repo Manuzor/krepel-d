@@ -6,6 +6,7 @@ import krepel.win32;
 import krepel.win32.directx.xinput;
 import krepel.memory;
 import krepel.container;
+import krepel.string;
 
 
 import std.string : toStringz, fromStringz;
@@ -128,21 +129,8 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
 
     if(Window)
     {
-      auto State = G.Allocator.NewARC!VulkanState();
-      State.ProcessHandle = Instance;
-      State.WindowHandle = Window;
-
-      State.LoadDLL();
-      if(State.DLL)
-      {
-        Log.Info("Using Vulkan DLL %s", State.DLLName);
-
-        State.Initialize();
-
-        State.Prepare();
-        assert(State.Instance);
-        scope(exit) State.Destroy();
-      }
+      OptionData Options;
+      AllOnTheStack(Instance, Window, Options);
     }
     else
     {
@@ -247,1046 +235,390 @@ LRESULT Win32MainWindowCallback(HWND Window, UINT Message,
   return Result;
 }
 
-class VulkanState
+struct OptionData
 {
-  string DLLName;
-  HANDLE DLL;
-
-  HINSTANCE ProcessHandle;
-  HWND WindowHandle;
-
-  VkInstance Instance;
-
-  VkPhysicalDevice PhysicalDevice;
-  VkPhysicalDeviceProperties PhysicalDeviceProperties;
-  VkPhysicalDeviceMemoryProperties PhysicalDeviceMemoryProperties;
-  VkQueueFamilyProperties[] QueueFamilyProperties;
-
-  VkDevice Device;
-
-  VkQueue Queue;
-
-  VkFormat DepthFormat;
-
-  static struct SemaphoresData
-  {
-    VkSemaphore PresentComplete;
-    VkSemaphore RenderComplete;
-  }
-
-  SemaphoresData Semaphores;
-  VkSubmitInfo SubmitInfo;
-  VkPipelineStageFlags SubmitPipelineStages = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-
-  SwapChainData SwapChain;
-
-  VkCommandPool CommandPool;
-
-  VkCommandBuffer SetupCommandBuffer;
-
-  // Command buffer for submitting a post present image barrier
-  VkCommandBuffer PostPresentCommandBuffer;
-
-  // Command buffer for submitting a pre present image barrier
-  VkCommandBuffer PrePresentCommandBuffer;
-
-  VkCommandBuffer[] DrawCommandBuffers;
-
-  static struct DepthStencilData
-  {
-    VkImage Image;
-    VkDeviceMemory Memory;
-    VkImageView View;
-  }
-
-  DepthStencilData DepthStencil;
-
-  VkRenderPass RenderPass;
-  VkPipelineCache PipelineCache;
-
-  VkFramebuffer[] FrameBuffers;
-
-  uint Width = 1200;
-  uint Height = 720;
-
-  //
-  // Debugging
-  //
-  VkDebugReportCallbackEXT DebugReportCallback;
+  bool Validate;
 }
 
-struct SwapChainData
+/// Params:
+///   Options = Unused for now.
+void AllOnTheStack(HINSTANCE ProcessHandle, HWND WindowHandle, OptionData Options)
 {
-  VkInstance Instance;
-  VkPhysicalDevice PhysicalDevice;
-  VkDevice Device;
-  VkSurfaceKHR Surface;
-
-  VkFormat ColorFormat;
-  VkColorSpaceKHR ColorSpace;
-
-  VkSwapchainKHR SwapChainHandle;
-
-  static struct Buffer
+  //
+  // Load DLL
+  //
+  HMODULE DLL;
+  auto DLLName = UString(G.Allocator);
   {
-    VkImage Image;
-    VkImageView View;
-  }
-
-  uint ImageCount;
-  VkImage[] Images;
-  Buffer[] Buffers;
-
-  uint QueueNodeIndex = uint.max;
-}
-
-void LoadDLL(VulkanState State)
-{
-  string[1] Candidates =
-  [
-    "vulkan-1.dll",
-  ];
-
-  foreach(DLLName; Candidates)
-  {
-    auto DLL = LoadLibrary("vulkan-1.dll");
+    DLL = LoadLibrary("vulkan-1.dll");
     if(DLL)
     {
-      auto Func = GetProcAddress(DLL, "vkGetInstanceProcAddr");
-      if(Func is null)
-      {
-        Log.Warning("Failed to load Vulkan instance functions.");
-        return;
-      }
-
-      .vkGetInstanceProcAddr = cast(typeof(vkGetInstanceProcAddr))Func;
-
-      DVulkanLoader.loadInstanceFunctions(.vkGetInstanceProcAddr);
-      State.DLLName = DLLName;
-      State.DLL = DLL;
-      return;
+      char[1.KiB] Buffer;
+      auto CharCount = GetModuleFileNameA(DLL, Buffer.ptr, cast(DWORD)Buffer.length);
+      DLLName = Buffer[0 .. CharCount];
     }
     else
     {
       Log.Failure("Failed to load DLL: %s", DLLName);
+      return;
     }
   }
 
-  Log.Failure("Failed to load Vulkan.");
-}
-
-void Initialize(VulkanState State)
-{
-  VkApplicationInfo ApplicationInfo;
-  with(ApplicationInfo)
-  {
-    pApplicationName = "Vulkan Experiments".ptr;
-    applicationVersion = VK_MAKE_VERSION(0, 0, 1);
-
-    pEngineName = "Krepel".ptr,
-    engineVersion = VK_MAKE_VERSION(0, 0, 1);
-
-    apiVersion = VK_MAKE_VERSION(1, 0, 5);
-  }
-
-  enum VK_KHR_WIN32_SURFACE_EXTENSION_NAME = "VK_KHR_win32_surface";
-
-  const(char)*[3] Extensions =
-  [
-    VK_KHR_SURFACE_EXTENSION_NAME.ptr,
-    VK_KHR_WIN32_SURFACE_EXTENSION_NAME.ptr,
-    VK_EXT_DEBUG_REPORT_EXTENSION_NAME.ptr,
-  ];
-
-  const(char)*[1] Layers =
-  [
-    "VK_LAYER_LUNARG_standard_validation".ptr,
-
-    //"VK_LAYER_GOOGLE_threading".ptr,
-    //"VK_LAYER_LUNARG_mem_tracker".ptr,
-    //"VK_LAYER_LUNARG_object_tracker".ptr,
-    //"VK_LAYER_LUNARG_draw_state".ptr,
-    //"VK_LAYER_LUNARG_param_checker".ptr,
-    //"VK_LAYER_LUNARG_swapchain".ptr,
-    //"VK_LAYER_LUNARG_device_limits".ptr,
-    //"VK_LAYER_LUNARG_image".ptr,
-    //"VK_LAYER_GOOGLE_unique_objects".ptr,
-  ];
-
-  VkInstanceCreateInfo CreateInfo;
-  with(CreateInfo)
-  {
-    pApplicationInfo = &ApplicationInfo;
-
-    enabledExtensionCount = Extensions.length;
-    ppEnabledExtensionNames = Extensions.ptr;
-
-    enabledLayerCount = Layers.length;
-    ppEnabledLayerNames = Layers.ptr;
-  }
-
-  vkCreateInstance(&CreateInfo, null, &State.Instance).Verify;
-  assert(State.Instance);
-
-  LoadAllInstanceFunctions(.vkGetInstanceProcAddr, State.Instance);
-
-  State.SetupDebugging();
-
-  // Try loading vkGetDeviceProcAddr
-  .vkGetDeviceProcAddr = LoadInstanceFunction(.vkGetInstanceProcAddr,
-                                              State.Instance,
-                                              "vkGetDeviceProcAddr".ptr,
-                                              .vkGetDeviceProcAddr);
-  assert(.vkGetDeviceProcAddr);
-
   //
-  // Device setup
+  // Load Crucial Functions Pointers
   //
-  uint DeviceCount;
-  vkEnumeratePhysicalDevices(State.Instance, &DeviceCount, null).Verify;
-  if(DeviceCount)
+  PFN_vkCreateInstance vkCreateInstance;
+  PFN_vkGetInstanceProcAddr vkGetInstanceProcAddr;
+  PFN_vkEnumerateInstanceLayerProperties vkEnumerateInstanceLayerProperties;
+  PFN_vkEnumerateInstanceExtensionProperties vkEnumerateInstanceExtensionProperties;
   {
+    // These have to be loaded with GetProcAddress because for everything else
+    // we need a Vulkan instance, which is obtained later.
+
     //
-    // Note(Manu): Enumerating physical devices is disabled for now because it
-    // appears to yield undeterministic results when called often.
+    // vkCreateInstance
     //
-    //  Log.Info("All physical Vulkan devices:");
-    //  foreach(Index, GPU; PhysicalDevices)
-    //  {
-    //    Log.Info("Properties of Physical Device #%d:", Index);
-    //    LogPhysicalDeviceProperties(GPU);
-    //  }
-
-    auto PhysicalDevices = G.Allocator.NewArray!VkPhysicalDevice(DeviceCount);
-    scope(success) G.Allocator.Delete(PhysicalDevices);
-
-    vkEnumeratePhysicalDevices(State.Instance, &DeviceCount, PhysicalDevices.ptr).Verify;
-
-    // TODO(Manu): Choose Vulkan GPU somehow?
-    const DeviceIndex = 0;
-    State.PhysicalDevice = PhysicalDevices[DeviceIndex];
-
-    vkGetPhysicalDeviceProperties(State.PhysicalDevice, &State.PhysicalDeviceProperties);
-    vkGetPhysicalDeviceMemoryProperties(State.PhysicalDevice, &State.PhysicalDeviceMemoryProperties);
-
-    uint QueueCount;
-    vkGetPhysicalDeviceQueueFamilyProperties(State.PhysicalDevice, &QueueCount, null);
-    State.QueueFamilyProperties = G.Allocator.NewArray!VkQueueFamilyProperties(QueueCount);
-    assert(State.QueueFamilyProperties.length == QueueCount);
-
-    vkGetPhysicalDeviceQueueFamilyProperties(State.PhysicalDevice, &QueueCount, State.QueueFamilyProperties.ptr);
-
-
-    Log.Info("Using physical device %d:", DeviceIndex);
-    Log.Info("  GPU Name: %s", State.PhysicalDeviceProperties.deviceName.ptr.fromStringz);
-    Log.Info("  Vulkan API Version: %d.%d.%d",
-             VK_VERSION_MAJOR(State.PhysicalDeviceProperties.apiVersion),
-             VK_VERSION_MINOR(State.PhysicalDeviceProperties.apiVersion),
-             VK_VERSION_PATCH(State.PhysicalDeviceProperties.apiVersion));
-    Log.Info("  Driver Version: %d.%d.%d",
-             VK_VERSION_MAJOR(State.PhysicalDeviceProperties.apiVersion),
-             VK_VERSION_MINOR(State.PhysicalDeviceProperties.apiVersion),
-             VK_VERSION_PATCH(State.PhysicalDeviceProperties.apiVersion));
-    Log.Info("  Vendor ID: %d", State.PhysicalDeviceProperties.vendorID);
-    Log.Info("  Device ID: %d", State.PhysicalDeviceProperties.deviceID);
-    Log.Info("  Device Type: %s", State.PhysicalDeviceProperties.deviceType);
-    // TODO(Manu): State.PhysicalDeviceProperties.pipelineCacheUUID
-    // TODO(Manu): State.PhysicalDeviceProperties.limits
-    Log.Info("  Number of available queues: %u", State.QueueFamilyProperties.length);
-  }
-  else
-  {
-    Log.Failure("Failed to enumerate devices.");
-    return;
-  }
-
-  uint GraphicsQueueIndex;
-  foreach(ref QueueProperties; State.QueueFamilyProperties)
-  {
-    if(QueueProperties.queueFlags & VK_QUEUE_GRAPHICS_BIT) break;
-    GraphicsQueueIndex++;
-  }
-  assert(GraphicsQueueIndex < State.QueueFamilyProperties.length);
-
-  float[1] QueuePriorities = [ 0.0f ];
-  VkDeviceQueueCreateInfo QueueDesc;
-  with(QueueDesc)
-  {
-    queueFamilyIndex = GraphicsQueueIndex;
-    queueCount = cast(uint)QueuePriorities.length;
-    pQueuePriorities = QueuePriorities.ptr;
-  }
-
-  State.CreateDevice(QueueDesc);
-
-  LoadAllDeviceFunctions(.vkGetDeviceProcAddr, State.Device);
-
-  vkGetDeviceQueue(State.Device, GraphicsQueueIndex, 0, &State.Queue);
-
-  //vkGetPhysicalDeviceMemoryProperties(State.PhysicalDevice, &State.PhysicalDeviceMemoryProperties);
-
-  State.DepthFormat = ChooseDepthFormat(State.PhysicalDevice);
-
-  with(State)
-  {
-    SwapChain.Instance = State.Instance;
-    SwapChain.PhysicalDevice = State.PhysicalDevice;
-    SwapChain.Device = State.Device;
-
-    State.InitializeSurface();
-  }
-
-  // Is default initialized for now.
-  VkSemaphoreCreateInfo SemaphoreDesc;
-  vkCreateSemaphore(State.Device, &SemaphoreDesc, null, &State.Semaphores.PresentComplete).Verify;
-  vkCreateSemaphore(State.Device, &SemaphoreDesc, null, &State.Semaphores.RenderComplete).Verify;
-
-  with(State.SubmitInfo)
-  {
-    pWaitDstStageMask = &State.SubmitPipelineStages;
-    waitSemaphoreCount = 1;
-    pWaitSemaphores = &State.Semaphores.PresentComplete;
-    signalSemaphoreCount = 1;
-    pSignalSemaphores = &State.Semaphores.RenderComplete;
-  }
-}
-
-void Prepare(VulkanState State)
-{
-  //
-  // Create Command Pool
-  //
-  {
-    VkCommandPoolCreateInfo CommandPoolDesc;
-    with(CommandPoolDesc)
     {
-      queueFamilyIndex = State.SwapChain.QueueNodeIndex;
-      flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-    }
-    vkCreateCommandPool(State.Device, &CommandPoolDesc, null, &State.CommandPool).Verify;
-  }
-
-  //
-  // Create Setup Command Buffer
-  //
-  {
-    if (State.SetupCommandBuffer != VK_NULL_HANDLE)
-    {
-      vkFreeCommandBuffers(State.Device, State.CommandPool, 1, &State.SetupCommandBuffer);
-      State.SetupCommandBuffer = VK_NULL_HANDLE;
-    }
-
-    VkCommandBufferAllocateInfo CommandBufferAllocateInfo;
-    with(CommandBufferAllocateInfo)
-    {
-      commandPool = State.CommandPool;
-      level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-      commandBufferCount = 1;
-    }
-
-    vkAllocateCommandBuffers(State.Device,
-                             &CommandBufferAllocateInfo,
-                             &State.SetupCommandBuffer).Verify;
-
-    VkCommandBufferBeginInfo CommandBufferBeginInfo = {};
-    vkBeginCommandBuffer(State.SetupCommandBuffer, &CommandBufferBeginInfo).Verify;
-
-  }
-
-  //
-  // Setup Swap Chain
-  //
-  CreateSwapChain(State.SwapChain,
-                  State.SetupCommandBuffer,
-                  State.Width,
-                  State.Height);
-
-  //
-  // Create Command Buffers
-  //
-
-  // Create one command buffer per frame buffer
-  // in the swap chain
-  // Command buffers store a reference to the
-  // frame buffer inside their render pass info
-  // so for static usage withouth having to rebuild
-  // them each frame, we use one per frame buffer
-  {
-    State.DrawCommandBuffers = G.Allocator.NewArray!VkCommandBuffer(State.SwapChain.ImageCount);
-
-    VkCommandBufferAllocateInfo CommandBufferAllocateInfo = {};
-    with(CommandBufferAllocateInfo)
-    {
-      commandPool = State.CommandPool;
-      level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-      commandBufferCount = cast(uint)State.DrawCommandBuffers.length;
-    }
-
-    vkAllocateCommandBuffers(State.Device, &CommandBufferAllocateInfo, State.DrawCommandBuffers.ptr).Verify;
-
-    // Command buffers for submitting present barriers
-    CommandBufferAllocateInfo.commandBufferCount = 1;
-    // Pre present
-    vkAllocateCommandBuffers(State.Device, &CommandBufferAllocateInfo, &State.PrePresentCommandBuffer).Verify;
-    // Post present
-    vkAllocateCommandBuffers(State.Device, &CommandBufferAllocateInfo, &State.PostPresentCommandBuffer).Verify;
-  }
-
-  //
-  // Setup Depth Stencil
-  //
-
-  {
-    VkImageCreateInfo Image;
-    with(Image)
-    {
-      imageType = VK_IMAGE_TYPE_2D;
-      format = State.DepthFormat;
-      extent = VkExtent3D(State.Width, State.Height, 1);
-      mipLevels = 1;
-      arrayLayers = 1;
-      samples = VK_SAMPLE_COUNT_1_BIT;
-      tiling = VK_IMAGE_TILING_OPTIMAL;
-      usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
-      flags = 0;
-    }
-
-    VkMemoryAllocateInfo MemoryAllocationInfo;
-
-    VkImageViewCreateInfo DepthStencilView;
-    with(DepthStencilView)
-    {
-      viewType = VK_IMAGE_VIEW_TYPE_2D;
-      format = State.DepthFormat;
-      flags = 0;
-      subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
-      subresourceRange.baseMipLevel = 0;
-      subresourceRange.levelCount = 1;
-      subresourceRange.baseArrayLayer = 0;
-      subresourceRange.layerCount = 1;
-    }
-
-    VkMemoryRequirements MemoryRequirements;
-
-    vkCreateImage(State.Device, &Image, null, &State.DepthStencil.Image).Verify;
-    vkGetImageMemoryRequirements(State.Device, State.DepthStencil.Image, &MemoryRequirements);
-    MemoryAllocationInfo.allocationSize = MemoryRequirements.size;
-    GetMemoryType(State.PhysicalDeviceMemoryProperties,
-                  MemoryRequirements.memoryTypeBits,
-                  VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                  &MemoryAllocationInfo.memoryTypeIndex);
-    vkAllocateMemory(State.Device, &MemoryAllocationInfo, null, &State.DepthStencil.Memory).Verify;
-
-    vkBindImageMemory(State.Device, State.DepthStencil.Image, State.DepthStencil.Memory, 0).Verify;
-
-
-    VkImageSubresourceRange SubresourceRange;
-    with(SubresourceRange)
-    {
-      aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
-      baseMipLevel = 0;
-      levelCount = 1;
-      layerCount = 1;
-    }
-    SetImageLayout(State.SetupCommandBuffer,
-                   State.DepthStencil.Image,
-                   VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT,
-                   VK_IMAGE_LAYOUT_UNDEFINED,
-                   VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-                   SubresourceRange);
-
-    DepthStencilView.image = State.DepthStencil.Image;
-    vkCreateImageView(State.Device, &DepthStencilView, null, &State.DepthStencil.View).Verify;
-  }
-
-  //
-  // Setup Render Pass
-  //
-  {
-    VkAttachmentDescription[2] Attachments;
-    with(Attachments[0])
-    {
-      format         = State.SwapChain.ColorFormat;
-      samples        = VK_SAMPLE_COUNT_1_BIT;
-      loadOp         = VK_ATTACHMENT_LOAD_OP_CLEAR;
-      storeOp        = VK_ATTACHMENT_STORE_OP_STORE;
-      stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-      stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-      initialLayout  = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-      finalLayout    = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    }
-
-    with(Attachments[1])
-    {
-      format = State.DepthFormat;
-      samples = VK_SAMPLE_COUNT_1_BIT;
-      loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-      storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-      stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-      stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-      initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-      finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-    }
-
-    VkAttachmentReference ColorReference = {};
-    ColorReference.attachment = 0;
-    ColorReference.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-    VkAttachmentReference DepthReference = {};
-    DepthReference.attachment = 1;
-    DepthReference.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-
-    VkSubpassDescription SubPass = {};
-    with(SubPass)
-    {
-      pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-      flags = 0;
-      inputAttachmentCount = 0;
-      pInputAttachments = null;
-      colorAttachmentCount = 1;
-      pColorAttachments = &ColorReference;
-      pResolveAttachments = null;
-      pDepthStencilAttachment = &DepthReference;
-      preserveAttachmentCount = 0;
-      pPreserveAttachments = null;
-    }
-
-    VkRenderPassCreateInfo RenderPassInfo;
-    with(RenderPassInfo)
-    {
-      attachmentCount = 2;
-      pAttachments = Attachments.ptr;
-      subpassCount = 1;
-      pSubpasses = &SubPass;
-      dependencyCount = 0;
-      pDependencies = null;
-    }
-
-    vkCreateRenderPass(State.Device, &RenderPassInfo, null, &State.RenderPass).Verify;
-  }
-
-  //
-  // Create Pipeline Cache
-  //
-  {
-    VkPipelineCacheCreateInfo PipelineCacheCreateInfo;
-    vkCreatePipelineCache(State.Device,
-                          &PipelineCacheCreateInfo,
-                          null,
-                          &State.PipelineCache).Verify;
-  }
-
-  //
-  // Setup Frame Buffer
-  //
-  {
-    VkImageView[2] Attachments;
-
-    // Depth/Stencil attachment is the same for all frame buffers
-    Attachments[1] = State.DepthStencil.View;
-
-    VkFramebufferCreateInfo FrameBufferCreateInfo = {};
-    with(FrameBufferCreateInfo)
-    {
-      renderPass = State.RenderPass;
-      attachmentCount = cast(uint)Attachments.length;
-      pAttachments = Attachments.ptr;
-      width = State.Width;
-      height = State.Height;
-      layers = 1;
-    }
-
-    // Create frame buffers for every swap chain image
-    State.FrameBuffers = G.Allocator.NewArray!VkFramebuffer(State.SwapChain.ImageCount);
-    foreach(Index; 0 .. State.FrameBuffers.length)
-    {
-      Attachments[0] = State.SwapChain.Buffers[Index].View;
-      vkCreateFramebuffer(State.Device,
-                          &FrameBufferCreateInfo,
-                          null,
-                          &State.FrameBuffers[Index]);
-    }
-  }
-
-  //
-  // Flush Setup Command Buffer
-  //
-  if(State.SetupCommandBuffer)
-  {
-    vkEndCommandBuffer(State.SetupCommandBuffer).Verify;
-
-    VkSubmitInfo SubmitInfo;
-    with(SubmitInfo)
-    {
-      commandBufferCount = 1;
-      pCommandBuffers = &State.SetupCommandBuffer;
-    }
-
-    vkQueueSubmit(State.Queue, 1, &SubmitInfo, VK_NULL_HANDLE).Verify;
-
-    vkQueueWaitIdle(State.Queue).Verify;
-
-    vkFreeCommandBuffers(State.Device, State.CommandPool, 1, &State.SetupCommandBuffer);
-    State.SetupCommandBuffer = VK_NULL_HANDLE;
-  }
-}
-
-void Destroy(VulkanState State)
-{
-  if(State.Instance)
-  {
-    vkDestroyInstance(State.Instance, null);
-  }
-}
-
-VkResult CreateDevice(VulkanState State, VkDeviceQueueCreateInfo RequestedQueues)
-{
-  const(char)*[1] EnabledExtensions =
-  [
-    VK_KHR_SWAPCHAIN_EXTENSION_NAME.ptr,
-    //"VK_NV_glsl_shader".ptr,
-  ];
-
-  VkDeviceCreateInfo DeviceDesc;
-  with(DeviceDesc)
-  {
-    queueCreateInfoCount = 1;
-    pQueueCreateInfos = &RequestedQueues;
-
-    enabledExtensionCount = cast(uint)EnabledExtensions.length;
-    ppEnabledExtensionNames = EnabledExtensions.ptr;
-  }
-
-  return vkCreateDevice(State.PhysicalDevice, &DeviceDesc, null, &State.Device);
-}
-
-VkFormat ChooseDepthFormat(VkPhysicalDevice PhysicalDevice)
-{
-  VkFormat[5] Formats =
-  [
-    VK_FORMAT_D32_SFLOAT_S8_UINT,
-    VK_FORMAT_D32_SFLOAT,
-    VK_FORMAT_D24_UNORM_S8_UINT,
-    VK_FORMAT_D16_UNORM_S8_UINT,
-    VK_FORMAT_D16_UNORM
-  ];
-
-  foreach(ref Format; Formats[])
-  {
-    VkFormatProperties FormatProperties;
-    vkGetPhysicalDeviceFormatProperties(PhysicalDevice, Format, &FormatProperties);
-    if(FormatProperties.optimalTilingFeatures & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT)
-    {
-      return Format;
-    }
-  }
-
-  return VK_FORMAT_UNDEFINED;
-}
-
-void InitializeSurface(VulkanState State)
-{
-  VkWin32SurfaceCreateInfoKHR SufraceDesc;
-  with(SufraceDesc)
-  {
-    hinstance = State.ProcessHandle;
-    hwnd = State.WindowHandle;
-  }
-  vkCreateWin32SurfaceKHR(State.Instance, &SufraceDesc, null, &State.SwapChain.Surface).Verify;
-
-  auto SupportsPresenting = G.Allocator.NewArray!VkBool32(State.QueueFamilyProperties.length);
-  scope(success) G.Allocator.Delete(SupportsPresenting);
-
-  // Find presenter queues.
-  foreach(uint Index, ref Element; SupportsPresenting)
-  {
-    vkGetPhysicalDeviceSurfaceSupportKHR(State.PhysicalDevice, Index, State.SwapChain.Surface, &Element);
-  }
-
-  uint GraphicsQueueNodeIndex = uint.max;
-  uint PresentQueueNodeIndex = uint.max;
-
-  foreach(uint Index, ref QueueProperties; State.QueueFamilyProperties)
-  {
-    if(QueueProperties.queueFlags & VK_QUEUE_GRAPHICS_BIT)
-    {
-      if(GraphicsQueueNodeIndex == uint.max)
+      auto Func = GetProcAddress(DLL, "vkCreateInstance".ptr);
+      if(Func)
       {
-        GraphicsQueueNodeIndex = Index;
+        vkCreateInstance = cast(typeof(vkCreateInstance))Func;
       }
-
-      if(SupportsPresenting[Index])
+      else
       {
-        GraphicsQueueNodeIndex = Index;
-        PresentQueueNodeIndex = Index;
-        break;
+        Log.Failure("Unable to load function from Vulkan DLL: vkCreateInstance");
+        return;
+      }
+    }
+
+    //
+    // vkGetInstanceProcAddr
+    //
+    {
+      auto Func = GetProcAddress(DLL, "vkGetInstanceProcAddr".ptr);
+      if(Func)
+      {
+        vkGetInstanceProcAddr = cast(typeof(vkGetInstanceProcAddr))Func;
+      }
+      else
+      {
+        Log.Failure("Unable to load function from Vulkan DLL: vkGetInstanceProcAddr");
+        return;
+      }
+    }
+
+    //
+    // vkEnumerateInstanceLayerProperties
+    //
+    {
+      auto Func = GetProcAddress(DLL, "vkEnumerateInstanceLayerProperties".ptr);
+      if(Func)
+      {
+        vkEnumerateInstanceLayerProperties = cast(typeof(vkEnumerateInstanceLayerProperties))Func;
+      }
+      else
+      {
+        Log.Failure("Unable to load function from Vulkan DLL: vkEnumerateInstanceLayerProperties");
+        return;
+      }
+    }
+
+    //
+    // vkEnumerateInstanceExtensionProperties
+    //
+    {
+      auto Func = GetProcAddress(DLL, "vkEnumerateInstanceExtensionProperties".ptr);
+      if(Func)
+      {
+        vkEnumerateInstanceExtensionProperties = cast(typeof(vkEnumerateInstanceExtensionProperties))Func;
+      }
+      else
+      {
+        Log.Failure("Unable to load function from Vulkan DLL: vkEnumerateInstanceExtensionProperties");
+        return;
       }
     }
   }
 
-  if(PresentQueueNodeIndex == uint.max)
+  //
+  // Create Instance
+  //
+  VkInstance Vulkan;
   {
-    // If there's no queue that supports present AND graphics, find a seperate
-    // present queue.
-    foreach(uint Index, Element; SupportsPresenting)
+    // TODO: Check for the existance of the requested layers and extensions
+    // first.
+
+    const(char)*[1] Layers = [
+      "VK_LAYER_LUNARG_standard_validation".ptr
+    ];
+
+    const(char)*[3] Extensions =
+    [
+      VK_KHR_SURFACE_EXTENSION_NAME.ptr,
+      VK_KHR_WIN32_SURFACE_EXTENSION_NAME.ptr,
+      VK_EXT_DEBUG_REPORT_EXTENSION_NAME.ptr,
+    ];
+
+    VkApplicationInfo ApplicationInfo;
+    with(ApplicationInfo)
     {
-      if(Element)
-      {
-        PresentQueueNodeIndex = Index;
-        break;
-      }
-    }
-  }
+      pApplicationName = "Vulkan Experiments".ptr;
+      applicationVersion = VK_MAKE_VERSION(0, 0, 1);
 
-  if(GraphicsQueueNodeIndex == uint.max || PresentQueueNodeIndex == uint.max)
-  {
-    Log.Failure("Unable to find graphics and/or present queue.");
-    return;
-  }
+      pEngineName = "Krepel".ptr,
+      engineVersion = VK_MAKE_VERSION(0, 0, 1);
 
-  // TODO Add support for separate graphics and present queue.
-  if(GraphicsQueueNodeIndex != PresentQueueNodeIndex)
-  {
-    Log.Failure("Separate graphics and presenting queues are not supported yet.");
-    return;
-  }
-
-  State.SwapChain.QueueNodeIndex = GraphicsQueueNodeIndex;
-
-  uint FormatCount;
-  vkGetPhysicalDeviceSurfaceFormatsKHR(State.PhysicalDevice, State.SwapChain.Surface, &FormatCount, null).Verify;
-  assert(FormatCount > 0);
-
-  auto SurfaceFormats = G.Allocator.NewArray!VkSurfaceFormatKHR(FormatCount);
-  scope(success) G.Allocator.Delete(SurfaceFormats);
-
-
-  uint ChosenFormat;
-  if(FormatCount == 1 && SurfaceFormats[0].format == VK_FORMAT_UNDEFINED)
-  {
-    // If there's only 1 format, which is VK_FORMAT_UNDEFINED, it means
-    // there's no preferred format.
-    State.SwapChain.ColorFormat = VK_FORMAT_B8G8R8A8_UNORM;
-  }
-  else
-  {
-    // Always use the first format for now. If something like an SRGB format
-    // is desired, SurfaceFormats must be searched for the best match.
-    ChosenFormat = 0;
-
-    State.SwapChain.ColorFormat = SurfaceFormats[ChosenFormat].format;
-  }
-
-  State.SwapChain.ColorSpace = SurfaceFormats[ChosenFormat].colorSpace;
-}
-
-void CreateSwapChain(ref SwapChainData SwapChain,
-                     VkCommandBuffer CommandBuffer,
-                     ref uint Width,
-                     ref uint Height)
-{
-  auto OldSwapChainHandle = SwapChain.SwapChainHandle;
-
-  if(!vkGetPhysicalDeviceSurfaceCapabilitiesKHR)
-  {
-    Log.Warning("Missing vkGetPhysicalDeviceSurfaceCapabilitiesKHR");
-  }
-
-  auto GetPhysicalDeviceSurfaceCapabilitiesKHR = cast(typeof(vkGetPhysicalDeviceSurfaceCapabilitiesKHR))vkGetDeviceProcAddr(SwapChain.Device, "vkGetPhysicalDeviceSurfaceCapabilitiesKHR");
-
-  VkSurfaceCapabilitiesKHR SurfaceCapabilities;
-  vkGetPhysicalDeviceSurfaceCapabilitiesKHR(SwapChain.PhysicalDevice, SwapChain.Surface, &SurfaceCapabilities).Verify;
-
-  uint PresentModeCount;
-  vkGetPhysicalDeviceSurfacePresentModesKHR(SwapChain.PhysicalDevice, SwapChain.Surface, &PresentModeCount, null);
-  assert(PresentModeCount > 0);
-
-  auto PresentModes = G.Allocator.NewArray!VkPresentModeKHR(PresentModeCount);
-  scope(success) G.Allocator.Delete(PresentModes);
-
-  vkGetPhysicalDeviceSurfacePresentModesKHR(SwapChain.PhysicalDevice, SwapChain.Surface, &PresentModeCount, PresentModes.ptr).Verify;
-
-  VkExtent2D SwapChainExtent;
-  if(SurfaceCapabilities.currentExtent.width)
-  {
-    assert(SurfaceCapabilities.currentExtent.width == SurfaceCapabilities.currentExtent.height);
-    SwapChainExtent.width = Width;
-    SwapChainExtent.height = Height;
-  }
-  else
-  {
-    SwapChainExtent = SurfaceCapabilities.currentExtent;
-    Width = SwapChainExtent.width;
-    Height = SwapChainExtent.height;
-  }
-
-  // Prefer mailbox mode if present, it's the lowest latency non-tearing present  mode
-  VkPresentModeKHR SwapChainPresentMode = VK_PRESENT_MODE_FIFO_KHR;
-  foreach(ref Mode; PresentModes)
-  {
-    if(Mode == VK_PRESENT_MODE_MAILBOX_KHR)
-    {
-      SwapChainPresentMode = VK_PRESENT_MODE_MAILBOX_KHR;
-      break;
+      apiVersion = VK_MAKE_VERSION(1, 0, 8);
     }
 
-    if(SwapChainPresentMode != VK_PRESENT_MODE_MAILBOX_KHR && Mode == VK_PRESENT_MODE_IMMEDIATE_KHR)
+    VkInstanceCreateInfo CreateInfo;
+    with(CreateInfo)
     {
-      SwapChainPresentMode = VK_PRESENT_MODE_IMMEDIATE_KHR;
-    }
-  }
+      pApplicationInfo = &ApplicationInfo;
 
-  uint DesiredNumberOfSwapChainImages = SurfaceCapabilities.minImageCount + 1;
-  if(SurfaceCapabilities.maxImageCount > 0 && DesiredNumberOfSwapChainImages > SurfaceCapabilities.maxImageCount)
-  {
-    DesiredNumberOfSwapChainImages = SurfaceCapabilities.maxImageCount;
-  }
+      enabledExtensionCount = Extensions.length;
+      ppEnabledExtensionNames = Extensions.ptr;
 
-  VkSurfaceTransformFlagsKHR PreTransform;
-  if(SurfaceCapabilities.supportedTransforms & VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR)
-  {
-    PreTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
-  }
-  else
-  {
-    PreTransform = SurfaceCapabilities.currentTransform;
-  }
-
-  VkSwapchainCreateInfoKHR SwapChainDesc;
-  with(SwapChainDesc)
-  {
-    surface = SwapChain.Surface;
-    minImageCount = DesiredNumberOfSwapChainImages;
-    imageFormat = SwapChain.ColorFormat;
-    imageColorSpace = SwapChain.ColorSpace;
-    imageExtent = SwapChainExtent;
-    imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-    preTransform = cast(VkSurfaceTransformFlagBitsKHR)PreTransform;
-    imageArrayLayers = 1;
-    imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
-    queueFamilyIndexCount = 0;
-    pQueueFamilyIndices = null;
-    presentMode = SwapChainPresentMode;
-    oldSwapchain = OldSwapChainHandle;
-    clipped = true;
-    compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-  }
-
-  vkCreateSwapchainKHR(SwapChain.Device, &SwapChainDesc, null, &SwapChain.SwapChainHandle).Verify;
-
-  if(OldSwapChainHandle)
-  {
-    vkDestroySwapchainKHR(SwapChain.Device, OldSwapChainHandle, null);
-  }
-
-  vkGetSwapchainImagesKHR(SwapChain.Device, SwapChain.SwapChainHandle, &SwapChain.ImageCount, null).Verify;
-  assert(SwapChain.ImageCount);
-
-  //if(SwapChain.Images.ptr) G.Allocator.Delete(SwapChain.Images);
-  SwapChain.Images = G.Allocator.NewArray!VkImage(SwapChain.ImageCount);
-
-  vkGetSwapchainImagesKHR(SwapChain.Device, SwapChain.SwapChainHandle, &SwapChain.ImageCount, SwapChain.Images.ptr).Verify;
-
-  //if(SwapChain.Buffers.ptr) G.Allocator.Delete(SwapChain.Buffers);
-  SwapChain.Buffers = G.Allocator.NewArray!(SwapChain.Buffer)(SwapChain.ImageCount);
-
-  foreach(Index; 0 .. SwapChain.ImageCount)
-  {
-    VkImageViewCreateInfo ColorAttachmentView = {};
-    with(ColorAttachmentView)
-    {
-      format = SwapChain.ColorFormat;
-      components = VkComponentMapping(VK_COMPONENT_SWIZZLE_R,
-                                      VK_COMPONENT_SWIZZLE_G,
-                                      VK_COMPONENT_SWIZZLE_B,
-                                      VK_COMPONENT_SWIZZLE_A);
-      subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-      subresourceRange.baseMipLevel = 0;
-      subresourceRange.levelCount = 1;
-      subresourceRange.baseArrayLayer = 0;
-      subresourceRange.layerCount = 1;
-      viewType = VK_IMAGE_VIEW_TYPE_2D;
-      flags = 0;
+      enabledLayerCount = Layers.length;
+      ppEnabledLayerNames = Layers.ptr;
     }
 
-    auto CurrentBuffer = &SwapChain.Buffers[Index];
-    CurrentBuffer.Image = SwapChain.Images[Index];
-
-    // Transform images from initial (undefined) to present layout
-    VkImageSubresourceRange SubresourceRange;
-    with(SubresourceRange)
-    {
-      aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-      baseMipLevel = 0;
-      levelCount = 1;
-      layerCount = 1;
-    }
-    SetImageLayout(CommandBuffer,
-                   CurrentBuffer.Image,
-                   SubresourceRange.aspectMask,
-                   VK_IMAGE_LAYOUT_UNDEFINED,
-                   VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-                   SubresourceRange);
-
-    ColorAttachmentView.image = CurrentBuffer.Image;
-
-    vkCreateImageView(SwapChain.Device, &ColorAttachmentView, null, &CurrentBuffer.View).Verify;
+    vkCreateInstance(&CreateInfo, null, &Vulkan).Verify;
+    assert(Vulkan);
   }
-}
+  Log.Info("Created Vulkan instance.");
 
-void SetImageLayout(VkCommandBuffer CommandBuffer,
-                    VkImage Image,
-                    VkImageAspectFlags AspectMask,
-                    VkImageLayout OldImageLayout,
-                    VkImageLayout NewImageLayout,
-                    VkImageSubresourceRange SubresourceRange)
-{
-  // Create an image barrier object
-  VkImageMemoryBarrier ImageMemoryBarrier;
-  with(ImageMemoryBarrier)
+  //
+  // Load Instance Functions
+  //
+  //PFN_vkGetDeviceProcAddr vkGetDeviceProcAddr;
   {
-    srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    oldLayout = OldImageLayout;
-    newLayout = NewImageLayout;
-    image = Image;
-    subresourceRange = SubresourceRange;
+    LoadAllInstanceFunctions(vkGetInstanceProcAddr, Vulkan);
+    //vkGetDeviceProcAddr = LoadInstanceFunction(vkGetInstanceProcAddr, Vulkan, "vkGetDeviceProcAddr".ptr, .vkGetDeviceProcAddr);
   }
+  Log.Info("Finished loading instance functions.");
 
-  // Source layouts (old)
-
-  // Undefined layout
-  // Only allowed as initial layout!
-  // Make sure any writes to the image have been finished
-  if (OldImageLayout == VK_IMAGE_LAYOUT_PREINITIALIZED)
-  {
-    ImageMemoryBarrier.srcAccessMask = VK_ACCESS_HOST_WRITE_BIT | VK_ACCESS_TRANSFER_WRITE_BIT;
-  }
-
-  // Old layout is color attachment
-  // Make sure any writes to the color buffer have been finished
-  if (OldImageLayout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
-  {
-    ImageMemoryBarrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-  }
-
-  // Old layout is depth/stencil attachment
-  // Make sure any writes to the depth/stencil buffer have been finished
-  if (OldImageLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
-  {
-    ImageMemoryBarrier.srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-  }
-
-  // Old layout is transfer source
-  // Make sure any reads from the image have been finished
-  if (OldImageLayout == VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL)
-  {
-    ImageMemoryBarrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-  }
-
-  // Old layout is shader read (sampler, input attachment)
-  // Make sure any shader reads from the image have been finished
-  if (OldImageLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
-  {
-    ImageMemoryBarrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
-  }
-
-  // Target layouts (new)
-
-  // New layout is transfer destination (copy, blit)
-  // Make sure any copyies to the image have been finished
-  if (NewImageLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
-  {
-    ImageMemoryBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-  }
-
-  // New layout is transfer source (copy, blit)
-  // Make sure any reads from and writes to the image have been finished
-  if (NewImageLayout == VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL)
-  {
-    ImageMemoryBarrier.srcAccessMask = ImageMemoryBarrier.srcAccessMask | VK_ACCESS_TRANSFER_READ_BIT;
-    ImageMemoryBarrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-  }
-
-  // New layout is color attachment
-  // Make sure any writes to the color buffer hav been finished
-  if (NewImageLayout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
-  {
-    ImageMemoryBarrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-    ImageMemoryBarrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-  }
-
-  // New layout is depth attachment
-  // Make sure any writes to depth/stencil buffer have been finished
-  if (NewImageLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
-  {
-    ImageMemoryBarrier.dstAccessMask = ImageMemoryBarrier.dstAccessMask | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-  }
-
-  // New layout is shader read (sampler, input attachment)
-  // Make sure any writes to the image have been finished
-  if (NewImageLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
-  {
-    ImageMemoryBarrier.srcAccessMask = VK_ACCESS_HOST_WRITE_BIT | VK_ACCESS_TRANSFER_WRITE_BIT;
-    ImageMemoryBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-  }
-
-  // Put barrier on top
-  VkPipelineStageFlags SourceStageFlags = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-  VkPipelineStageFlags DestinationStageFlags = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-
-  // Put barrier inside setup command buffer
-  vkCmdPipelineBarrier(
-    CommandBuffer,
-    SourceStageFlags,
-    DestinationStageFlags,
-    0,
-    0, null,
-    0, null,
-    1, &ImageMemoryBarrier);
-}
-
-VkBool32 GetMemoryType(VkPhysicalDeviceMemoryProperties PhysicalDeviceMemoryProperties,
-                       uint TypeBits,
-                       VkFlags Properties,
-                       uint* TypeIndex)
-{
-  assert(TypeIndex);
-  foreach(Index; 0 .. 32)
-  {
-    if(TypeBits & 1)
-    {
-      if((PhysicalDeviceMemoryProperties.memoryTypes[Index].propertyFlags & Properties) == Properties)
-      {
-        *TypeIndex = Index;
-        return true;
-      }
-    }
-    TypeBits >>= 1;
-  }
-  return false;
-}
-
-void SetupDebugging(VulkanState State)
-{
-  if(vkCreateDebugReportCallbackEXT is null)
-  {
-    Log.Warning("Unable to set up debugging: vkCreateDebugReportCallbackEXT is null");
-    return;
-  }
-
-  VkDebugReportCallbackCreateInfoEXT DebugSetupInfo;
-  with(DebugSetupInfo)
-  {
-    pfnCallback = &DebugMessageCallback;
-    flags = VK_DEBUG_REPORT_ERROR_BIT_EXT | VK_DEBUG_REPORT_WARNING_BIT_EXT;
-  }
+  //
+  // Debugging setup
+  //
   VkDebugReportCallbackEXT DebugReportCallback;
-  vkCreateDebugReportCallbackEXT(
-    State.Instance,
-    &DebugSetupInfo,
-    null,
-    &State.DebugReportCallback).Verify;
+  {
+    if(vkCreateDebugReportCallbackEXT !is null)
+    {
+      VkDebugReportCallbackCreateInfoEXT DebugSetupInfo;
+      with(DebugSetupInfo)
+      {
+        pfnCallback = &DebugMessageCallback;
+        flags = VK_DEBUG_REPORT_ERROR_BIT_EXT | VK_DEBUG_REPORT_WARNING_BIT_EXT;
+      }
+      vkCreateDebugReportCallbackEXT(
+        Vulkan,
+        &DebugSetupInfo,
+        null,
+        &DebugReportCallback).Verify;
+    }
+    else
+    {
+      Log.Warning("Unable to set up debugging: vkCreateDebugReportCallbackEXT is null");
+      return;
+    }
+  }
+  Log.Info("Debug Callback is set up.");
+
+  //
+  // Choose Physical Device
+  //
+  size_t GpuIndex;
+  VkPhysicalDevice Gpu;
+  uint GpuCount;
+  {
+    vkEnumeratePhysicalDevices(Vulkan, &GpuCount, null).Verify;
+    assert(GpuCount > 0);
+
+    Log.Info("Found %u physical device(s).", GpuCount);
+
+    auto Gpus = Array!VkPhysicalDevice(G.Allocator);
+    Gpus.Expand(GpuCount);
+
+    vkEnumeratePhysicalDevices(Vulkan, &GpuCount, Gpus.Data.ptr).Verify;
+
+    // Use the first Physical Device for now.
+    GpuIndex = 0;
+    Gpu = Gpus[GpuIndex];
+  }
+  Log.Info("Using physical device %u", GpuIndex);
+
+  //
+  // Queue and Physical Device Properties.
+  //
+  VkPhysicalDeviceProperties GpuProps;
+  VkPhysicalDeviceMemoryProperties GpuMemoryProps;
+  VkPhysicalDeviceFeatures GpuFeatures;
+  uint QueueCount;
+  auto QueueProps = Array!VkQueueFamilyProperties(G.Allocator);
+  {
+    vkGetPhysicalDeviceProperties(Gpu, &GpuProps);
+    vkGetPhysicalDeviceMemoryProperties(Gpu, &GpuMemoryProps);
+    vkGetPhysicalDeviceFeatures(Gpu, &GpuFeatures);
+
+    vkGetPhysicalDeviceQueueFamilyProperties(Gpu, &QueueCount, null);
+    QueueProps.Expand(QueueCount);
+    vkGetPhysicalDeviceQueueFamilyProperties(Gpu, &QueueCount, QueueProps.Data.ptr);
+  }
+  Log.Info("Retrieved physical device and queue properties.");
+
+  //
+  // Create Win32 Surface
+  //
+  VkSurfaceKHR Surface;
+  {
+    VkWin32SurfaceCreateInfoKHR CreateInfo;
+    with(CreateInfo)
+    {
+      hinstance = ProcessHandle;
+      hwnd = WindowHandle;
+    }
+
+    vkCreateWin32SurfaceKHR(Vulkan, &CreateInfo, null, &Surface).Verify;
+  }
+  Log.Info("Created Win32 Surface.");
+
+  //
+  // Find Queue for Graphics and Presenting
+  //
+  uint QueueNodeIndex = uint.max; // For both graphics and presenting.
+  {
+    uint GraphicsIndex = uint.max;
+    uint PresentIndex = uint.max;
+    foreach(uint Index; 0 .. QueueCount)
+    {
+      VkBool32 SupportsPresenting;
+      vkGetPhysicalDeviceSurfaceSupportKHR(Gpu, Index, Surface, &SupportsPresenting);
+
+      if(QueueProps[Index].queueFlags & VK_QUEUE_GRAPHICS_BIT)
+      {
+        if(GraphicsIndex == uint.max)
+        {
+          GraphicsIndex = Index;
+        }
+
+        if(SupportsPresenting)
+        {
+          GraphicsIndex = Index;
+          PresentIndex = Index;
+        }
+      }
+    }
+
+    // TODO: Support for separate graphics and present queue?
+    // See tri-demo 1.0.8 line 2200
+
+    if(GraphicsIndex == uint.max)
+    {
+      Log.Failure("Unable to find Graphics queue.");
+      return;
+    }
+
+    if(PresentIndex == uint.max)
+    {
+      Log.Failure("Unable to find Present queue.");
+      return;
+    }
+
+    if(GraphicsIndex != PresentIndex)
+    {
+      Log.Failure("(2)");
+      return;
+    }
+
+    QueueNodeIndex = GraphicsIndex;
+  }
+
+  //
+  // Create Logical Device
+  //
+  VkDevice Device;
+  VkQueue Queue;
+  {
+    const(char)*[1] Layers = [
+      "VK_LAYER_LUNARG_standard_validation".ptr,
+    ];
+
+    //const(char)*[0] Extensions = [
+    //];
+    const(char)*[] Extensions = null;
+
+    float[1] QueuePriorities = [
+      0.0f,
+    ];
+
+    VkDeviceQueueCreateInfo QueueCreateInfo;
+    with(QueueCreateInfo)
+    {
+      queueFamilyIndex = QueueNodeIndex;
+      queueCount = QueuePriorities.length;
+      pQueuePriorities = QueuePriorities.ptr;
+    }
+
+    VkPhysicalDeviceFeatures EnabledFeatures;
+    with(EnabledFeatures)
+    {
+      shaderClipDistance = VK_TRUE;
+    }
+
+    VkDeviceCreateInfo DeviceCreateInfo;
+    with(DeviceCreateInfo)
+    {
+      queueCreateInfoCount = 1;
+      pQueueCreateInfos = &QueueCreateInfo;
+
+      enabledLayerCount = Layers.length;
+      ppEnabledLayerNames = Layers.ptr;
+
+      enabledExtensionCount = cast(uint)Extensions.length;
+      ppEnabledExtensionNames = Extensions.ptr;
+
+      pEnabledFeatures = &EnabledFeatures;
+    }
+
+    vkCreateDevice(Gpu, &DeviceCreateInfo, null, &Device).Verify;
+    assert(Device);
+
+    vkGetDeviceQueue(Device, QueueNodeIndex, 0, &Queue);
+    assert(Queue);
+  }
+  Log.Info("Created logical device and retrieved the queue.");
+
+  //
+  // Get Physical Device Format and Color Space.
+  //
+  VkFormat Format;
+  VkColorSpaceKHR ColorSpace;
+  {
+    uint FormatCount;
+    vkGetPhysicalDeviceSurfaceFormatsKHR(Gpu, Surface, &FormatCount, null).Verify;
+    assert(FormatCount > 0);
+
+    auto SurfaceFormats = Array!VkSurfaceFormatKHR(G.Allocator);
+    SurfaceFormats.Expand(FormatCount);
+
+    vkGetPhysicalDeviceSurfaceFormatsKHR(Gpu, Surface, &FormatCount, SurfaceFormats.Data.ptr).Verify;
+
+    if(FormatCount == 1 && SurfaceFormats[0].format == VK_FORMAT_UNDEFINED)
+    {
+      Format = VK_FORMAT_B8G8R8A8_UNORM;
+    }
+    else
+    {
+      Format = SurfaceFormats[0].format;
+    }
+
+    ColorSpace = SurfaceFormats[0].colorSpace;
+  }
+  Log.Info("Got format and color space for the previously created Win32 surface.");
+
+  // Done.
+  return;
 }
 
 extern(Windows) VkBool32 DebugMessageCallback(
