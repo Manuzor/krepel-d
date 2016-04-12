@@ -217,8 +217,8 @@ struct Array(T)
     }
     else
     {
-    Data = Data[Amount .. $];
-  }
+      Data = Data[Amount .. $];
+    }
   }
 
   @property ref auto Front() inout { return Data[0]; }
