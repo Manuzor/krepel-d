@@ -7,6 +7,7 @@ import krepel.win32.directx.xinput;
 import krepel.memory;
 import krepel.container;
 import krepel.string;
+import krepel.math;
 
 
 import std.string : toStringz, fromStringz;
@@ -103,8 +104,8 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
   debug Log.Sinks ~= ToDelegate(&StdoutLogSink);
   Log.Sinks ~= ToDelegate(&VisualStudioLogSink);
 
-  Log.Info("=== Beginning of Log");
-  scope(exit) Log.Info("=== End of Log");
+  Log.Info("=== Beginning of Log ===");
+  scope(exit) Log.Info("=== End of Log ===");
 
   version(XInput_RuntimeLinking) LoadXInput();
 
@@ -133,24 +134,29 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
     if(Window)
     {
       auto Vulkan = .Allocator.NewARC!VulkanData(.Allocator);
-      if(Vulkan.Initialize(Instance, Window))
-      {
-        Log.Info("Vulkan is initialized.");
+      // TODO: scope(success) Vulkan.Destroy();?
+      bool VulkanInitialized;
+      bool SwapchainPreparedInitially;
 
-        if(Vulkan.PrepareSwapchain())
-        {
-          Log.Info("Swapchain is prepared.");
-        }
-        else
-        {
-          Log.Info("Failed to prepare swap chain.");
-        }
-      }
-      else
       {
-        Log.Info("Failed to initialize Vulkan.");
+        Log.BeginScope("Initializing Vulkan.");
+        VulkanInitialized = Vulkan.Initialize(Instance, Window);
+        if(VulkanInitialized) Log.EndScope("Vulkan initialized successfully.");
+        else                  Log.EndScope("Failed to initialize Vulkan.");
       }
-      // TODO: Vulkan.Destroy();
+
+      if(VulkanInitialized)
+      {
+        Log.BeginScope("Preparing Swapchain for the first time.");
+        SwapchainPreparedInitially = Vulkan.PrepareSwapchain();
+        if(SwapchainPreparedInitially) Log.EndScope("Swapchain is prepared.");
+        else                           Log.EndScope("Failed to prepare Swapchain.");
+      }
+
+      if(SwapchainPreparedInitially)
+      {
+        // TODO
+      }
     }
     else
     {
@@ -325,8 +331,17 @@ class VulkanData
   version(all)
   {
     bool UseStagingBuffer;
+
     enum TextureCount = 1;
     TextureData[TextureCount] Textures;
+
+    VertexBufferData Vertices;
+
+    VkPipelineLayout PipelineLayout;
+    VkDescriptorSetLayout DescriptorSetLayout;
+
+    VkRenderPass RenderPass;
+    VkPipeline Pipeline;
   }
 
   this(IAllocator Allocator)
@@ -366,6 +381,18 @@ struct TextureData
   int TextureHeight;
 }
 
+struct VertexBufferData
+{
+  VkBuffer Buffer;
+  VkDeviceMemory Memory;
+
+  uint BindID;
+  // TODO: Get rid of this create info here.
+  VkPipelineVertexInputStateCreateInfo VertexInputInfo;
+  VkVertexInputBindingDescription[1] VertexInputBindingDescs;
+  VkVertexInputAttributeDescription[2] VertexInputAttributeDescs;
+}
+
 bool Initialize(VulkanData Vulkan, HINSTANCE ProcessHandle, HWND WindowHandle)
 {
   with(Vulkan)
@@ -374,16 +401,21 @@ bool Initialize(VulkanData Vulkan, HINSTANCE ProcessHandle, HWND WindowHandle)
     // Load DLL
     //
     {
-      DLL = LoadLibrary("vulkan-1.dll");
+      Log.BeginScope("Loading Vulkan DLL.");
+      scope(exit) Log.EndScope("");
+
+      auto FileName = "vulkan-1.dll";
+      DLL = LoadLibraryA(FileName.ptr);
       if(DLL)
       {
         char[1.KiB] Buffer;
         auto CharCount = GetModuleFileNameA(DLL, Buffer.ptr, cast(DWORD)Buffer.length);
         DLLName = Buffer[0 .. CharCount];
+        Log.Info("Loaded Vulkan DLL: %s", DLLName.Data);
       }
       else
       {
-        Log.Failure("Failed to load DLL: %s", DLLName);
+        Log.Failure("Failed to load DLL: %s", FileName);
         return false;
       }
     }
@@ -394,6 +426,8 @@ bool Initialize(VulkanData Vulkan, HINSTANCE ProcessHandle, HWND WindowHandle)
     {
       // These have to be loaded with GetProcAddress because for everything else
       // we need a Vulkan instance, which is obtained later.
+      Log.BeginScope("First Stage of loading Vulkan function pointers.");
+      scope(exit) Log.EndScope("");
 
       //
       // vkCreateInstance
@@ -465,6 +499,9 @@ bool Initialize(VulkanData Vulkan, HINSTANCE ProcessHandle, HWND WindowHandle)
     // Create Instance
     //
     {
+      Log.BeginScope("Creating Vulkan instance.");
+      scope(exit) Log.EndScope("");
+
       //
       // Instance Layers
       //
@@ -481,7 +518,8 @@ bool Initialize(VulkanData Vulkan, HINSTANCE ProcessHandle, HWND WindowHandle)
         LayerProperties.Expand(LayerCount);
         vkEnumerateInstanceLayerProperties(&LayerCount, LayerProperties.Data.ptr).Verify;
 
-        Log.Info("Explicitly enabled instance layers:");
+        Log.BeginScope("Explicitly enabled instance layers:");
+        scope(success) Log.EndScope("==========");
         foreach(ref Property; LayerProperties)
         {
           auto LayerName = Property.layerName.ptr.fromStringz;
@@ -491,11 +529,11 @@ bool Initialize(VulkanData Vulkan, HINSTANCE ProcessHandle, HWND WindowHandle)
           }
           else
           {
-            Log.Info("  [ ] %s", LayerName);
+            Log.Info("[ ] %s", LayerName);
             continue;
           }
 
-          Log.Info("  [x] %s", LayerName);
+          Log.Info("[x] %s", LayerName);
         }
       }
 
@@ -515,7 +553,8 @@ bool Initialize(VulkanData Vulkan, HINSTANCE ProcessHandle, HWND WindowHandle)
         ExtensionProperties.Expand(ExtensionCount);
         vkEnumerateInstanceExtensionProperties(null, &ExtensionCount, ExtensionProperties.Data.ptr).Verify;
 
-        Log.Info("Explicitly enabled instance extensions:");
+        Log.BeginScope("Explicitly enabled instance extensions:");
+        scope(success) Log.EndScope("==========");
         foreach(ref Property; ExtensionProperties)
         {
           auto ExtensionName = Property.extensionName.ptr.fromStringz;
@@ -586,22 +625,26 @@ bool Initialize(VulkanData Vulkan, HINSTANCE ProcessHandle, HWND WindowHandle)
       vkCreateInstance(&CreateInfo, null, &Instance).Verify;
       assert(Instance);
     }
-    Log.Info("Created Vulkan instance.");
 
     //
     // Load Instance Functions
     //
     //PFN_vkGetDeviceProcAddr vkGetDeviceProcAddr;
     {
+      Log.BeginScope("Loading all Vulkan instance functions.");
+      scope(exit) Log.EndScope("Finished loading instance functions.");
+
       LoadAllInstanceFunctions(vkGetInstanceProcAddr, Instance);
       //vkGetDeviceProcAddr = LoadInstanceFunction(vkGetInstanceProcAddr, Instance, "vkGetDeviceProcAddr".ptr, .vkGetDeviceProcAddr);
     }
-    Log.Info("Finished loading instance functions.");
 
     //
     // Debugging setup
     //
     {
+      Log.BeginScope("Setting up Vulkan debugging.");
+      scope(exit) Log.EndScope("Finished debug setup.");
+
       if(vkCreateDebugReportCallbackEXT !is null)
       {
         VkDebugReportCallbackCreateInfoEXT DebugSetupInfo;
@@ -622,12 +665,14 @@ bool Initialize(VulkanData Vulkan, HINSTANCE ProcessHandle, HWND WindowHandle)
         return false;
       }
     }
-    Log.Info("Debug Callback is set up.");
 
     //
     // Choose Physical Device
     //
     {
+      Log.BeginScope("Choosing physical device.");
+      scope(exit) Log.EndScope("Finished choosing physical device.");
+
       vkEnumeratePhysicalDevices(Instance, &GpuCount, null).Verify;
       assert(GpuCount > 0);
 
@@ -642,12 +687,14 @@ bool Initialize(VulkanData Vulkan, HINSTANCE ProcessHandle, HWND WindowHandle)
       GpuIndex = 0;
       Gpu = Gpus[GpuIndex];
     }
-    Log.Info("Using physical device %u", GpuIndex);
 
     //
     // Queue and Physical Device Properties.
     //
     {
+      Log.BeginScope("Querying for physical device and queue properties.");
+      scope(exit) Log.EndScope("Retrieved physical device and queue properties.");
+
       vkGetPhysicalDeviceProperties(Gpu, &GpuProperties);
       vkGetPhysicalDeviceMemoryProperties(Gpu, &GpuMemoryProperties);
       vkGetPhysicalDeviceFeatures(Gpu, &GpuFeatures);
@@ -656,12 +703,14 @@ bool Initialize(VulkanData Vulkan, HINSTANCE ProcessHandle, HWND WindowHandle)
       QueueProperties.Expand(QueueCount);
       vkGetPhysicalDeviceQueueFamilyProperties(Gpu, &QueueCount, QueueProperties.Data.ptr);
     }
-    Log.Info("Retrieved physical device and queue properties.");
 
     //
     // Create Win32 Surface
     //
     {
+      Log.BeginScope("Creating Win32 Surface.");
+      scope(exit) Log.EndScope("Created Win32 Surface.");
+
       VkWin32SurfaceCreateInfoKHR CreateInfo;
       with(CreateInfo)
       {
@@ -671,12 +720,14 @@ bool Initialize(VulkanData Vulkan, HINSTANCE ProcessHandle, HWND WindowHandle)
 
       vkCreateWin32SurfaceKHR(Instance, &CreateInfo, null, &Surface).Verify;
     }
-    Log.Info("Created Win32 Surface.");
 
     //
     // Find Queue for Graphics and Presenting
     //
     {
+      Log.BeginScope("Finding queue indices for graphics and presenting.");
+      scope(exit) Log.EndScope("Done finding queue indices.");
+
       uint GraphicsIndex = uint.max;
       uint PresentIndex = uint.max;
       foreach(uint Index; 0 .. QueueCount)
@@ -716,7 +767,7 @@ bool Initialize(VulkanData Vulkan, HINSTANCE ProcessHandle, HWND WindowHandle)
 
       if(GraphicsIndex != PresentIndex)
       {
-        Log.Failure("(2)");
+        Log.Failure("Support for separate graphics and present queue not implemented.");
         return false;
       }
 
@@ -727,6 +778,9 @@ bool Initialize(VulkanData Vulkan, HINSTANCE ProcessHandle, HWND WindowHandle)
     // Create Logical Device
     //
     {
+      Log.BeginScope("Creating Device.");
+      scope(exit) Log.EndScope("Device created.");
+
       //
       // Device Layers
       //
@@ -743,7 +797,8 @@ bool Initialize(VulkanData Vulkan, HINSTANCE ProcessHandle, HWND WindowHandle)
         LayerProperties.Expand(LayerCount);
         vkEnumerateDeviceLayerProperties(Gpu, &LayerCount, LayerProperties.Data.ptr).Verify;
 
-        Log.Info("Explicitly enabled device layers:");
+        Log.BeginScope("Explicitly enabled device layers:");
+        scope(exit) Log.EndScope("==========");
         foreach(ref Property; LayerProperties)
         {
           auto LayerName = Property.layerName.ptr.fromStringz;
@@ -753,11 +808,11 @@ bool Initialize(VulkanData Vulkan, HINSTANCE ProcessHandle, HWND WindowHandle)
           }
           else
           {
-            Log.Info("  [ ] %s", LayerName);
+            Log.Info("[ ] %s", LayerName);
             continue;
           }
 
-          Log.Info("  [x] %s", LayerName);
+          Log.Info("[x] %s", LayerName);
         }
       }
 
@@ -776,7 +831,8 @@ bool Initialize(VulkanData Vulkan, HINSTANCE ProcessHandle, HWND WindowHandle)
         ExtensionProperties.Expand(ExtensionCount);
         vkEnumerateDeviceExtensionProperties(Gpu, null, &ExtensionCount, ExtensionProperties.Data.ptr).Verify;
 
-        Log.Info("Explicitly enabled device extensions:");
+        Log.BeginScope("Explicitly enabled device extensions:");
+        scope(exit) Log.EndScope("==========");
         foreach(ref Property; ExtensionProperties)
         {
           auto ExtensionName = Property.extensionName.ptr.fromStringz;
@@ -787,11 +843,11 @@ bool Initialize(VulkanData Vulkan, HINSTANCE ProcessHandle, HWND WindowHandle)
           }
           else
           {
-            Log.Info("  [ ] %s", ExtensionName);
+            Log.Info("[ ] %s", ExtensionName);
             continue;
           }
 
-          Log.Info("  [x] %s", ExtensionName);
+          Log.Info("[x] %s", ExtensionName);
         }
 
         bool Success = true;
@@ -844,12 +900,14 @@ bool Initialize(VulkanData Vulkan, HINSTANCE ProcessHandle, HWND WindowHandle)
       vkGetDeviceQueue(Device, QueueNodeIndex, 0, &Queue);
       assert(Queue);
     }
-    Log.Info("Created logical device and retrieved the queue.");
 
     //
     // Get Physical Device Format and Color Space.
     //
     {
+      Log.BeginScope("Gathering physical device format and color space.");
+      scope(exit) Log.EndScope("Got format and color space for the previously created Win32 surface.");
+
       uint FormatCount;
       vkGetPhysicalDeviceSurfaceFormatsKHR(Gpu, Surface, &FormatCount, null).Verify;
       assert(FormatCount > 0);
@@ -870,7 +928,6 @@ bool Initialize(VulkanData Vulkan, HINSTANCE ProcessHandle, HWND WindowHandle)
 
       ColorSpace = SurfaceFormats[0].colorSpace;
     }
-    Log.Info("Got format and color space for the previously created Win32 surface.");
   }
 
   // Done.
@@ -885,6 +942,9 @@ bool PrepareSwapchain(VulkanData Vulkan)
     // Create Command Pool
     //
     {
+      Log.BeginScope("Creating command pool.");
+      scope(exit) Log.EndScope("Finished creating command pool.");
+
       VkCommandPoolCreateInfo CreateInfo;
       with(CreateInfo)
       {
@@ -895,12 +955,14 @@ bool PrepareSwapchain(VulkanData Vulkan)
       vkCreateCommandPool(Device, &CreateInfo, null, &CommandPool).Verify;
       assert(CommandPool);
     }
-    Log.Info("Created command pool.");
 
     //
     // Create Command Buffer
     //
     {
+      Log.BeginScope("Creating command buffer.");
+      scope(exit) Log.EndScope("Finished creating command buffer.");
+
       VkCommandBufferAllocateInfo AllocateInfo;
       with(AllocateInfo)
       {
@@ -910,12 +972,14 @@ bool PrepareSwapchain(VulkanData Vulkan)
       }
       vkAllocateCommandBuffers(Device, &AllocateInfo, &DrawCommand).Verify;
     }
-    Log.Info("Allocated command buffer for drawing.");
 
     //
     // Prepare Buffers
     //
     {
+      Log.BeginScope("Creating swapchain buffers.");
+      scope(exit) Log.EndScope("Finished creating swapchain buffers.");
+
       scope(success) CurrentSwapchainBuffer = 0; // Reset.
 
       VkSwapchainKHR OldSwapchain = Swapchain;
@@ -1050,12 +1114,14 @@ bool PrepareSwapchain(VulkanData Vulkan)
                           &SwapchainBuffers[Index].View).Verify;
       }
     }
-    Log.Info("Prepared swap chain buffers.");
 
     //
     // Prepare Depth
     //
     {
+      Log.BeginScope("Preparing depth.");
+      scope(exit) Log.EndScope("Finished preparing depth.");
+
       Depth.Format = VK_FORMAT_D16_UNORM;
       VkImageCreateInfo ImageCreateInfo;
       with(ImageCreateInfo)
@@ -1108,12 +1174,14 @@ bool PrepareSwapchain(VulkanData Vulkan)
       }
       vkCreateImageView(Device, &ImageViewCreateInfo, null, &Depth.View).Verify;
     }
-    Log.Info("Depth is prepared.");
 
     //
     // Prepare Textures
     //
     {
+      Log.BeginScope("Preparing textures.");
+      scope(exit) Log.EndScope("Finished preparing textures.");
+
       const VkFormat TextureFormat = VK_FORMAT_B8G8R8A8_UNORM;
       VkFormatProperties FormatProperties;
       uint[2][TextureCount] TextureColors =
@@ -1133,8 +1201,8 @@ bool PrepareSwapchain(VulkanData Vulkan)
           // Device can texture using linear textures.
           PrepareTextureImage(Vulkan, TextureColors[Index], &Vulkan.Textures[Index],
                               VK_IMAGE_TILING_LINEAR,
-                              /*cast(VkImageUsageFlags)*/VK_IMAGE_USAGE_SAMPLED_BIT,
-                              /*cast(VkFlags)*/VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+                              VK_IMAGE_USAGE_SAMPLED_BIT,
+                              VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
         }
         else if (FormatProperties.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT)
         {
@@ -1143,19 +1211,19 @@ bool PrepareSwapchain(VulkanData Vulkan)
 
           PrepareTextureImage(Vulkan, TextureColors[Index], &StagingTexture,
                               VK_IMAGE_TILING_LINEAR,
-                              /*cast(VkImageUsageFlags)*/VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+                              VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
                               VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
 
           PrepareTextureImage(Vulkan, TextureColors[Index], &Vulkan.Textures[Index],
                               VK_IMAGE_TILING_OPTIMAL,
-                              /*cast(VkImageUsageFlags)*/(VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT),
+                              (VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT),
                               VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
           SetImageLayout(Vulkan, StagingTexture.Image,
-                         /*cast(VkImageAspectFlags)*/VK_IMAGE_ASPECT_COLOR_BIT,
+                         VK_IMAGE_ASPECT_COLOR_BIT,
                          StagingTexture.ImageLayout,
                          VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                         /*cast(VkAccessFlags)*/0);
+                         0);
 
           SetImageLayout(Vulkan, Vulkan.Textures[Index].Image,
                          VK_IMAGE_ASPECT_COLOR_BIT,
@@ -1166,7 +1234,7 @@ bool PrepareSwapchain(VulkanData Vulkan)
           VkImageCopy CopyRegion;
           with(CopyRegion)
           {
-            srcSubresource.aspectMask = /*cast(VkImageAspectFlags)*/VK_IMAGE_ASPECT_COLOR_BIT;
+            srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
             srcSubresource.layerCount = 1;
 
             // Same subresource data.
@@ -1234,56 +1302,402 @@ bool PrepareSwapchain(VulkanData Vulkan)
         }
       }
     }
-    Log.Info("Textures are prepared.");
 
     //
     // Prepare Vertices
     //
     {
+      Log.BeginScope("Preparing vertices.");
+      scope(exit) Log.EndScope("Finished preparing vertices.");
+
+      static struct VertexData
+      {
+        Vector3 Position;
+        Vector2 TexCoord;
+      }
+
+      VertexData[3] Triangle =
+      [
+        VertexData(Vector3(-1.0f, -1.0f,  0.25f), Vector2(0.0f, 0.0f)),
+        VertexData(Vector3( 1.0f, -1.0f,  0.25f), Vector2(1.0f, 0.0f)),
+        VertexData(Vector3( 0.0f,  1.0f,  1.00f), Vector2(0.5f, 1.0f)),
+      ];
+      const TriangleBytes = Triangle.ByteCount;
+
+
+
+
+
+      VkBufferCreateInfo BufferCreateInfo;
+      with(BufferCreateInfo)
+      {
+        size = TriangleBytes;
+        usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+      }
+      vkCreateBuffer(Device, &BufferCreateInfo, null, &Vertices.Buffer).Verify;
+
+      VkMemoryRequirements MemoryRequirements;
+      vkGetBufferMemoryRequirements(Device, Vertices.Buffer, &MemoryRequirements);
+
+      VkMemoryAllocateInfo MemoryAllocateInfo;
+      with(MemoryAllocateInfo)
+      {
+        allocationSize = MemoryRequirements.size;
+        auto Result = ExtractMemoryTypeFromProperties(Vulkan,
+                                                      MemoryRequirements.memoryTypeBits,
+                                                      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+                                                      &memoryTypeIndex);
+        assert(Result);
+      }
+
+      vkAllocateMemory(Device, &MemoryAllocateInfo, null, &Vertices.Memory).Verify;
+
+      // Copy data from host to the device.
+      {
+        void* RawData;
+        vkMapMemory(Device, Vertices.Memory, 0, MemoryAllocateInfo.allocationSize, 0, &RawData).Verify;
+        scope(success) vkUnmapMemory(Device, Vertices.Memory);
+
+        auto Target = (cast(VertexData*)RawData)[0 .. 3];
+        Target[] = Triangle[];
+      }
+
+      vkBindBufferMemory(Device, Vertices.Buffer, Vertices.Memory, 0).Verify;
+
+      Vertices.BindID = 0;
+
+      with(Vertices.VertexInputInfo)
+      {
+        vertexBindingDescriptionCount = Vertices.VertexInputBindingDescs.length;
+        pVertexBindingDescriptions = Vertices.VertexInputBindingDescs.ptr;
+        vertexAttributeDescriptionCount = Vertices.VertexInputAttributeDescs.length;
+        pVertexAttributeDescriptions = Vertices.VertexInputAttributeDescs.ptr;
+      }
+
+      with(Vertices.VertexInputBindingDescs[0])
+      {
+        binding = Vertices.BindID;
+        stride = VertexData.sizeof;
+        inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+      }
+
+      with(Vertices.VertexInputAttributeDescs[0])
+      {
+        binding = Vertices.BindID;
+        location = 0;
+        format = VK_FORMAT_R32G32B32_SFLOAT;
+        offset = 0;
+      }
+
+      with(Vertices.VertexInputAttributeDescs[1])
+      {
+        binding = Vertices.BindID;
+        location = 1;
+        format = VK_FORMAT_R32G32_SFLOAT;
+        offset = typeof(VertexData.Position).sizeof;
+      }
     }
-    //Log.Info("Vertices are prepared.");
 
     //
     // Prepare Descriptor Layout
     //
     {
+      Log.BeginScope("Preparing descriptor layout.");
+      scope(exit) Log.EndScope("Finished preparing descriptor layout.");
+
+      VkDescriptorSetLayoutBinding LayoutBinding;
+      with(LayoutBinding)
+      {
+        //binding = Vertices.BindID; // Should I do that?
+        descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        descriptorCount = TextureCount;
+        stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+      }
+
+      VkDescriptorSetLayoutCreateInfo DescriptorLayout;
+      with(DescriptorLayout)
+      {
+        bindingCount = 1;
+        pBindings = &LayoutBinding;
+      }
+
+      vkCreateDescriptorSetLayout(Device, &DescriptorLayout, null, &DescriptorSetLayout).Verify;
+
+      VkPipelineLayoutCreateInfo PipelineLayoutCreateInfo;
+      with(PipelineLayoutCreateInfo)
+      {
+        setLayoutCount = 1;
+        pSetLayouts = &DescriptorSetLayout;
+      }
+      vkCreatePipelineLayout(Device, &PipelineLayoutCreateInfo, null, &PipelineLayout).Verify;
     }
-    //Log.Info("Descriptor layout prepared.");
 
     //
     // Prepare Render Pass
     //
     {
+      Log.BeginScope("Preparing render pass.");
+      scope(exit) Log.EndScope("Finished preparing render pass.");
+
+      VkAttachmentDescription[2] Attachments;
+      with(Attachments[0])
+      {
+        format = Format;
+        samples = VK_SAMPLE_COUNT_1_BIT;
+        loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+        stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+      }
+
+      with(Attachments[1])
+      {
+        format = Depth.Format;
+        samples = VK_SAMPLE_COUNT_1_BIT;
+        loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+        finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+      }
+
+      VkAttachmentReference ColorReference;
+      with(ColorReference)
+      {
+        attachment = 0;
+        layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+      }
+
+      VkAttachmentReference DepthReference;
+      with(DepthReference)
+      {
+        attachment = 1;
+        layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+      }
+
+      VkSubpassDescription SubpassDesc;
+      with(SubpassDesc)
+      {
+        pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+        colorAttachmentCount = 1;
+        pColorAttachments = &ColorReference;
+        pDepthStencilAttachment = &DepthReference;
+      }
+
+      VkRenderPassCreateInfo RenderPassCreateInfo;
+      with(RenderPassCreateInfo)
+      {
+        attachmentCount = Attachments.length;
+        pAttachments = Attachments.ptr;
+        subpassCount = 1;
+        pSubpasses = &SubpassDesc;
+      }
+
+      vkCreateRenderPass(Device, &RenderPassCreateInfo, null, &RenderPass).Verify;
     }
-    //Log.Info("Render pass prepared.");
 
     //
     // Prepare Pipeline
     //
     {
+      Log.BeginScope("Preparing pipeline.");
+      scope(exit) Log.EndScope("Finished preparing pipeline.");
+
+      // Two shader stages: vs and fs
+      VkPipelineShaderStageCreateInfo[2] Stages;
+
+      //
+      // Vertex Shader
+      //
+      auto VertexShaderStage = &Stages[0];
+      {
+        VertexShaderStage.stage = VK_SHADER_STAGE_VERTEX_BIT;
+        VertexShaderStage.pName = "main".ptr;
+
+        auto Filename = "../data/shader/tri-vert.spv"w;
+        Log.BeginScope("Loading vertex shader from file: %s", Filename);
+        scope(exit) Log.EndScope("");
+
+        auto File = OpenFile(.Allocator, Filename);
+        scope(exit) CloseFile(.Allocator, File);
+
+        auto ShaderCode = .Allocator.NewArray!void(File.Size);
+        scope(exit) .Allocator.Delete(ShaderCode);
+
+        auto BytesRead = File.Read(ShaderCode);
+        assert(BytesRead == ShaderCode.length);
+
+        VkShaderModuleCreateInfo ShaderModuleCreateInfo;
+        with(ShaderModuleCreateInfo)
+        {
+          codeSize = ShaderCode.length; // In bytes, regardless of the fact that typeof(*pCode) == uint.
+          pCode = cast(const(uint)*)ShaderCode.ptr; // As a const(uint)*, for some reason...
+        }
+        vkCreateShaderModule(Device, &ShaderModuleCreateInfo, NULL, &VertexShaderStage._module).Verify;
+      }
+      scope(exit) vkDestroyShaderModule(Device, VertexShaderStage._module, null);
+
+      //
+      // Fragment Shader
+      //
+      auto FragmentShaderStage = &Stages[1];
+      {
+        FragmentShaderStage.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+        FragmentShaderStage.pName = "main";
+
+        auto Filename = "../data/shader/tri-frag.spv"w;
+        Log.BeginScope("Loading vertex shader from file: %s", Filename);
+        scope(exit) Log.EndScope("");
+
+        auto File = OpenFile(.Allocator, Filename);
+        scope(exit) CloseFile(.Allocator, File);
+
+        auto ShaderCode = .Allocator.NewArray!void(File.Size);
+        scope(exit) .Allocator.Delete(ShaderCode);
+
+        auto BytesRead = File.Read(ShaderCode);
+        assert(BytesRead == ShaderCode.length);
+
+        VkShaderModuleCreateInfo ShaderModuleCreateInfo;
+        with(ShaderModuleCreateInfo)
+        {
+          codeSize = ShaderCode.length; // In bytes, regardless of the fact that typeof(*pCode) == uint.
+          pCode = cast(const(uint)*)ShaderCode.ptr; // As a const(uint)*, for some reason...
+        }
+        vkCreateShaderModule(Device, &ShaderModuleCreateInfo, NULL, &FragmentShaderStage._module).Verify;
+      }
+      scope(exit) vkDestroyShaderModule(Device, FragmentShaderStage._module, null);
+
+      VkPipelineVertexInputStateCreateInfo VertexInputState;
+      with(VertexInputState)
+      {
+        vertexBindingDescriptionCount = Vertices.VertexInputBindingDescs.length;
+        pVertexBindingDescriptions    = Vertices.VertexInputBindingDescs.ptr;
+        vertexAttributeDescriptionCount = Vertices.VertexInputAttributeDescs.length;
+        pVertexAttributeDescriptions    = Vertices.VertexInputAttributeDescs.ptr;
+      }
+
+      VkPipelineInputAssemblyStateCreateInfo InputAssemblyState;
+      with(InputAssemblyState)
+      {
+        topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+      }
+
+      VkPipelineViewportStateCreateInfo ViewportState;
+      with(ViewportState)
+      {
+        viewportCount = 1;
+        scissorCount = 1;
+      }
+
+      VkPipelineRasterizationStateCreateInfo RasterizationState;
+      with(RasterizationState)
+      {
+        polygonMode = VK_POLYGON_MODE_FILL;
+        cullMode = VK_CULL_MODE_BACK_BIT;
+        frontFace = VK_FRONT_FACE_CLOCKWISE;
+        depthClampEnable = VK_FALSE;
+        rasterizerDiscardEnable = VK_FALSE;
+        depthBiasEnable = VK_FALSE;
+      }
+
+      VkPipelineMultisampleStateCreateInfo MultisampleState;
+      with(MultisampleState)
+      {
+        rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+      }
+
+      VkPipelineDepthStencilStateCreateInfo DepthStencilState;
+      with(DepthStencilState)
+      {
+        depthTestEnable = VK_TRUE;
+        depthWriteEnable = VK_TRUE;
+        depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
+        depthBoundsTestEnable = VK_FALSE;
+        back.failOp = VK_STENCIL_OP_KEEP;
+        back.passOp = VK_STENCIL_OP_KEEP;
+        back.compareOp = VK_COMPARE_OP_ALWAYS;
+        stencilTestEnable = VK_FALSE;
+        front = back;
+      }
+
+      VkPipelineColorBlendAttachmentState[1] ColorBlendStateAttachments;
+      with(ColorBlendStateAttachments[0])
+      {
+        colorWriteMask = 0xf;
+        blendEnable = VK_FALSE;
+      }
+
+      VkPipelineColorBlendStateCreateInfo ColorBlendState;
+      with(ColorBlendState)
+      {
+        attachmentCount = ColorBlendStateAttachments.length;
+        pAttachments = ColorBlendStateAttachments.ptr;
+      }
+
+      VkDynamicState[VK_DYNAMIC_STATE_RANGE_SIZE] DynamicStates;
+      VkPipelineDynamicStateCreateInfo DynamicState;
+      with(DynamicState)
+      {
+        DynamicStates[dynamicStateCount++] = VK_DYNAMIC_STATE_VIEWPORT;
+        DynamicStates[dynamicStateCount++] = VK_DYNAMIC_STATE_SCISSOR;
+        pDynamicStates = DynamicStates.ptr;
+      }
+
+      VkGraphicsPipelineCreateInfo GraphicsPipelineCreateInfo;
+      with(GraphicsPipelineCreateInfo)
+      {
+        stageCount = Stages.length;
+        pStages = Stages.ptr;
+        pVertexInputState = &VertexInputState;
+        pInputAssemblyState = &InputAssemblyState;
+        pViewportState = &ViewportState;
+        pRasterizationState = &RasterizationState;
+        pMultisampleState = &MultisampleState;
+        pDepthStencilState = &DepthStencilState;
+        pColorBlendState = &ColorBlendState;
+        pDynamicState = &DynamicState;
+        layout = PipelineLayout;
+        renderPass = RenderPass;
+      }
+
+      VkPipelineCacheCreateInfo PipelineCacheCreateInfo;
+      VkPipelineCache PipelineCache;
+      vkCreatePipelineCache(Device, &PipelineCacheCreateInfo, null, &PipelineCache).Verify;
+      scope(exit) vkDestroyPipelineCache(Device, PipelineCache, null);
+
+      vkCreateGraphicsPipelines(Device, PipelineCache,
+                                1, &GraphicsPipelineCreateInfo,
+                                null,
+                                &Pipeline).Verify;
     }
-    //Log.Info("Pipeline prepared.");
 
     //
     // Prepare Descriptor Pool
     //
     {
+      Log.BeginScope("Preparing descriptor pool.");
+      scope(exit) Log.EndScope("Finished preparing descriptor pool.");
     }
-    //Log.Info("Descriptor pool prepared.");
 
     //
     // Prepare Descriptor Set
     //
     {
+      Log.BeginScope("Preparing descriptor set.");
+      scope(exit) Log.EndScope("Finished preparing descriptor set.");
     }
-    //Log.Info("Descriptor set prepared.");
 
     //
     // Prepare Framebuffers
     //
     {
+      Log.BeginScope("Preparing framebuffers.");
+      scope(exit) Log.EndScope("Finished preparing framebuffers.");
     }
-    //Log.Info("Framebuffers prepared.");
   }
 
   // Done.
@@ -1478,8 +1892,8 @@ void FlushSetupCommand(VulkanData Vulkan)
       commandBufferCount = 1;
       pCommandBuffers = &SetupCommand;
     }
-    VkFence NullFence;
-    vkQueueSubmit(Queue, 1, &SubmitInfo, NullFence).Verify;
+    VkFence nullFence;
+    vkQueueSubmit(Queue, 1, &SubmitInfo, nullFence).Verify;
 
     vkQueueWaitIdle(Queue).Verify;
 
