@@ -3,6 +3,7 @@ version(Windows):
 
 import core.sys.windows.windows;
 
+import krepel.algorithm : Min;
 import krepel.memory : AlignedPointer;
 import krepel.math : IsPowerOfTwo;
 import krepel.log;
@@ -96,29 +97,45 @@ private auto AlignAndSavePadding(ubyte* InputPointer, size_t Alignment)
 }
 
 /// Log sink that outputs to Visual Studio's Output window.
-void VisualStudioLogSink(LogLevel Level, char[] Message)
+void VisualStudioLogSink(LogSinkArgs Args)
 {
-  char[1024] Buffer = void;
-
-  final switch(Level)
+  with(Args)
   {
-    case LogLevel.Info:    OutputDebugStringA("Info: ");    break;
-    case LogLevel.Warning: OutputDebugStringA("Warning: "); break;
-    case LogLevel.Failure: OutputDebugStringA("Failure: "); break;
+    final switch(Level)
+    {
+      case LogLevel.Info:       OutputDebugStringA("Info"); break;
+      case LogLevel.Warning:    OutputDebugStringA("Warn"); break;
+      case LogLevel.Failure:    OutputDebugStringA("Fail"); break;
+      case LogLevel.ScopeBegin: OutputDebugStringA(" >>>"); break;
+      case LogLevel.ScopeEnd:   OutputDebugStringA(" <<<"); break;
+    }
+
+    if(Message.length)
+    {
+      OutputDebugStringA(": ");
+
+      while(Indentation > 0)
+      {
+        OutputDebugStringA("  ");
+        Indentation--;
+      }
+
+      // Write the message out in null-terminated chunks.
+      char[1024] Buffer = void;
+      while(Message.length)
+      {
+        auto Amount = Min(Buffer.length - 1, Message.length);
+
+        Buffer[Amount] = '\0';
+        // Copy over the data.
+        Buffer[0 .. Amount] = Message[0 .. Amount];
+
+        OutputDebugStringA(cast(const(char)*)Buffer.ptr);
+
+        Message = Message[Amount .. $];
+      }
+    }
+
+    OutputDebugStringA("\n");
   }
-
-  while(Message.length)
-  {
-    auto Amount = Min(Buffer.length - 1, Message.length);
-
-    Buffer[Amount] = '\0';
-    // Copy over the data.
-    Buffer[0 .. Amount] = Message[0 .. Amount];
-
-    OutputDebugStringA(cast(const(char)*)Buffer.ptr);
-
-    Message = Message[Amount .. $];
-  }
-
-  OutputDebugStringA("\n");
 }
