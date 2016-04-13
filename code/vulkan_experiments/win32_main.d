@@ -342,6 +342,11 @@ class VulkanData
 
     VkRenderPass RenderPass;
     VkPipeline Pipeline;
+
+    VkDescriptorPool DescriptorPool;
+    VkDescriptorSet DescriptorSet;
+
+    Array!VkFramebuffer Framebuffers;
   }
 
   this(IAllocator Allocator)
@@ -349,6 +354,7 @@ class VulkanData
     DLLName = UString(Allocator);
     QueueProperties.Allocator = Allocator;
     SwapchainBuffers.Allocator = Allocator;
+    Framebuffers.Allocator = Allocator;
   }
 }
 
@@ -1681,6 +1687,22 @@ bool PrepareSwapchain(VulkanData Vulkan)
     {
       Log.BeginScope("Preparing descriptor pool.");
       scope(exit) Log.EndScope("Finished preparing descriptor pool.");
+
+      VkDescriptorPoolSize TypeCount;
+      with(TypeCount)
+      {
+        type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        descriptorCount = TextureCount;
+      }
+      VkDescriptorPoolCreateInfo DescriptorPoolCreateInfo;
+      with(DescriptorPoolCreateInfo)
+      {
+        maxSets = 1;
+        poolSizeCount = 1;
+        pPoolSizes = &TypeCount;
+      }
+
+      vkCreateDescriptorPool(Device, &DescriptorPoolCreateInfo, null, &DescriptorPool).Verify;
     }
 
     //
@@ -1689,6 +1711,35 @@ bool PrepareSwapchain(VulkanData Vulkan)
     {
       Log.BeginScope("Preparing descriptor set.");
       scope(exit) Log.EndScope("Finished preparing descriptor set.");
+
+      VkDescriptorSetAllocateInfo DescriptorSetAllocateInfo;
+      with(DescriptorSetAllocateInfo)
+      {
+        descriptorPool = DescriptorPool;
+        descriptorSetCount = 1;
+        pSetLayouts = &DescriptorSetLayout;
+      }
+      vkAllocateDescriptorSets(Device, &DescriptorSetAllocateInfo, &DescriptorSet).Verify;
+
+      VkDescriptorImageInfo[TextureCount] TextureDescriptors;
+      foreach(Index; 0 .. TextureCount)
+      {
+        TextureDescriptors[Index].sampler = Textures[Index].Sampler;
+        TextureDescriptors[Index].imageView = Textures[Index].View;
+        TextureDescriptors[Index].imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+      }
+
+      VkWriteDescriptorSet WriteDescriptorSet;
+      with(WriteDescriptorSet)
+      {
+        dstSet = DescriptorSet;
+        descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        descriptorCount = TextureDescriptors.length;
+        pImageInfo = TextureDescriptors.ptr;
+      }
+      vkUpdateDescriptorSets(Device,
+                             1, &WriteDescriptorSet,
+                             0, null);
     }
 
     //
@@ -1697,6 +1748,29 @@ bool PrepareSwapchain(VulkanData Vulkan)
     {
       Log.BeginScope("Preparing framebuffers.");
       scope(exit) Log.EndScope("Finished preparing framebuffers.");
+
+      VkImageView[2] Attachments;
+      Attachments[1] = Depth.View;
+
+      VkFramebufferCreateInfo FramebufferCreateInfo;
+      with(FramebufferCreateInfo)
+      {
+        renderPass = RenderPass;
+        attachmentCount = Attachments.length;
+        pAttachments = Attachments.ptr;
+        width = Width;
+        height = Height;
+        layers = 1;
+      }
+
+      Framebuffers.Clear();
+      Framebuffers.Expand(SwapchainImageCount);
+
+      foreach(Index; 0 .. SwapchainImageCount)
+      {
+        Attachments[0] = SwapchainBuffers[Index].View;
+        vkCreateFramebuffer(Device, &FramebufferCreateInfo, null, &Framebuffers[Index]).Verify;
+      }
     }
   }
 
