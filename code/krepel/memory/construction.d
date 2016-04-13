@@ -85,34 +85,42 @@ void Destruct(Type)(Type* Instance)
 
 void ConstructArray(Type, ArgTypes...)(Type[] Array, auto ref ArgTypes Args)
 {
-  static if(Meta.IsPlainOldData!Type)
+  // Arrays of void are always uninitialized.
+  static if(!Meta.IsVoid!Type)
   {
-    static      if(Args.length == 0) BlitInitialData(Array);
-    else static if(Args.length == 1) Array[] = Args[0];
+    static if(Meta.IsPlainOldData!Type)
+    {
+      static      if(Args.length == 0) BlitInitialData(Array);
+      else static if(Args.length == 1) Array[] = Args[0];
+      else
+      {
+        static assert(false,"Cannot initialize plain old data "
+                            "with more than one argument.");
+      }
+    }
     else
     {
-      static assert(false,"Cannot initialize plain old data "
-                          "with more than one argument.");
+      static if(is(Type == class)) foreach(    Element; Array) Construct(Element);
+      else                         foreach(ref Element; Array) Construct(&Element);
     }
-  }
-  else
-  {
-    static if(is(Type == class)) foreach(    Element; Array) Construct(Element);
-    else                         foreach(ref Element; Array) Construct(&Element);
   }
 }
 
 
 void DestructArray(Type)(Type[] Array)
 {
-  static if(Meta.IsPlainOldData!Type)
+  // Can't destruct an array of void.
+  static if(!Meta.IsVoid!Type)
   {
-    BlitInitialData(Array);
-  }
-  else
-  {
-    static if(is(Type == class)) foreach(    Element; Array) Destruct(Element);
-    else                         foreach(ref Element; Array) Destruct(&Element);
+    static if(Meta.IsPlainOldData!Type)
+    {
+      BlitInitialData(Array);
+    }
+    else
+    {
+      static if(is(Type == class)) foreach(    Element; Array) Destruct(Element);
+      else                         foreach(ref Element; Array) Destruct(&Element);
+    }
   }
 }
 
