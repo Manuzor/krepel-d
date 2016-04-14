@@ -5,6 +5,7 @@ import krepel.container;
 import krepel.scene.game_object;
 import krepel.string;
 import krepel.scene.scene_component;
+import krepel.game_framework.tick;
 
 class SceneGraph
 {
@@ -41,5 +42,16 @@ class SceneGraph
     }
     GameObjects.RemoveAt(Index);
     Object.RefCountPayload.RemoveRef();
+  }
+
+  void Tick(TickData Tick)
+  {
+    foreach(Object; GameObjects)
+    {
+      if (Object.TickEnabled)
+      {
+        Object.Tick(Tick);
+      }
+    }
   }
 }

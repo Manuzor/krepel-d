@@ -6,6 +6,7 @@ import krepel.math;
 import krepel.container;
 import krepel.scene.component;
 import krepel.scene.scene_component;
+import krepel.game_framework.tick;
 
 class GameObject
 {
@@ -14,6 +15,8 @@ class GameObject
   UString Name;
   Array!GameComponent Components;
   SceneComponent RootComponent;
+
+  bool TickEnabled = true;
 
   this(IAllocator Allocator, UString Name)
   {
@@ -61,5 +64,16 @@ class GameObject
       Allocator.Delete(Component);
     }
     Components.Clear();
+  }
+
+  void Tick(TickData Tick)
+  {
+    foreach(Component; Components)
+    {
+      if (Component.TickEnabled)
+      {
+        Component.Tick(Tick);
+      }
+    }
   }
 }
