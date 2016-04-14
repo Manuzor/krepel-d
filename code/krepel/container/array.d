@@ -236,6 +236,17 @@ struct Array(T)
     Data = Data[0 .. $ - CountToRemove];
   }
 
+  bool RemoveFirst(ArgumentType)(ArgumentType ToRemove)
+  {
+    auto Index = this[].CountUntil(ToRemove);
+    if (Index >= 0)
+    {
+      this.RemoveAt(Index);
+      return true;
+    }
+    return false;
+  }
+
   void Insert(IndexType)(IndexType Where, const(ElementType[]) ToInsert)
   {
     assert(Where >= 0 && Where <= Count);
