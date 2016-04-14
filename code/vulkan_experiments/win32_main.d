@@ -15,6 +15,24 @@ import std.string : toStringz, fromStringz;
 alias CString = const(char)*;
 enum VK_LAYER_LUNARG_STANDARD_VALIDATION_NAME = "VK_LAYER_LUNARG_standard_validation";
 
+void HandleError(Throwable Error)
+{
+  auto ErrorString = Error.toString();
+  string MessageBoxMessage;
+  if(.Log)
+  {
+    .Log.Failure("%s", Error);
+    MessageBoxMessage = "An error occurred. Check the log.";
+  }
+  else
+  {
+    MessageBoxMessage = ErrorString[0 .. Min(2000, ErrorString.length)];
+  }
+  MessageBoxA(null, MessageBoxMessage.toStringz(),
+              "Error",
+              MB_OK | MB_ICONEXCLAMATION);
+}
+
 extern(Windows)
 int WinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
             LPSTR CommandLine, int ShowCode)
@@ -27,18 +45,56 @@ int WinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
 
     Runtime.initialize();
 
-    Result = MyWinMain(Instance, PreviousInstance, CommandLine, ShowCode);
+    {
+      void* BaseAddress;
+      debug BaseAddress = cast(void*)2.TiB;
+      const MemorySize = 6.GiB;
+      auto RawMemory = VirtualAlloc(BaseAddress,
+                                    MemorySize,
+                                    MEM_RESERVE | MEM_COMMIT,
+                                    PAGE_READWRITE);
+      if(RawMemory is null)
+      {
+        return 1;
+      }
+      assert(RawMemory);
+      auto Heap = HeapMemory((cast(ubyte*)RawMemory)[0 .. MemorySize]);
+      .Allocator = Heap.Wrap();
+      scope(exit) .Allocator = null;
+
+      Log = .Allocator.New!LogData(.Allocator);
+      scope(exit)
+      {
+        .Allocator.Delete(Log);
+        Log = null;
+      }
+
+      debug
+      {
+        Win32SetupConsole("Krepel Console".ptr);
+        Log.Sinks ~= ToDelegate(&StdoutLogSink);
+      }
+      Log.Sinks ~= ToDelegate(&VisualStudioLogSink);
+
+      Log.Info("=== Beginning of Log ===");
+      scope(exit) Log.Info("=== End of Log ===");
+
+      // User another try-catch block to ensure the log still lives.
+      try
+      {
+        Result = MyWinMain(Instance, PreviousInstance, CommandLine, ShowCode);
+      }
+      catch(Throwable Error)
+      {
+        HandleError(Error);
+      }
+    }
 
     Runtime.terminate();
   }
   catch(Throwable Error)
   {
-    auto ErrorString = Error.toString();
-    auto ShortErrorString = ErrorString[0 .. Min(2000, ErrorString.length)];
-    MessageBoxA(null, ShortErrorString.toStringz(),
-                "Error",
-                MB_OK | MB_ICONEXCLAMATION);
-
+    HandleError(Error);
     Result = 0;
   }
 
@@ -76,41 +132,21 @@ Dictionary!(HWND, VulkanData) Vulkans;
 int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
               LPSTR CommandLine, int ShowCode)
 {
-  debug Win32SetupConsole("Krepel Console".ptr);
-
-  void* BaseAddress;
-  debug BaseAddress = cast(void*)2.TiB;
-  const MemorySize = 6.GiB;
-  auto RawMemory = VirtualAlloc(BaseAddress,
-                                MemorySize,
-                                MEM_RESERVE | MEM_COMMIT,
-                                PAGE_READWRITE);
-  if(RawMemory is null)
-  {
-    return 1;
-  }
-  assert(RawMemory);
-  auto Heap = HeapMemory((cast(ubyte*)RawMemory)[0 .. MemorySize]);
-  .Allocator = Heap.Wrap();
-  scope(exit) .Allocator = null;
-
-  Log = .Allocator.New!LogData(.Allocator);
-  scope(success)
-  {
-    .Allocator.Delete(Log);
-    Log = null;
-  }
-
-  debug Log.Sinks ~= ToDelegate(&StdoutLogSink);
-  Log.Sinks ~= ToDelegate(&VisualStudioLogSink);
-
-  Log.Info("=== Beginning of Log ===");
-  scope(exit) Log.Info("=== End of Log ===");
-
   .Vulkans.Allocator = .Allocator;
   scope(exit) .Vulkans.ClearMemory();
 
   version(XInput_RuntimeLinking) LoadXInput();
+
+  // TODO: Implement CreateVulkanInstance(IAllocator) that does not need a
+  // window yet.
+  auto Vulkan = Allocator.New!VulkanData(Allocator);
+  scope(exit) if(Vulkan) .Allocator.Delete(Vulkan);
+
+  if(!CreateVulkanInstance(Vulkan))
+  {
+    Log.Failure("Failed to create vulkan instance.");
+    return 1;
+  }
 
   WNDCLASSA WindowClass;
   with(WindowClass)
@@ -136,11 +172,10 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
 
     if(Window)
     {
-      auto Vulkan = .Allocator.NewARC!VulkanData(.Allocator);
-
       // TODO: scope(success) Vulkan.Destroy();?
       bool VulkanInitialized;
-      bool SwapchainPreparedInitially;
+
+      scope(success) if(VulkanInitialized) Vulkan.Cleanup();
 
       {
         Log.BeginScope("Initializing Vulkan.");
@@ -155,12 +190,12 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
       if(VulkanInitialized)
       {
         Log.BeginScope("Preparing Swapchain for the first time.");
-        SwapchainPreparedInitially = Vulkan.PrepareSwapchain();
-        if(SwapchainPreparedInitially) Log.EndScope("Swapchain is prepared.");
-        else                           Log.EndScope("Failed to prepare Swapchain.");
+        Vulkan.IsPrepared = Vulkan.PrepareSwapchain();
+        if(Vulkan.IsPrepared) Log.EndScope("Swapchain is prepared.");
+        else                  Log.EndScope("Failed to prepare Swapchain.");
       }
 
-      if(SwapchainPreparedInitially)
+      if(Vulkan.IsPrepared)
       {
         //
         // Main Loop
@@ -168,7 +203,7 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
         .Running = true;
         while(.Running)
         {
-          //RedrawWindow(Window, null, null, RDW_INTERNALPAINT);
+          RedrawWindow(Window, null, null, RDW_INTERNALPAINT);
           Win32ProcessPendingMessages();
         }
       }
@@ -260,12 +295,27 @@ LRESULT Win32MainWindowCallback(HWND Window, UINT Message,
 
     case WM_PAINT:
     {
-      PAINTSTRUCT Paint;
-      HDC DeviceContext = BeginPaint(Window, &Paint);
+      //PAINTSTRUCT Paint;
+      //HDC DeviceContext = BeginPaint(Window, &Paint);
 
-      if(Vulkan) Vulkan.Draw();
+      if(Vulkan && Vulkan.IsPrepared)
+      {
+        if(Vulkan.DepthStencilValue > 0.99f)
+        {
+          Vulkan.DepthIncrement = -0.001f;
+        }
+        if(Vulkan.DepthStencilValue < 0.8f)
+        {
+          Vulkan.DepthIncrement = 0.001f;
+        }
 
-      EndPaint(Window, &Paint);
+        Vulkan.DepthStencilValue += Vulkan.DepthIncrement;
+        Log.Info("Depth Stencil Value Sample: %f", Vulkan.DepthStencilValue);
+
+        Vulkan.Draw();
+      }
+
+      //EndPaint(Window, &Paint);
     } break;
 
     default:
@@ -280,7 +330,7 @@ LRESULT Win32MainWindowCallback(HWND Window, UINT Message,
 
 class VulkanData
 {
-  RefCountPayloadData RefCountPayload;
+  bool IsPrepared;
 
   //
   // General Data
@@ -364,7 +414,7 @@ class VulkanData
 
     Array!VkFramebuffer Framebuffers;
 
-    float DepthStencilValue = 0.0f;
+    float DepthStencilValue = 1.0f;
     float DepthIncrement = 0.0f;
   }
 
@@ -416,7 +466,7 @@ struct VertexBufferData
   VkVertexInputAttributeDescription[2] VertexInputAttributeDescs;
 }
 
-bool Initialize(VulkanData Vulkan, HINSTANCE ProcessHandle, HWND WindowHandle)
+bool CreateVulkanInstance(VulkanData Vulkan)
 {
   with(Vulkan)
   {
@@ -726,6 +776,15 @@ bool Initialize(VulkanData Vulkan, HINSTANCE ProcessHandle, HWND WindowHandle)
       QueueProperties.Expand(QueueCount);
       vkGetPhysicalDeviceQueueFamilyProperties(Gpu, &QueueCount, QueueProperties.Data.ptr);
     }
+  }
+
+  return true;
+}
+
+bool Initialize(VulkanData Vulkan, HINSTANCE ProcessHandle, HWND WindowHandle)
+{
+  with(Vulkan)
+  {
 
     //
     // Create Win32 Surface
@@ -1429,14 +1488,14 @@ bool PrepareSwapchain(VulkanData Vulkan)
         stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
       }
 
-      VkDescriptorSetLayoutCreateInfo DescriptorLayout;
-      with(DescriptorLayout)
+      VkDescriptorSetLayoutCreateInfo DescriptorLayoutCreateInfo;
+      with(DescriptorLayoutCreateInfo)
       {
         bindingCount = 1;
         pBindings = &LayoutBinding;
       }
 
-      vkCreateDescriptorSetLayout(Device, &DescriptorLayout, null, &DescriptorSetLayout).Verify;
+      vkCreateDescriptorSetLayout(Device, &DescriptorLayoutCreateInfo, null, &DescriptorSetLayout).Verify;
 
       VkPipelineLayoutCreateInfo PipelineLayoutCreateInfo;
       with(PipelineLayoutCreateInfo)
@@ -1992,9 +2051,11 @@ void Draw(VulkanData Vulkan)
     VkFence NullFence;
     VkResult Error;
 
-    VkSemaphoreCreateInfo PresentCompleteSemaphoreCreateInfo;
     VkSemaphore PresentCompleteSemaphore;
-    vkCreateSemaphore(Device, &PresentCompleteSemaphoreCreateInfo, null, &PresentCompleteSemaphore).Verify;
+    {
+      VkSemaphoreCreateInfo PresentCompleteSemaphoreCreateInfo;
+      vkCreateSemaphore(Device, &PresentCompleteSemaphoreCreateInfo, null, &PresentCompleteSemaphore).Verify;
+    }
     scope(exit) vkDestroySemaphore(Device, PresentCompleteSemaphore, null);
 
     // Get the index of the next available swapchain image:
@@ -2009,10 +2070,8 @@ void Draw(VulkanData Vulkan)
       {
         // Swapchain is out of date (e.g. the window was resized) and must be
         // recreated:
-
-        // TODO: Resize.
-        //Resize(Vulkan);
-        //Draw(Vulkan);
+        Resize(Vulkan);
+        Draw(Vulkan);
       } break;
       case VK_SUBOPTIMAL_KHR:
       {
@@ -2037,87 +2096,106 @@ void Draw(VulkanData Vulkan)
     // okay to render to the image.
 
     // FIXME/TODO: DEAL WITH VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
-    Vulkan.PrepareCommandForDrawing();
-    VkPipelineStageFlags PipelineStageFlags = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-    VkSubmitInfo SubmitInfo;
-    with(SubmitInfo)
-    {
-      waitSemaphoreCount = 1;
-      pWaitSemaphores = &PresentCompleteSemaphore;
-      pWaitDstStageMask = &PipelineStageFlags;
-      commandBufferCount = 1;
-      pCommandBuffers = &DrawCommand;
-      signalSemaphoreCount = 0;
-      pSignalSemaphores = null;
-    }
+    Vulkan.CreateDrawCommand();
 
-    vkQueueSubmit(Queue,
-                  1, &SubmitInfo,
-                  NullFence).Verify;
-
-    VkPresentInfoKHR Present;
-    with(Present)
+    // Submit the draw command to the queue.
     {
-      swapchainCount = 1;
-      pSwapchains = &Swapchain;
-      pImageIndices = &CurrentBufferIndex;
-    }
-
-    Error = vkQueuePresentKHR(Queue, &Present);
-    switch(Error)
-    {
-      case VK_ERROR_OUT_OF_DATE_KHR:
+      VkPipelineStageFlags PipelineStageFlags = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+      VkSubmitInfo SubmitInfo;
+      with(SubmitInfo)
       {
-        // Swapchain is out of date (e.g. the window was resized) and must be
-        // recreated:
-        // TODO: Resize.
-        //Vulkan.Resize();
-      } break;
-      case VK_SUBOPTIMAL_KHR:
-      {
-        // Swapchain is not as optimal as it could be, but the platform's
-        // presentation engine will still present the image correctly.
-      } break;
-      default: Verify(Error);
+        waitSemaphoreCount = 1;
+        pWaitSemaphores = &PresentCompleteSemaphore;
+        pWaitDstStageMask = &PipelineStageFlags;
+        commandBufferCount = 1;
+        pCommandBuffers = &DrawCommand;
+        signalSemaphoreCount = 0;
+        pSignalSemaphores = null;
+      }
+
+      vkQueueSubmit(Queue,
+                    1, &SubmitInfo,
+                    NullFence).Verify;
     }
 
+    // Present the results.
+    {
+      VkPresentInfoKHR Present;
+      with(Present)
+      {
+        swapchainCount = 1;
+        pSwapchains = &Swapchain;
+        pImageIndices = &CurrentBufferIndex;
+      }
+
+      Error = vkQueuePresentKHR(Queue, &Present);
+      switch(Error)
+      {
+        case VK_ERROR_OUT_OF_DATE_KHR:
+        {
+          // Swapchain is out of date (e.g. the window was resized) and must be
+          // recreated:
+          // TODO: Resize.
+          Vulkan.Resize();
+        } break;
+        case VK_SUBOPTIMAL_KHR:
+        {
+          // Swapchain is not as optimal as it could be, but the platform's
+          // presentation engine will still present the image correctly.
+        } break;
+        default: Verify(Error);
+      }
+    }
+
+    // Wait for the queue to complete.
     vkQueueWaitIdle(Queue).Verify;
   }
 }
 
-void PrepareCommandForDrawing(VulkanData Vulkan)
+void CreateDrawCommand(VulkanData Vulkan)
 {
   with(Vulkan)
   {
-    VkCommandBufferInheritanceInfo CommandBufferInheritanceInfo;
-    VkCommandBufferBeginInfo CommandBufferBeginInfo;
-    CommandBufferBeginInfo.pInheritanceInfo = &CommandBufferInheritanceInfo;
-    vkBeginCommandBuffer(DrawCommand, &CommandBufferBeginInfo).Verify;
+    {
+      VkCommandBufferInheritanceInfo CommandBufferInheritanceInfo;
+      assert(CommandBufferInheritanceInfo.sType == VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO);
+      VkCommandBufferBeginInfo CommandBufferBeginInfo;
+      assert(CommandBufferBeginInfo.sType == VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO);
+      CommandBufferBeginInfo.pInheritanceInfo = &CommandBufferInheritanceInfo;
+      vkBeginCommandBuffer(DrawCommand, &CommandBufferBeginInfo).Verify;
+    }
     scope(exit) vkEndCommandBuffer(DrawCommand).Verify;
 
-    VkClearValue[2] ClearValues;
-    with(ClearValues[0])
+    //
+    // Render Pass
+    //
     {
-      color.float32[] = 0.8f;
-    }
-    with(ClearValues[1])
-    {
-      depthStencil.depth = Vulkan.DepthStencilValue;
-      depthStencil.stencil = 0;
-    }
+      // Begin render pass.
+      {
+        VkClearValue[2] ClearValues;
+        with(ClearValues[0])
+        {
+          const CornflowerBlue = Vector4(100 / 255.0f, 149 / 255.0f, 237 / 255.0f, 1.0f);
+          color.float32[] = CornflowerBlue.Data[];
+        }
+        with(ClearValues[1])
+        {
+          depthStencil.depth = Vulkan.DepthStencilValue;
+          depthStencil.stencil = 0;
+        }
 
-    VkRenderPassBeginInfo RenderPassBeginInfo;
-    with(RenderPassBeginInfo)
-    {
-      renderPass = RenderPass;
-      framebuffer = Framebuffers[CurrentBufferIndex];
-      renderArea.extent.width = Width;
-      renderArea.extent.height = Height;
-      clearValueCount = ClearValues.length;
-      pClearValues = ClearValues.ptr;
-    }
-    {
-      vkCmdBeginRenderPass(DrawCommand, &RenderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+        VkRenderPassBeginInfo RenderPassBeginInfo;
+        with(RenderPassBeginInfo)
+        {
+          renderPass = RenderPass;
+          framebuffer = Framebuffers[CurrentBufferIndex];
+          renderArea.extent.width = Width;
+          renderArea.extent.height = Height;
+          clearValueCount = ClearValues.length;
+          pClearValues = ClearValues.ptr;
+        }
+        vkCmdBeginRenderPass(DrawCommand, &RenderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+      }
       scope(exit) vkCmdEndRenderPass(DrawCommand);
 
       vkCmdBindPipeline(DrawCommand, VK_PIPELINE_BIND_POINT_GRAPHICS, Pipeline);
@@ -2126,27 +2204,35 @@ void PrepareCommandForDrawing(VulkanData Vulkan)
                               1, &DescriptorSet,
                               0, null);
 
-      VkViewport Viewport;
-      with(Viewport)
+      // Set Viewport
       {
-        height = cast(float)Height;
-        width = cast(float)Width;
-        minDepth = 0.0f;
-        maxDepth = 1.0f;
+        VkViewport Viewport = void;
+        with(Viewport)
+        {
+          x = 0.0f;
+          y = 0.0f;
+          height = cast(float)Height;
+          width = cast(float)Width;
+          minDepth = 0.0f;
+          maxDepth = 1.0f;
+        }
+        vkCmdSetViewport(DrawCommand, 0, 1, &Viewport);
       }
-      vkCmdSetViewport(DrawCommand, 0, 1, &Viewport);
 
-      VkRect2D Scissor;
-      with(Scissor)
+      // Set Scissor
       {
-        extent.width = Width;
-        extent.height = Height;
+        VkRect2D Scissor;
+        with(Scissor)
+        {
+          extent.width = Width;
+          extent.height = Height;
+        }
+        vkCmdSetScissor(DrawCommand, 0, 1, &Scissor);
       }
-      vkCmdSetScissor(DrawCommand, 0, 1, &Scissor);
 
-      VkDeviceSize Offset;
+      VkDeviceSize VertexBufferOffset;
       vkCmdBindVertexBuffers(DrawCommand, Vertices.BindID,
-                             1, &Vertices.Buffer, &Offset);
+                             1, &Vertices.Buffer, &VertexBufferOffset);
 
       vkCmdDraw(DrawCommand, 3, 1, 0, 0);
     }
@@ -2179,6 +2265,85 @@ void PrepareCommandForDrawing(VulkanData Vulkan)
                          0, null,                              // bufferMemoryBarrierCount, pBufferMemoryBarriers
                          1, &PrePresentBarrier);               // imageMemoryBarrierCount, pImageMemoryBarriers
   }
+}
+
+void Resize(VulkanData Vulkan)
+{
+  // Don't react to resize until after first initialization.
+  if(!Vulkan.IsPrepared) return;
+
+  // In order to properly resize the window, we must re-create the swapchain
+  // AND redo the command buffers, etc.
+
+  // First, perform part of the Cleanup() function:
+  Vulkan.DestroySwapchainData();
+
+  // Second, re-perform the Prepare() function, which will re-create the
+  // swapchain:
+  Vulkan.IsPrepared = Vulkan.PrepareSwapchain();
+}
+
+void DestroySwapchainData(VulkanData Vulkan)
+{
+  Vulkan.IsPrepared = false;
+
+  foreach(Framebuffer; Vulkan.Framebuffers)
+  {
+    vkDestroyFramebuffer(Vulkan.Device, Framebuffer, null);
+  }
+  Vulkan.Framebuffers.Clear();
+
+  vkDestroyDescriptorPool(Vulkan.Device, Vulkan.DescriptorPool, null);
+
+  if(Vulkan.SetupCommand)
+  {
+    vkFreeCommandBuffers(Vulkan.Device, Vulkan.CommandPool, 1, &Vulkan.SetupCommand);
+  }
+  vkFreeCommandBuffers(Vulkan.Device, Vulkan.CommandPool, 1, &Vulkan.DrawCommand);
+  vkDestroyCommandPool(Vulkan.Device, Vulkan.CommandPool, null);
+
+  vkDestroyPipeline(Vulkan.Device, Vulkan.Pipeline, null);
+  vkDestroyRenderPass(Vulkan.Device, Vulkan.RenderPass, null);
+  vkDestroyPipelineLayout(Vulkan.Device, Vulkan.PipelineLayout, null);
+  vkDestroyDescriptorSetLayout(Vulkan.Device, Vulkan.DescriptorSetLayout, null);
+
+  vkDestroyBuffer(Vulkan.Device, Vulkan.Vertices.Buffer, null);
+  vkFreeMemory(Vulkan.Device, Vulkan.Vertices.Memory, null);
+
+  foreach(ref Texture; Vulkan.Textures)
+  {
+    vkDestroyImageView(Vulkan.Device, Texture.View, null);
+    vkDestroyImage(Vulkan.Device,     Texture.Image, null);
+    vkFreeMemory(Vulkan.Device,       Texture.Memory, null);
+    vkDestroySampler(Vulkan.Device,   Texture.Sampler, null);
+  }
+
+  foreach(ref Buffer; Vulkan.SwapchainBuffers)
+  {
+    vkDestroyImageView(Vulkan.Device, Buffer.View, null);
+  }
+  Vulkan.SwapchainBuffers.Clear();
+
+  vkDestroyImageView(Vulkan.Device, Vulkan.Depth.View, null);
+  vkDestroyImage(Vulkan.Device,     Vulkan.Depth.Image, null);
+  vkFreeMemory(Vulkan.Device,       Vulkan.Depth.Memory, null);
+}
+
+void Cleanup(VulkanData Vulkan)
+{
+  if(Vulkan.IsPrepared)
+  {
+    Vulkan.DestroySwapchainData();
+  }
+
+  vkDestroySwapchainKHR(Vulkan.Device, Vulkan.Swapchain, null);
+  vkDestroyDevice(Vulkan.Device, null);
+  vkDestroyDebugReportCallbackEXT(Vulkan.Instance, Vulkan.DebugReportCallback, null);
+
+  vkDestroySurfaceKHR(Vulkan.Instance, Vulkan.Surface, null);
+  vkDestroyInstance(Vulkan.Instance, null);
+
+  Vulkan.QueueProperties.Clear();
 }
 
 extern(Windows) VkBool32 DebugMessageCallback(
