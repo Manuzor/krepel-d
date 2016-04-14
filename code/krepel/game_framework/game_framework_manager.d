@@ -12,7 +12,7 @@ class GameFrameworkManager
   Array!SceneGraph SceneGraphs;
   IAllocator Allocator;
   float TimeDilation;
-  float FixedUpdateInterval = 0.0166666f;
+  float FixedTickInterval = 0.0166666f;
   float PendingElapsedTime = 0.0f;
   bool FixedTimeStep = true;
   float TimeElapsedFromStart = 0.0f;
@@ -37,13 +37,13 @@ class GameFrameworkManager
     assert(ElapsedTime >= 0.0f);
     if (FixedTimeStep)
     {
-      assert(FixedUpdateInterval > 0.0f, "Cannot have 0 or negative update interval");
+      assert(FixedTickInterval > 0.0f, "Cannot have 0 or negative update interval");
       PendingElapsedTime += ElapsedTime;
-      while(PendingElapsedTime >= FixedUpdateInterval)
+      while(PendingElapsedTime >= FixedTickInterval)
       {
-        PendingElapsedTime -= FixedUpdateInterval;
-        TimeElapsedFromStart += FixedUpdateInterval;
-        TickData UpdateData = TickData(FixedUpdateInterval, TimeDilation, TimeElapsedFromStart);
+        PendingElapsedTime -= FixedTickInterval;
+        TimeElapsedFromStart += FixedTickInterval;
+        TickData UpdateData = TickData(FixedTickInterval, TimeDilation, TimeElapsedFromStart);
         foreach(Graph; SceneGraphs)
         {
           Graph.Tick(UpdateData);
