@@ -18,9 +18,9 @@ class SceneGraph
 
   Array!GameObject GameObjects;
 
-  ARC!GameObject CreateDefaultGameObject(UString Name)
+  GameObject CreateDefaultGameObject(UString Name)
   {
-    auto NewGO = Allocator.NewARC!GameObject(Allocator, Name);
+    auto NewGO = Allocator.New!GameObject(Allocator, Name);
     GameObjects ~= NewGO;
     NewGO.ConstructChild!SceneComponent(UString("Scene Component", Allocator));
     return NewGO;
@@ -31,7 +31,7 @@ class SceneGraph
     return GameObjects[];
   }
 
-  void DestroyGameObject(ref ARC!GameObject Object)
+  void DestroyGameObject(GameObject Object)
   {
     GameObject GameObj = Object;
     auto Index = GameObjects[].CountUntil(GameObj);
@@ -41,7 +41,7 @@ class SceneGraph
       return;
     }
     GameObjects.RemoveAt(Index);
-    Object.RefCountPayload.RemoveRef();
+    Allocator.Delete(GameObj);
   }
 
   void Tick(TickData Tick)
