@@ -186,6 +186,12 @@ template HasDestructor(Type)
   }
 }
 
+template IsVoid(Type)
+{
+  static if(is(Unqualified!Type == void)) enum IsVoid = true;
+  else                                    enum IsVoid = false;
+}
+
 alias IsArray                  = std.traits.isArray;
 alias IsIntegral               = std.traits.isIntegral;
 alias IsPointer                = std.traits.isPointer;
@@ -267,4 +273,16 @@ unittest
   static assert( IsSomeChar!wchar);
   static assert( IsSomeChar!(immutable char));
   static assert(!IsSomeChar!int);
+}
+
+unittest
+{
+  static assert(IsVoid!(          void));
+  static assert(IsVoid!(    const void));
+  static assert(IsVoid!(immutable void));
+  static assert(IsVoid!(   shared void));
+
+  static struct Something {}
+  static assert(!IsVoid!int);
+  static assert(!IsVoid!Something);
 }

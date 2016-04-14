@@ -44,6 +44,23 @@ auto ByteCount(Type)(in Type[] Slice)
   return Slice.length * Type.sizeof;
 }
 
+/// Cast a class to a pointer to some value type.
+///
+/// Most useful to convert a class variable to a $(D void*) or $(D ubyte*) for
+/// raw byte access.
+///
+/// You should prefer this to a straight cast(SourceType*) because it will
+/// work for all types of classes, even ones that have an $(D alias this)
+/// member. If you try to cast a class instance of a class that has an $(D
+/// alias this) member to something, the $(D alias this) value is always
+/// preferred.
+TargetType* AsPointerTo(TargetType, SourceType)(SourceType Source)
+  if( is(SourceType == class) ||  is(SourceType == interface) &&
+     !is(TargetType == class) || !is(TargetType == interface))
+{
+  return *cast(TargetType**)&Source;
+}
+
 //
 // Unit Tests
 //

@@ -93,23 +93,30 @@ struct StringBase(CharType)
 {
   Array!CharType* Data;
 
-  @property auto Allocator()
+  @property IAllocator Allocator()
   {
+    assert(Data !is null, "This string has not been initialized with an allocator yet.");
     return Data.Allocator;
+  }
+
+  @property void Allocator(IAllocator NewAllocator)
+  {
+    assert(Data is null, "Not implemented yet.");
+    Data = NewAllocator.New!(Array!CharType)(NewAllocator);
+    RefCount = NewAllocator.New!(uint);
+    *RefCount = 1;
+    Data.PushBack('\0');
   }
 
   this(IAllocator Allocator)
   {
-    Data = Allocator.New!(Array!CharType)(Allocator);
-    RefCount = Allocator.New!(uint);
-    *RefCount = 1;
-    Data.PushBack('\0');
+    this.Allocator = Allocator;
   }
 
   this(const CharType[] String, IAllocator Allocator)
   {
     this(Allocator);
-    Data.PopFront();
+    Data.PopBack();
     Data.PushBack(String);
     Data.PushBack('\0');
   }
@@ -235,6 +242,13 @@ struct StringBase(CharType)
     return ReplaceCount;
   }
 
+  void Clear()
+  {
+    EnsureSingleCopy();
+    Data.Clear();
+    *Data ~= '\0';
+  }
+
   long Concat(const(CharType[]) OtherString)
   {
     EnsureSingleCopy();
@@ -278,6 +292,17 @@ struct StringBase(CharType)
   //  this = StringBase!CharType(Chars);
   //}
 
+  void opAssign(in ref StringBase!CharType Other)
+  {
+    this = Other[];
+  }
+
+  void opAssign(in CharType[] String)
+  {
+    Clear();
+    Concat(String);
+  }
+
   ulong opDollar() const
   {
     return Count;
@@ -307,6 +332,9 @@ struct StringBase(CharType)
   {
     return this[];
   }
+
+  // Phobos' string formatting support.
+  auto toString() const { return this[]; }
 
   alias ToChar this;
 
