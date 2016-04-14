@@ -53,11 +53,9 @@ __gshared IAllocator Allocator;
 
 void Verify(VkResult Result, string File = __FILE__, size_t Line = __LINE__)
 {
-  import std.conv : to;
-
   if(Result != VK_SUCCESS)
   {
-    Log.Failure("%s(%u): %s", File, Line, Result.to!string);
+    Log.Failure("%s(%u): %s", File, Line, Result);
     DebugBreak();
     assert(false, "Vulkan verification failed. Check the log.");
   }
@@ -72,6 +70,8 @@ void Win32SetupConsole(CString Title)
   core.stdc.stdio.freopen("CON".ptr, "w".ptr, core.stdc.stdio.stdout);
   SetConsoleTitleA(Title);
 }
+
+Dictionary!(HWND, VulkanData) Vulkans;
 
 int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
               LPSTR CommandLine, int ShowCode)
@@ -107,13 +107,16 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
   Log.Info("=== Beginning of Log ===");
   scope(exit) Log.Info("=== End of Log ===");
 
+  .Vulkans.Allocator = .Allocator;
+  scope(exit) .Vulkans.ClearMemory();
+
   version(XInput_RuntimeLinking) LoadXInput();
 
   WNDCLASSA WindowClass;
   with(WindowClass)
   {
     style = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;
-    lpfnWndProc = &Win32MainWindowCallback;
+    lpfnWndProc = cast(WNDPROC)cast(void*)&Win32MainWindowCallback;
     hInstance = Instance;
     lpszClassName = "D_WindowClass";
   }
@@ -134,6 +137,7 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
     if(Window)
     {
       auto Vulkan = .Allocator.NewARC!VulkanData(.Allocator);
+
       // TODO: scope(success) Vulkan.Destroy();?
       bool VulkanInitialized;
       bool SwapchainPreparedInitially;
@@ -145,6 +149,9 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
         else                  Log.EndScope("Failed to initialize Vulkan.");
       }
 
+      if(VulkanInitialized) .Vulkans[Window] = Vulkan;
+      scope(exit) if(VulkanInitialized) .Vulkans.Remove(Window);
+
       if(VulkanInitialized)
       {
         Log.BeginScope("Preparing Swapchain for the first time.");
@@ -155,7 +162,15 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
 
       if(SwapchainPreparedInitially)
       {
-        // TODO
+        //
+        // Main Loop
+        //
+        .Running = true;
+        while(.Running)
+        {
+          //RedrawWindow(Window, null, null, RDW_INTERNALPAINT);
+          Win32ProcessPendingMessages();
+        }
       }
     }
     else
@@ -174,7 +189,7 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
 void Win32ProcessPendingMessages()
 {
   MSG Message;
-  if(PeekMessageA(&Message, null, 0, 0, PM_REMOVE))
+  while(PeekMessageA(&Message, null, 0, 0, PM_REMOVE))
   {
     switch(Message.message)
     {
@@ -196,7 +211,7 @@ void Win32ProcessPendingMessages()
         }
         else if(VKCode == VK_ESCAPE)
         {
-          .Running = false;
+          PostQuitMessage(0);
         }
 
       } break;
@@ -212,22 +227,25 @@ void Win32ProcessPendingMessages()
 
 extern(Windows)
 LRESULT Win32MainWindowCallback(HWND Window, UINT Message,
-                                WPARAM WParam, LPARAM LParam) nothrow
+                                WPARAM WParam, LPARAM LParam)
 {
-  LRESULT Result = 0;
+  LRESULT Result;
+
+  VulkanData Vulkan;
+  .Vulkans.TryGet(Window, Vulkan);
 
   switch(Message)
   {
     case WM_CLOSE:
     {
       // TODO: Handle this with a message to the user?
-      .Running = false;
+      PostQuitMessage(0);
     } break;
 
     case WM_DESTROY:
     {
       // TODO: Handle this as an error - recreate Window?
-      .Running = false;
+      PostQuitMessage(0);
     } break;
 
     case WM_SYSKEYDOWN: goto case; // fallthrough
@@ -244,9 +262,8 @@ LRESULT Win32MainWindowCallback(HWND Window, UINT Message,
     {
       PAINTSTRUCT Paint;
       HDC DeviceContext = BeginPaint(Window, &Paint);
-      //win32_main_dimension WindowDim = Win32GetWindowDimension(Window);
-      //Win32DisplayBufferInWindow(&GlobalBackbuffer, DeviceContext,
-      //                           WindowDim.Width, WindowDim.Height);
+
+      if(Vulkan) Vulkan.Draw();
 
       EndPaint(Window, &Paint);
     } break;
@@ -270,7 +287,6 @@ class VulkanData
   //
   version(all)
   {
-
     HMODULE DLL;
     UString DLLName;
 
@@ -320,7 +336,7 @@ class VulkanData
     VkSwapchainKHR Swapchain;
     uint SwapchainImageCount;
     Array!SwapchainBufferData SwapchainBuffers;
-    uint CurrentSwapchainBuffer;
+    uint CurrentBufferIndex;
 
     DepthData Depth;
   }
@@ -347,6 +363,9 @@ class VulkanData
     VkDescriptorSet DescriptorSet;
 
     Array!VkFramebuffer Framebuffers;
+
+    float DepthStencilValue = 0.0f;
+    float DepthIncrement = 0.0f;
   }
 
   this(IAllocator Allocator)
@@ -393,8 +412,6 @@ struct VertexBufferData
   VkDeviceMemory Memory;
 
   uint BindID;
-  // TODO: Get rid of this create info here.
-  VkPipelineVertexInputStateCreateInfo VertexInputInfo;
   VkVertexInputBindingDescription[1] VertexInputBindingDescs;
   VkVertexInputAttributeDescription[2] VertexInputAttributeDescs;
 }
@@ -986,7 +1003,7 @@ bool PrepareSwapchain(VulkanData Vulkan)
       Log.BeginScope("Creating swapchain buffers.");
       scope(exit) Log.EndScope("Finished creating swapchain buffers.");
 
-      scope(success) CurrentSwapchainBuffer = 0; // Reset.
+      scope(success) CurrentBufferIndex = 0; // Reset.
 
       VkSwapchainKHR OldSwapchain = Swapchain;
 
@@ -1372,14 +1389,6 @@ bool PrepareSwapchain(VulkanData Vulkan)
 
       Vertices.BindID = 0;
 
-      with(Vertices.VertexInputInfo)
-      {
-        vertexBindingDescriptionCount = Vertices.VertexInputBindingDescs.length;
-        pVertexBindingDescriptions = Vertices.VertexInputBindingDescs.ptr;
-        vertexAttributeDescriptionCount = Vertices.VertexInputAttributeDescs.length;
-        pVertexAttributeDescriptions = Vertices.VertexInputAttributeDescs.ptr;
-      }
-
       with(Vertices.VertexInputBindingDescs[0])
       {
         binding = Vertices.BindID;
@@ -1542,7 +1551,7 @@ bool PrepareSwapchain(VulkanData Vulkan)
           codeSize = ShaderCode.length; // In bytes, regardless of the fact that typeof(*pCode) == uint.
           pCode = cast(const(uint)*)ShaderCode.ptr; // As a const(uint)*, for some reason...
         }
-        vkCreateShaderModule(Device, &ShaderModuleCreateInfo, NULL, &VertexShaderStage._module).Verify;
+        vkCreateShaderModule(Device, &ShaderModuleCreateInfo, null, &VertexShaderStage._module).Verify;
       }
       scope(exit) vkDestroyShaderModule(Device, VertexShaderStage._module, null);
 
@@ -1573,7 +1582,7 @@ bool PrepareSwapchain(VulkanData Vulkan)
           codeSize = ShaderCode.length; // In bytes, regardless of the fact that typeof(*pCode) == uint.
           pCode = cast(const(uint)*)ShaderCode.ptr; // As a const(uint)*, for some reason...
         }
-        vkCreateShaderModule(Device, &ShaderModuleCreateInfo, NULL, &FragmentShaderStage._module).Verify;
+        vkCreateShaderModule(Device, &ShaderModuleCreateInfo, null, &FragmentShaderStage._module).Verify;
       }
       scope(exit) vkDestroyShaderModule(Device, FragmentShaderStage._module, null);
 
@@ -1966,13 +1975,209 @@ void FlushSetupCommand(VulkanData Vulkan)
       commandBufferCount = 1;
       pCommandBuffers = &SetupCommand;
     }
-    VkFence nullFence;
-    vkQueueSubmit(Queue, 1, &SubmitInfo, nullFence).Verify;
+    VkFence NullFence;
+    vkQueueSubmit(Queue, 1, &SubmitInfo, NullFence).Verify;
 
     vkQueueWaitIdle(Queue).Verify;
 
     vkFreeCommandBuffers(Device, CommandPool, 1, &SetupCommand);
     SetupCommand = VK_NULL_HANDLE;
+  }
+}
+
+void Draw(VulkanData Vulkan)
+{
+  with(Vulkan)
+  {
+    VkFence NullFence;
+    VkResult Error;
+
+    VkSemaphoreCreateInfo PresentCompleteSemaphoreCreateInfo;
+    VkSemaphore PresentCompleteSemaphore;
+    vkCreateSemaphore(Device, &PresentCompleteSemaphoreCreateInfo, null, &PresentCompleteSemaphore).Verify;
+    scope(exit) vkDestroySemaphore(Device, PresentCompleteSemaphore, null);
+
+    // Get the index of the next available swapchain image:
+    auto Timeout = ulong.max;
+    Error = vkAcquireNextImageKHR(Device, Swapchain, Timeout,
+                                  PresentCompleteSemaphore, NullFence,
+                                  &CurrentBufferIndex);
+
+    switch(Error)
+    {
+      case VK_ERROR_OUT_OF_DATE_KHR:
+      {
+        // Swapchain is out of date (e.g. the window was resized) and must be
+        // recreated:
+
+        // TODO: Resize.
+        //Resize(Vulkan);
+        //Draw(Vulkan);
+      } break;
+      case VK_SUBOPTIMAL_KHR:
+      {
+        // Swapchain is not as optimal as it could be, but the platform's
+        // presentation engine will still present the image correctly.
+      } break;
+      default: Verify(Error);
+    }
+
+    // Assume the command buffer has been run on current_buffer before so
+    // we need to set the image layout back to COLOR_ATTACHMENT_OPTIMAL
+    Vulkan.SetImageLayout(SwapchainBuffers[CurrentBufferIndex].Image,
+                          VK_IMAGE_ASPECT_COLOR_BIT,
+                          VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                          VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                          0);
+    Vulkan.FlushSetupCommand();
+
+    // Wait for the present complete semaphore to be signaled to ensure
+    // that the image won't be rendered to until the presentation
+    // engine has fully released ownership to the application, and it is
+    // okay to render to the image.
+
+    // FIXME/TODO: DEAL WITH VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+    Vulkan.PrepareCommandForDrawing();
+    VkPipelineStageFlags PipelineStageFlags = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+    VkSubmitInfo SubmitInfo;
+    with(SubmitInfo)
+    {
+      waitSemaphoreCount = 1;
+      pWaitSemaphores = &PresentCompleteSemaphore;
+      pWaitDstStageMask = &PipelineStageFlags;
+      commandBufferCount = 1;
+      pCommandBuffers = &DrawCommand;
+      signalSemaphoreCount = 0;
+      pSignalSemaphores = null;
+    }
+
+    vkQueueSubmit(Queue,
+                  1, &SubmitInfo,
+                  NullFence).Verify;
+
+    VkPresentInfoKHR Present;
+    with(Present)
+    {
+      swapchainCount = 1;
+      pSwapchains = &Swapchain;
+      pImageIndices = &CurrentBufferIndex;
+    }
+
+    Error = vkQueuePresentKHR(Queue, &Present);
+    switch(Error)
+    {
+      case VK_ERROR_OUT_OF_DATE_KHR:
+      {
+        // Swapchain is out of date (e.g. the window was resized) and must be
+        // recreated:
+        // TODO: Resize.
+        //Vulkan.Resize();
+      } break;
+      case VK_SUBOPTIMAL_KHR:
+      {
+        // Swapchain is not as optimal as it could be, but the platform's
+        // presentation engine will still present the image correctly.
+      } break;
+      default: Verify(Error);
+    }
+
+    vkQueueWaitIdle(Queue).Verify;
+  }
+}
+
+void PrepareCommandForDrawing(VulkanData Vulkan)
+{
+  with(Vulkan)
+  {
+    VkCommandBufferInheritanceInfo CommandBufferInheritanceInfo;
+    VkCommandBufferBeginInfo CommandBufferBeginInfo;
+    CommandBufferBeginInfo.pInheritanceInfo = &CommandBufferInheritanceInfo;
+    vkBeginCommandBuffer(DrawCommand, &CommandBufferBeginInfo).Verify;
+    scope(exit) vkEndCommandBuffer(DrawCommand).Verify;
+
+    VkClearValue[2] ClearValues;
+    with(ClearValues[0])
+    {
+      color.float32[] = 0.8f;
+    }
+    with(ClearValues[1])
+    {
+      depthStencil.depth = Vulkan.DepthStencilValue;
+      depthStencil.stencil = 0;
+    }
+
+    VkRenderPassBeginInfo RenderPassBeginInfo;
+    with(RenderPassBeginInfo)
+    {
+      renderPass = RenderPass;
+      framebuffer = Framebuffers[CurrentBufferIndex];
+      renderArea.extent.width = Width;
+      renderArea.extent.height = Height;
+      clearValueCount = ClearValues.length;
+      pClearValues = ClearValues.ptr;
+    }
+    {
+      vkCmdBeginRenderPass(DrawCommand, &RenderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+      scope(exit) vkCmdEndRenderPass(DrawCommand);
+
+      vkCmdBindPipeline(DrawCommand, VK_PIPELINE_BIND_POINT_GRAPHICS, Pipeline);
+      vkCmdBindDescriptorSets(DrawCommand, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                              PipelineLayout, 0,
+                              1, &DescriptorSet,
+                              0, null);
+
+      VkViewport Viewport;
+      with(Viewport)
+      {
+        height = cast(float)Height;
+        width = cast(float)Width;
+        minDepth = 0.0f;
+        maxDepth = 1.0f;
+      }
+      vkCmdSetViewport(DrawCommand, 0, 1, &Viewport);
+
+      VkRect2D Scissor;
+      with(Scissor)
+      {
+        extent.width = Width;
+        extent.height = Height;
+      }
+      vkCmdSetScissor(DrawCommand, 0, 1, &Scissor);
+
+      VkDeviceSize Offset;
+      vkCmdBindVertexBuffers(DrawCommand, Vertices.BindID,
+                             1, &Vertices.Buffer, &Offset);
+
+      vkCmdDraw(DrawCommand, 3, 1, 0, 0);
+    }
+
+    VkImageMemoryBarrier PrePresentBarrier;
+    with(PrePresentBarrier)
+    {
+      srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+      dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+      oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+      newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+      srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+      dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+      with(subresourceRange)
+      {
+        aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        baseMipLevel = 0;
+        levelCount = 1;
+        baseArrayLayer = 0;
+        layerCount = 1;
+      }
+      image = SwapchainBuffers[CurrentBufferIndex].Image;
+    }
+
+    vkCmdPipelineBarrier(DrawCommand,                          // commandBuffer
+                         VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,   // srcStageMask
+                         VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, // dstStageMask
+                         0,                                    // dependencyFlags
+                         0, null,                              // memoryBarrierCount, pMemoryBarriers
+                         0, null,                              // bufferMemoryBarrierCount, pBufferMemoryBarriers
+                         1, &PrePresentBarrier);               // imageMemoryBarrierCount, pImageMemoryBarriers
   }
 }
 
