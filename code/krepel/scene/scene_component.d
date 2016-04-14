@@ -16,6 +16,7 @@ class SceneComponent : GameComponent
   {
     super(Allocator, Name, Owner);
     Children.Allocator = Allocator;
+    Transformation = Transform.Identity;
   }
 
   Transform GetLocalTransform()
