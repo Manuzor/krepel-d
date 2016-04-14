@@ -164,7 +164,9 @@ struct Vector3
   {
     struct
     {
-      float X, Y, Z;
+      float X = 0;
+      float Y = 0;
+      float Z = 0;
     }
     float[3] Data;
   }
