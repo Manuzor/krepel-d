@@ -477,6 +477,13 @@ unittest
 
   Arr.RemoveAt(1, 2);
   assert(Arr.Count == 1);
+
+  Arr.Clear();
+  Arr.PushBack(1, 2, 3);
+  assert(Arr.RemoveFirst(3));
+  assert(Arr.Count == 2);
+  assert(Arr[0] == 1);
+  assert(Arr[1] == 2);
 }
 
 unittest
