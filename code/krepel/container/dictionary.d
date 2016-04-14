@@ -28,6 +28,18 @@ struct Dictionary(K, V)
     ValueArray.Allocator = NewAllocator;
   }
 
+  void Clear()
+  {
+    KeyArray.Clear();
+    ValueArray.Clear();
+  }
+
+  void ClearMemory()
+  {
+    KeyArray.ClearMemory();
+    ValueArray.ClearMemory();
+  }
+
   // TODO(Manu): Collapse with the other overload and make it `inout` once the
   // compiler allows this.
   auto opIndex()
