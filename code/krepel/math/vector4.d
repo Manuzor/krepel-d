@@ -91,6 +91,18 @@ bool ContainsNaN(Vector4 Vec)
   return IsNaN(Vec.X) || IsNaN(Vec.Y) || IsNaN(Vec.Z);
 }
 
+/// Calculates th reciprocal (1/X) of the vector components and returns it
+/// If a component is zero it will be ZeroCase instead of +inf
+Vector4 Reciprocal(Vector4 Vec, float ZeroCase = 3.4e38f)
+{
+  return Vector4(
+    Vec.X != 0.0f ? 1/Vec.X : ZeroCase,
+    Vec.Y != 0.0f ? 1/Vec.Y : ZeroCase,
+    Vec.Z != 0.0f ? 1/Vec.Z : ZeroCase,
+    Vec.W != 0.0f ? 1/Vec.W : ZeroCase,
+  );
+}
+
 /// Checks if two Vectors are nearly equal (are equal with respect to a scaled epsilon)
 /// Input Vectors will not be modified
 bool NearlyEquals(Vector4 A, Vector4 B, float Epsilon = 1e-4f)
@@ -133,7 +145,10 @@ struct Vector4
   {
     struct
     {
-      float X, Y, Z, W;
+      float X = 0;
+      float Y = 0;
+      float Z = 0;
+      float W = 0;
     }
     float[4] Data;
   }
