@@ -170,8 +170,6 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
       // TODO: scope(success) Vulkan.Destroy();?
       bool VulkanInitialized;
 
-      scope(success) if(VulkanInitialized) Vulkan.Cleanup();
-
       {
         Log.BeginScope("Initializing Vulkan.");
         VulkanInitialized = Vulkan.Initialize(Instance, Window);
@@ -179,27 +177,34 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
         else                  Log.EndScope("Failed to initialize Vulkan.");
       }
 
-      if(VulkanInitialized) SetWindowLongPtr(Window, GWLP_USERDATA, cast(LONG_PTR)Vulkan.AsPointerTo!void);
-      scope(exit) SetWindowLongPtr(Window, GWLP_USERDATA, cast(LONG_PTR)null);
+      if(VulkanInitialized) Log.EndScope("Vulkan initialized successfully.");
+      else                  Log.EndScope("Failed to initialize Vulkan.");
 
       if(VulkanInitialized)
       {
-        Log.BeginScope("Preparing Swapchain for the first time.");
-        Vulkan.IsPrepared = Vulkan.PrepareSwapchain();
-        if(Vulkan.IsPrepared) Log.EndScope("Swapchain is prepared.");
-        else                  Log.EndScope("Failed to prepare Swapchain.");
-      }
+        scope(success) Vulkan.Cleanup();
 
-      if(Vulkan.IsPrepared)
-      {
-        //
-        // Main Loop
-        //
-        .Running = true;
-        while(.Running)
+        SetWindowLongPtr(Window, GWLP_USERDATA, cast(LONG_PTR)Vulkan.AsPointerTo!void);
+        scope(exit) SetWindowLongPtr(Window, GWLP_USERDATA, cast(LONG_PTR)null);
+
         {
-          RedrawWindow(Window, null, null, RDW_INTERNALPAINT);
-          Win32ProcessPendingMessages();
+          Log.BeginScope("Preparing Swapchain for the first time.");
+          Vulkan.IsPrepared = Vulkan.PrepareSwapchain(1200, 720);
+          if(Vulkan.IsPrepared) Log.EndScope("Swapchain is prepared.");
+          else                  Log.EndScope("Failed to prepare Swapchain.");
+        }
+
+        if(Vulkan.IsPrepared)
+        {
+          //
+          // Main Loop
+          //
+          .Running = true;
+          while(.Running)
+          {
+            RedrawWindow(Window, null, null, RDW_INTERNALPAINT);
+            Win32ProcessPendingMessages();
+          }
         }
       }
     }
@@ -304,12 +309,29 @@ LRESULT Win32MainWindowCallback(HWND Window, UINT Message,
         }
 
         Vulkan.DepthStencilValue += Vulkan.DepthIncrement;
-        Log.Info("Depth Stencil Value Sample: %f", Vulkan.DepthStencilValue);
+        //Log.Info("Depth Stencil Value Sample: %f", Vulkan.DepthStencilValue);
 
         Vulkan.Draw();
       }
 
       //EndPaint(Window, &Paint);
+    } break;
+
+    case WM_SIZE:
+    {
+      if(WParam != SIZE_MINIMIZED && Vulkan)
+      {
+        uint NewWidth = LParam & 0xffff;
+        uint NewHeight = (LParam & 0xffff0000) >> 16;
+        Log.Info("Resizing to %ux%u.", NewWidth, NewHeight);
+        Vulkan.Resize(NewWidth, NewHeight);
+      }
+    } break;
+
+    case WM_SIZING:
+    {
+      Log.Info("Sizing.");
+      Result = TRUE;
     } break;
 
     default:
@@ -370,8 +392,8 @@ class VulkanData
   //
   version(all)
   {
-    uint Width = 1200;
-    uint Height = 720;
+    uint Width;
+    uint Height;
 
     VkCommandPool CommandPool;
     VkCommandBuffer SetupCommand;
@@ -1001,7 +1023,6 @@ bool Initialize(VulkanData Vulkan, HINSTANCE ProcessHandle, HWND WindowHandle)
       {
         Format = SurfaceFormats[0].format;
       }
-
       Log.Info("Format: %s", Format);
 
       ColorSpace = SurfaceFormats[0].colorSpace;
@@ -1013,7 +1034,7 @@ bool Initialize(VulkanData Vulkan, HINSTANCE ProcessHandle, HWND WindowHandle)
   return true;
 }
 
-bool PrepareSwapchain(VulkanData Vulkan)
+bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
 {
   with(Vulkan)
   {
@@ -1080,15 +1101,16 @@ bool PrepareSwapchain(VulkanData Vulkan)
       {
         assert(SurfaceCapabilities.currentExtent.height == cast(uint)-1);
 
-        SwapchainExtent.width = Width;
-        SwapchainExtent.height = Height;
+        SwapchainExtent.width = NewWidth;
+        SwapchainExtent.height = NewHeight;
       }
       else
       {
         SwapchainExtent = SurfaceCapabilities.currentExtent;
-        Width = SurfaceCapabilities.currentExtent.width;
-        Height = SurfaceCapabilities.currentExtent.height;
       }
+      Width = SwapchainExtent.width;
+      Height = SwapchainExtent.height;
+      Log.Info("Swapchain extents: ", SwapchainExtent);
 
       VkPresentModeKHR SwapchainPresentMode = VK_PRESENT_MODE_FIFO_KHR;
 
@@ -1908,7 +1930,7 @@ void SetImageLayout(VulkanData Vulkan,
 }
 
 bool ExtractMemoryTypeFromProperties(VulkanData Vulkan,
-                                     uint32_t TypeBits,
+                                     uint TypeBits,
                                      VkFlags RequirementsMask,
                                      uint* TypeIndex)
 {
@@ -2063,8 +2085,8 @@ void Draw(VulkanData Vulkan)
       {
         // Swapchain is out of date (e.g. the window was resized) and must be
         // recreated:
-        Resize(Vulkan);
-        Draw(Vulkan);
+        Vulkan.Resize(Vulkan.Width, Vulkan.Height);
+        Vulkan.Draw();
       } break;
       case VK_SUBOPTIMAL_KHR:
       {
@@ -2129,7 +2151,7 @@ void Draw(VulkanData Vulkan)
           // Swapchain is out of date (e.g. the window was resized) and must be
           // recreated:
           // TODO: Resize.
-          Vulkan.Resize();
+          Vulkan.Resize(Vulkan.Width, Vulkan.Height);
         } break;
         case VK_SUBOPTIMAL_KHR:
         {
@@ -2260,7 +2282,7 @@ void CreateDrawCommand(VulkanData Vulkan)
   }
 }
 
-void Resize(VulkanData Vulkan)
+void Resize(VulkanData Vulkan, uint NewWidth, uint NewHeight)
 {
   // Don't react to resize until after first initialization.
   if(!Vulkan.IsPrepared) return;
@@ -2273,11 +2295,13 @@ void Resize(VulkanData Vulkan)
 
   // Second, re-perform the Prepare() function, which will re-create the
   // swapchain:
-  Vulkan.IsPrepared = Vulkan.PrepareSwapchain();
+  Vulkan.IsPrepared = Vulkan.PrepareSwapchain(NewWidth, NewHeight);
 }
 
 void DestroySwapchainData(VulkanData Vulkan)
 {
+  assert(Vulkan.IsPrepared);
+
   Vulkan.IsPrepared = false;
 
   foreach(Framebuffer; Vulkan.Framebuffers)
