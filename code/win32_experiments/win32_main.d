@@ -127,7 +127,7 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
 
       State.InitDevice();
 
-      auto VertexShaderCode = State.LoadAndCompileDxShader(WString("shader/first.hlsl", State.Allocator),
+      auto VertexShaderCode = State.LoadAndCompileDxShader(WString("../data/shader/first.hlsl", State.Allocator),
                                                            UString("VSMain", State.Allocator),
                                                            UString("vs_5_0", State.Allocator));
 
@@ -159,7 +159,7 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
 
       State.ImmediateContext.IASetInputLayout(VertexShaderLayout);
 
-      auto PixelShaderCode = State.LoadAndCompileDxShader(WString("shader/first.hlsl", State.Allocator),
+      auto PixelShaderCode = State.LoadAndCompileDxShader(WString("../data/shader/first.hlsl", State.Allocator),
                                                           UString("PSMain", State.Allocator),
                                                           UString("ps_5_0", State.Allocator));
 
