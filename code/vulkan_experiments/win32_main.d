@@ -127,14 +127,9 @@ void Win32SetupConsole(CString Title)
   SetConsoleTitleA(Title);
 }
 
-Dictionary!(HWND, VulkanData) Vulkans;
-
 int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
               LPSTR CommandLine, int ShowCode)
 {
-  .Vulkans.Allocator = .Allocator;
-  scope(exit) .Vulkans.ClearMemory();
-
   version(XInput_RuntimeLinking) LoadXInput();
 
   // TODO: Implement CreateVulkanInstance(IAllocator) that does not need a
@@ -184,8 +179,8 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
         else                  Log.EndScope("Failed to initialize Vulkan.");
       }
 
-      if(VulkanInitialized) .Vulkans[Window] = Vulkan;
-      scope(exit) if(VulkanInitialized) .Vulkans.Remove(Window);
+      if(VulkanInitialized) SetWindowLongPtr(Window, GWLP_USERDATA, cast(LONG_PTR)Vulkan.AsPointerTo!void);
+      scope(exit) SetWindowLongPtr(Window, GWLP_USERDATA, cast(LONG_PTR)null);
 
       if(VulkanInitialized)
       {
@@ -266,8 +261,7 @@ LRESULT Win32MainWindowCallback(HWND Window, UINT Message,
 {
   LRESULT Result;
 
-  VulkanData Vulkan;
-  .Vulkans.TryGet(Window, Vulkan);
+  auto Vulkan = cast(VulkanData)cast(void*)GetWindowLongPtr(Window, GWLP_USERDATA);
 
   switch(Message)
   {
@@ -1008,7 +1002,10 @@ bool Initialize(VulkanData Vulkan, HINSTANCE ProcessHandle, HWND WindowHandle)
         Format = SurfaceFormats[0].format;
       }
 
+      Log.Info("Format: %s", Format);
+
       ColorSpace = SurfaceFormats[0].colorSpace;
+      Log.Info("Color Space: %s", ColorSpace);
     }
   }
 
@@ -1405,10 +1402,6 @@ bool PrepareSwapchain(VulkanData Vulkan)
         VertexData(Vector3( 0.0f,  1.0f,  1.00f), Vector2(0.5f, 1.0f)),
       ];
       const TriangleBytes = Triangle.ByteCount;
-
-
-
-
 
       VkBufferCreateInfo BufferCreateInfo;
       with(BufferCreateInfo)
