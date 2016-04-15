@@ -202,8 +202,29 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
           .Running = true;
           while(.Running)
           {
-            RedrawWindow(Window, null, null, RDW_INTERNALPAINT);
             Win32ProcessPendingMessages();
+
+            if(Vulkan.DepthStencilValue > 0.99f)
+            {
+              Vulkan.DepthIncrement = -0.001f;
+            }
+            if(Vulkan.DepthStencilValue < 0.8f)
+            {
+              Vulkan.DepthIncrement = 0.001f;
+            }
+
+            Vulkan.DepthStencilValue += Vulkan.DepthIncrement;
+            //Log.Info("Depth Stencil Value Sample: %f", Vulkan.DepthStencilValue);
+
+            if(.IsResizeRequested)
+            {
+              Log.BeginScope("Resizing swapchain.");
+              scope(exit) Log.EndScope("Finished resizing swapchain.");
+              Vulkan.Resize(.ResizeRequest_Width, .ResizeRequest_Height);
+              .IsResizeRequested = false;
+            }
+
+            RedrawWindow(Window, null, null, RDW_INTERNALPAINT);
           }
         }
       }
@@ -260,10 +281,17 @@ void Win32ProcessPendingMessages()
   }
 }
 
+__gshared bool IsResizeRequested;
+__gshared uint ResizeRequest_Width;
+__gshared uint ResizeRequest_Height;
+
 extern(Windows)
 LRESULT Win32MainWindowCallback(HWND Window, UINT Message,
                                 WPARAM WParam, LPARAM LParam)
 {
+  enum RESIZE_EVENT_ID = 1337;
+  enum MILLISECONDS_TO_WAIT_BEFORE_RESIZING = 200;
+
   LRESULT Result;
 
   auto Vulkan = cast(VulkanData)cast(void*)GetWindowLongPtr(Window, GWLP_USERDATA);
@@ -292,51 +320,36 @@ LRESULT Win32MainWindowCallback(HWND Window, UINT Message,
       //OutputDebugStringA("WM_ACTIATEAPP\n");
     } break;
 
+    case WM_SIZE:
+    {
+      if(Vulkan && WParam != SIZE_MINIMIZED)
+      {
+        .IsResizeRequested = true;
+        .ResizeRequest_Width = LParam & 0xffff;
+        .ResizeRequest_Height = (LParam & 0xffff0000) >> 16;
+
+        //Vulkan.Resize(NewWidth, NewHeight);
+      }
+    } break;
+
     case WM_PAINT:
     {
-      //PAINTSTRUCT Paint;
-      //HDC DeviceContext = BeginPaint(Window, &Paint);
+      PAINTSTRUCT Paint;
+
+      RECT Rect;
+      auto MustBeginBeginEndPaint = GetUpdateRect(Window, &Rect, FALSE);
+
+      if(MustBeginBeginEndPaint) BeginPaint(Window, &Paint);
+      scope(exit) if(MustBeginBeginEndPaint) EndPaint(Window, &Paint);
 
       if(Vulkan && Vulkan.IsPrepared)
       {
-        if(Vulkan.DepthStencilValue > 0.99f)
-        {
-          Vulkan.DepthIncrement = -0.001f;
-        }
-        if(Vulkan.DepthStencilValue < 0.8f)
-        {
-          Vulkan.DepthIncrement = 0.001f;
-        }
-
-        Vulkan.DepthStencilValue += Vulkan.DepthIncrement;
-        //Log.Info("Depth Stencil Value Sample: %f", Vulkan.DepthStencilValue);
-
         Vulkan.Draw();
       }
-
-      //EndPaint(Window, &Paint);
-    } break;
-
-    case WM_SIZE:
-    {
-      if(WParam != SIZE_MINIMIZED && Vulkan)
-      {
-        uint NewWidth = LParam & 0xffff;
-        uint NewHeight = (LParam & 0xffff0000) >> 16;
-        Log.Info("Resizing to %ux%u.", NewWidth, NewHeight);
-        Vulkan.Resize(NewWidth, NewHeight);
-      }
-    } break;
-
-    case WM_SIZING:
-    {
-      Log.Info("Sizing.");
-      Result = TRUE;
     } break;
 
     default:
     {
-      // OutputDebugStringA("Default\n");
       Result = DefWindowProcA(Window, Message, WParam, LParam);
     } break;
   }
@@ -1114,7 +1127,7 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
 
       VkPresentModeKHR SwapchainPresentMode = VK_PRESENT_MODE_FIFO_KHR;
 
-      // Determine the number of VkImage's to use in the swap chain (we desire to
+      // Determine the number of VkImage's to use in the swapchain (we desire to
       // own only 1 image at a time, besides the images being displayed and
       // queued for display):
       uint DesiredNumberOfSwapchainImages = SurfaceCapabilities.minImageCount + 1;
@@ -2059,8 +2072,13 @@ void FlushSetupCommand(VulkanData Vulkan)
   }
 }
 
+__gshared bool IsDrawing;
+
 void Draw(VulkanData Vulkan)
 {
+  .IsDrawing = true;
+  scope(exit) .IsDrawing = false;
+
   with(Vulkan)
   {
     VkFence NullFence;
@@ -2286,6 +2304,8 @@ void Resize(VulkanData Vulkan, uint NewWidth, uint NewHeight)
 {
   // Don't react to resize until after first initialization.
   if(!Vulkan.IsPrepared) return;
+
+  Log.Info("Resizing to %ux%u.", NewWidth, NewHeight);
 
   // In order to properly resize the window, we must re-create the swapchain
   // AND redo the command buffers, etc.
