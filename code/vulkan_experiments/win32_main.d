@@ -337,10 +337,10 @@ LRESULT Win32MainWindowCallback(HWND Window, UINT Message,
       PAINTSTRUCT Paint;
 
       RECT Rect;
-      auto MustBeginBeginEndPaint = GetUpdateRect(Window, &Rect, FALSE);
+      auto MustBeginEndPaint = cast(bool)GetUpdateRect(Window, &Rect, FALSE);
 
-      if(MustBeginBeginEndPaint) BeginPaint(Window, &Paint);
-      scope(exit) if(MustBeginBeginEndPaint) EndPaint(Window, &Paint);
+      if(MustBeginEndPaint) BeginPaint(Window, &Paint);
+      scope(exit) if(MustBeginEndPaint) EndPaint(Window, &Paint);
 
       if(Vulkan && Vulkan.IsPrepared)
       {
@@ -1619,7 +1619,7 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
         VertexShaderStage.stage = VK_SHADER_STAGE_VERTEX_BIT;
         VertexShaderStage.pName = "main".ptr;
 
-        auto Filename = "../data/shader/tri-vert.spv"w;
+        auto Filename = "../data/shader/tri/vert.spv"w;
         Log.BeginScope("Loading vertex shader from file: %s", Filename);
         scope(exit) Log.EndScope("");
 
@@ -1650,7 +1650,7 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
         FragmentShaderStage.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
         FragmentShaderStage.pName = "main";
 
-        auto Filename = "../data/shader/tri-frag.spv"w;
+        auto Filename = "../data/shader/tri/frag.spv"w;
         Log.BeginScope("Loading vertex shader from file: %s", Filename);
         scope(exit) Log.EndScope("");
 
