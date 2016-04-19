@@ -132,8 +132,6 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
 {
   version(XInput_RuntimeLinking) LoadXInput();
 
-  // TODO: Implement CreateVulkanInstance(IAllocator) that does not need a
-  // window yet.
   auto Vulkan = Allocator.New!VulkanData(Allocator);
   scope(exit) if(Vulkan) .Allocator.Delete(Vulkan);
 
@@ -167,7 +165,6 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
 
     if(Window)
     {
-      // TODO: scope(success) Vulkan.Destroy();?
       bool VulkanInitialized;
 
       {
@@ -199,21 +196,24 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
           //
           // Main Loop
           //
+          Vulkan.DepthStencilValue = 1.0f;
+          Vulkan.DepthStencilIncrement = 0.0f;
           .Running = true;
           while(.Running)
           {
             Win32ProcessPendingMessages();
 
-            if(Vulkan.DepthStencilValue > 0.99f)
+            Vulkan.DepthStencilValue = Clamp(Vulkan.DepthStencilValue + Vulkan.DepthStencilIncrement, 0.8f, 1.0f);
+
+            if(Vulkan.DepthStencilValue == 1.0f)
             {
-              Vulkan.DepthIncrement = -0.001f;
+              Vulkan.DepthStencilIncrement = -0.001;
             }
-            if(Vulkan.DepthStencilValue < 0.8f)
+            else if(Vulkan.DepthStencilValue == 0.8f)
             {
-              Vulkan.DepthIncrement = 0.001f;
+              Vulkan.DepthStencilIncrement = 0.001;
             }
 
-            Vulkan.DepthStencilValue += Vulkan.DepthIncrement;
             //Log.Info("Depth Stencil Value Sample: %f", Vulkan.DepthStencilValue);
 
             if(.IsResizeRequested)
@@ -431,6 +431,7 @@ class VulkanData
     TextureData[TextureCount] Textures;
 
     VertexBufferData Vertices;
+    IndexBufferData Indices;
 
     VkPipelineLayout PipelineLayout;
     VkDescriptorSetLayout DescriptorSetLayout;
@@ -444,7 +445,7 @@ class VulkanData
     Array!VkFramebuffer Framebuffers;
 
     float DepthStencilValue = 1.0f;
-    float DepthIncrement = 0.0f;
+    float DepthStencilIncrement = 0.0f;
   }
 
   this(IAllocator Allocator)
@@ -491,8 +492,17 @@ struct VertexBufferData
   VkDeviceMemory Memory;
 
   uint BindID;
+  uint NumVertices;
   VkVertexInputBindingDescription[1] VertexInputBindingDescs;
   VkVertexInputAttributeDescription[2] VertexInputAttributeDescs;
+}
+
+struct IndexBufferData
+{
+  VkBuffer Buffer;
+  VkDeviceMemory Memory;
+
+  uint NumIndices;
 }
 
 bool CreateVulkanInstance(VulkanData Vulkan)
@@ -988,6 +998,7 @@ bool Initialize(VulkanData Vulkan, HINSTANCE ProcessHandle, HWND WindowHandle)
       with(EnabledFeatures)
       {
         shaderClipDistance = VK_TRUE;
+        shaderCullDistance = VK_TRUE;
       }
 
       VkDeviceCreateInfo DeviceCreateInfo;
@@ -1418,7 +1429,7 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
     }
 
     //
-    // Prepare Vertices
+    // Prepare Vertices and Indices
     //
     {
       Log.BeginScope("Preparing vertices.");
@@ -1430,73 +1441,125 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
         Vector2 TexCoord;
       }
 
-      VertexData[3] Triangle =
+      auto TopLeft     = VertexData(Vector3(-1.0f, -1.0f,  0.25f), Vector2(0.0f, 0.0f));
+      auto TopRight    = VertexData(Vector3( 1.0f, -1.0f,  0.25f), Vector2(1.0f, 0.0f));
+      auto BottomLeft  = VertexData(Vector3(-1.0f,  1.0f,  1.00f), Vector2(0.0f, 1.0f));
+      auto BottomRight = VertexData(Vector3( 1.0f,  1.0f,  1.00f), Vector2(1.0f, 1.0f));
+      VertexData[4] Geometry =
       [
-        VertexData(Vector3(-1.0f, -1.0f,  0.25f), Vector2(0.0f, 0.0f)),
-        VertexData(Vector3( 1.0f, -1.0f,  0.25f), Vector2(1.0f, 0.0f)),
-        VertexData(Vector3( 0.0f,  1.0f,  1.00f), Vector2(0.5f, 1.0f)),
+        /*0*/TopLeft,    /*1*/TopRight,
+        /*2*/BottomLeft, /*3*/BottomRight,
       ];
-      const TriangleBytes = Triangle.ByteCount;
+      Vertices.NumVertices = Geometry.length;
 
-      VkBufferCreateInfo BufferCreateInfo;
-      with(BufferCreateInfo)
+      uint[6] IndexData =
+      [
+        0, 3, 1,
+        0, 2, 3,
+      ];
+      Indices.NumIndices = IndexData.length;
+
+      // Vertex Buffer Setup
       {
-        size = TriangleBytes;
-        usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+        VkBufferCreateInfo BufferCreateInfo;
+        with(BufferCreateInfo)
+        {
+          size = Geometry.ByteCount;
+          usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+        }
+        vkCreateBuffer(Device, &BufferCreateInfo, null, &Vertices.Buffer).Verify;
+
+        VkMemoryRequirements MemoryRequirements;
+        vkGetBufferMemoryRequirements(Device, Vertices.Buffer, &MemoryRequirements);
+
+        VkMemoryAllocateInfo MemoryAllocateInfo;
+        with(MemoryAllocateInfo)
+        {
+          allocationSize = MemoryRequirements.size;
+          auto Result = ExtractMemoryTypeFromProperties(Vulkan,
+                                                        MemoryRequirements.memoryTypeBits,
+                                                        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+                                                        &memoryTypeIndex);
+          assert(Result);
+        }
+
+        vkAllocateMemory(Device, &MemoryAllocateInfo, null, &Vertices.Memory).Verify;
+
+        // Copy data from host to the device.
+        {
+          void* RawData;
+          vkMapMemory(Device, Vertices.Memory, 0, MemoryAllocateInfo.allocationSize, 0, &RawData).Verify;
+          scope(success) vkUnmapMemory(Device, Vertices.Memory);
+
+          auto Target = (cast(VertexData*)RawData)[0 .. Geometry.length];
+          Target[] = Geometry[];
+        }
+
+        vkBindBufferMemory(Device, Vertices.Buffer, Vertices.Memory, 0).Verify;
+
+        Vertices.BindID = 0;
+
+        with(Vertices.VertexInputBindingDescs[0])
+        {
+          binding = Vertices.BindID;
+          stride = VertexData.sizeof;
+          inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+        }
+
+        with(Vertices.VertexInputAttributeDescs[0])
+        {
+          binding = Vertices.BindID;
+          location = 0;
+          format = VK_FORMAT_R32G32B32_SFLOAT;
+          offset = 0;
+        }
+
+        with(Vertices.VertexInputAttributeDescs[1])
+        {
+          binding = Vertices.BindID;
+          location = 1;
+          format = VK_FORMAT_R32G32_SFLOAT;
+          offset = typeof(VertexData.Position).sizeof;
+        }
       }
-      vkCreateBuffer(Device, &BufferCreateInfo, null, &Vertices.Buffer).Verify;
 
-      VkMemoryRequirements MemoryRequirements;
-      vkGetBufferMemoryRequirements(Device, Vertices.Buffer, &MemoryRequirements);
-
-      VkMemoryAllocateInfo MemoryAllocateInfo;
-      with(MemoryAllocateInfo)
+      // Index Buffer Setup
       {
-        allocationSize = MemoryRequirements.size;
-        auto Result = ExtractMemoryTypeFromProperties(Vulkan,
-                                                      MemoryRequirements.memoryTypeBits,
-                                                      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
-                                                      &memoryTypeIndex);
-        assert(Result);
-      }
+        VkBufferCreateInfo BufferCreateInfo;
+        with(BufferCreateInfo)
+        {
+          size = IndexData.ByteCount;
+          usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+        }
+        vkCreateBuffer(Device, &BufferCreateInfo, null, &Indices.Buffer).Verify;
 
-      vkAllocateMemory(Device, &MemoryAllocateInfo, null, &Vertices.Memory).Verify;
+        VkMemoryRequirements MemoryRequirements;
+        vkGetBufferMemoryRequirements(Device, Indices.Buffer, &MemoryRequirements);
 
-      // Copy data from host to the device.
-      {
-        void* RawData;
-        vkMapMemory(Device, Vertices.Memory, 0, MemoryAllocateInfo.allocationSize, 0, &RawData).Verify;
-        scope(success) vkUnmapMemory(Device, Vertices.Memory);
+        VkMemoryAllocateInfo MemoryAllocateInfo;
+        with(MemoryAllocateInfo)
+        {
+          allocationSize = MemoryRequirements.size;
+          auto Result = ExtractMemoryTypeFromProperties(Vulkan,
+                                                        MemoryRequirements.memoryTypeBits,
+                                                        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+                                                        &memoryTypeIndex);
+          assert(Result);
+        }
 
-        auto Target = (cast(VertexData*)RawData)[0 .. 3];
-        Target[] = Triangle[];
-      }
+        vkAllocateMemory(Device, &MemoryAllocateInfo, null, &Indices.Memory).Verify;
 
-      vkBindBufferMemory(Device, Vertices.Buffer, Vertices.Memory, 0).Verify;
+        // Copy data from host to the device.
+        {
+          void* RawData;
+          vkMapMemory(Device, Indices.Memory, 0, MemoryAllocateInfo.allocationSize, 0, &RawData).Verify;
+          scope(success) vkUnmapMemory(Device, Indices.Memory);
 
-      Vertices.BindID = 0;
+          auto Target = (cast(uint*)RawData)[0 .. IndexData.length];
+          Target[] = IndexData[];
+        }
 
-      with(Vertices.VertexInputBindingDescs[0])
-      {
-        binding = Vertices.BindID;
-        stride = VertexData.sizeof;
-        inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
-      }
-
-      with(Vertices.VertexInputAttributeDescs[0])
-      {
-        binding = Vertices.BindID;
-        location = 0;
-        format = VK_FORMAT_R32G32B32_SFLOAT;
-        offset = 0;
-      }
-
-      with(Vertices.VertexInputAttributeDescs[1])
-      {
-        binding = Vertices.BindID;
-        location = 1;
-        format = VK_FORMAT_R32G32_SFLOAT;
-        offset = typeof(VertexData.Position).sizeof;
+        vkBindBufferMemory(Device, Indices.Buffer, Indices.Memory, 0).Verify;
       }
     }
 
@@ -1510,7 +1573,7 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
       VkDescriptorSetLayoutBinding LayoutBinding;
       with(LayoutBinding)
       {
-        //binding = Vertices.BindID; // Should I do that?
+        binding = Vertices.BindID; // TODO: Should I do that?
         descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         descriptorCount = TextureCount;
         stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
@@ -1700,7 +1763,7 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
       {
         polygonMode = VK_POLYGON_MODE_FILL;
         cullMode = VK_CULL_MODE_BACK_BIT;
-        frontFace = VK_FRONT_FACE_CLOCKWISE;
+        frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
         depthClampEnable = VK_FALSE;
         rasterizerDiscardEnable = VK_FALSE;
         depthBiasEnable = VK_FALSE;
@@ -2168,7 +2231,6 @@ void Draw(VulkanData Vulkan)
         {
           // Swapchain is out of date (e.g. the window was resized) and must be
           // recreated:
-          // TODO: Resize.
           Vulkan.Resize(Vulkan.Width, Vulkan.Height);
         } break;
         case VK_SUBOPTIMAL_KHR:
@@ -2263,11 +2325,28 @@ void CreateDrawCommand(VulkanData Vulkan)
         vkCmdSetScissor(DrawCommand, 0, 1, &Scissor);
       }
 
-      VkDeviceSize VertexBufferOffset;
-      vkCmdBindVertexBuffers(DrawCommand, Vertices.BindID,
-                             1, &Vertices.Buffer, &VertexBufferOffset);
+      {
+        VkDeviceSize VertexBufferOffset;
+        vkCmdBindVertexBuffers(DrawCommand, Vertices.BindID,
+                               1, &Vertices.Buffer,
+                               &VertexBufferOffset);
+      }
 
-      vkCmdDraw(DrawCommand, 3, 1, 0, 0);
+      {
+        VkDeviceSize IndexBufferOffset;
+        vkCmdBindIndexBuffer(DrawCommand,
+                             Indices.Buffer,
+                             IndexBufferOffset,
+                             VK_INDEX_TYPE_UINT32);
+
+      }
+
+      vkCmdDrawIndexed(DrawCommand,
+                       Indices.NumIndices, // indexCount
+                       1,                  // instanceCount
+                       0,                  // firstIndex
+                       0,                  // vertexOffset
+                       0);                 // firstInstance
     }
 
     VkImageMemoryBarrier PrePresentBarrier;
@@ -2344,6 +2423,9 @@ void DestroySwapchainData(VulkanData Vulkan)
   vkDestroyPipelineLayout(Vulkan.Device, Vulkan.PipelineLayout, null);
   vkDestroyDescriptorSetLayout(Vulkan.Device, Vulkan.DescriptorSetLayout, null);
 
+  vkDestroyBuffer(Vulkan.Device, Vulkan.Indices.Buffer, null);
+  vkFreeMemory(Vulkan.Device, Vulkan.Indices.Memory, null);
+
   vkDestroyBuffer(Vulkan.Device, Vulkan.Vertices.Buffer, null);
   vkFreeMemory(Vulkan.Device, Vulkan.Vertices.Memory, null);
 
@@ -2368,6 +2450,9 @@ void DestroySwapchainData(VulkanData Vulkan)
 
 void Cleanup(VulkanData Vulkan)
 {
+  Log.BeginScope("Vulkan cleanup.");
+  scope(exit) Log.EndScope("Finished Vulkan cleanup.");
+
   if(Vulkan.IsPrepared)
   {
     Vulkan.DestroySwapchainData();
