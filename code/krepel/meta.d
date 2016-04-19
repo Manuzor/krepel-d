@@ -239,6 +239,18 @@ template TemplateArguments(Type)
 alias ModuleNameOf = std.traits.moduleName;
 alias ParentOf = std.traits.parentOf;
 
+template IsClassOrInterface(Type)
+{
+  static if(is(Type == class) || is(Type == interface))
+  {
+    enum IsClassOrInterface = true;
+  }
+  else
+  {
+    enum IsClassOrInterface = false;
+  }
+}
+
 
 //
 // Unit Tests

@@ -47,7 +47,7 @@ Type NewUnconstructed(Type)(IAllocator Allocator)
 /// Note: If the memory type used does not support deallocation
 ///       (e.g. StackMemory), this function does nothing.
 void DeleteUndestructed(Type)(IAllocator Allocator, Type* Instance)
-  if(!is(Type == class))
+  if(!Meta.IsClassOrInterface!Type)
 {
   if(Instance)
   {
@@ -57,11 +57,11 @@ void DeleteUndestructed(Type)(IAllocator Allocator, Type* Instance)
 
 /// Ditto
 void DeleteUndestructed(Type)(IAllocator Allocator, Type Instance)
-  if(is(Type == class))
+  if(Meta.IsClassOrInterface!Type)
 {
   if(Instance)
   {
-    Allocator.Deallocate((cast(void*)Instance)[0 .. Type.sizeof]);
+    Allocator.Deallocate(Instance.AsPointerTo!void[0 .. Type.sizeof]);
   }
 }
 
@@ -83,7 +83,7 @@ Type New(Type, ArgTypes...)(IAllocator Allocator, auto ref ArgTypes Args)
 ///       (e.g. StackMemory), this function only destructs Instance,
 ///       but does not free memory.
 void Delete(Type)(IAllocator Allocator, Type* Instance)
-  if(!is(Type == class))
+  if(!Meta.IsClassOrInterface!Type)
 {
   if(Instance)
   {
@@ -94,7 +94,7 @@ void Delete(Type)(IAllocator Allocator, Type* Instance)
 
 /// Ditto
 void Delete(Type)(IAllocator Allocator, Type Instance)
-  if(is(Type == class))
+  if(Meta.IsClassOrInterface!Type)
 {
   if(Instance)
   {
