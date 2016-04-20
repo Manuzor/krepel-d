@@ -151,7 +151,7 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
     auto BytesRead = File.Read(FileContent);
     assert(BytesRead == FileContent.length);
 
-    auto TheImage = .Allocator.New!ImageContainer;
+    auto TheImage = .Allocator.New!ImageContainer(.Allocator);
     scope(exit) .Allocator.Delete(TheImage);
 
     if(Loader.LoadImageFromData(FileContent, TheImage))
