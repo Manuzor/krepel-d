@@ -270,7 +270,8 @@ struct Array(T)
 
   ElementType[] ExpandUninitialized(size_t NumNewElements)
   {
-    assert(NumNewElements >= 1);
+    if(NumNewElements == 0) return Data[$ .. $];
+
     const OldCount = this.Count;
     const NewCount = OldCount + NumNewElements;
     Reserve(NewCount);
