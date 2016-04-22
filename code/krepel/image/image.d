@@ -84,12 +84,13 @@ class ImageContainer
 
   inout(Type)[] SubImageData(Type)(uint MipLevel = 0, uint Face = 0, uint ArrayIndex = 0) inout
   {
-    const Offset = PointerToSubImageAt(MipLevel, NumFaces, ArrayIndex).DataOffset;
+    const Offset = PointerToSubImageAt(MipLevel, Face, ArrayIndex).DataOffset;
     auto RawResult = RawData[Offset .. $];
     return cast(typeof(return))RawResult;
   }
 
-  inout(Type)* SinglePixel(Type)(uint MipLevel = 0, uint Face = 0, uint ArrayIndex = 0, uint X = 0, uint Y = 0, uint Z = 0)
+  // TODO(Manu): Replace with PixelData that returns Type[] instead of Type*?
+  inout(Type)* PixelPointer(Type)(uint MipLevel = 0, uint Face = 0, uint ArrayIndex = 0, uint X = 0, uint Y = 0, uint Z = 0) inout
   {
     assert(this.Format.FormatType == ImageFormatType.Linear,
            "Pixel pointer can only be retrieved for linear formats.");
@@ -97,31 +98,32 @@ class ImageContainer
     assert(Y < Height);
     assert(Z < Depth);
 
-    void* Pointer = SubImageData!void(MipLevel, Face, ArrayIndex).ptr;
+    auto Pointer = SubImageData!void(MipLevel, Face, ArrayIndex).ptr;
 
     Pointer += Z * DepthPitch(MipLevel);
     Pointer += Y * RowPitch(MipLevel);
-    Pointer += X * Format.BitsPerPixel / 8;
+    Pointer += X * this.Format.BitsPerPixel / 8;
 
-    return cast(typeof(return))Pointer;
+    return cast(inout(Type)*)Pointer;
   }
 
-  inout(Type)* SingleBlock(Type)(uint MipLevel = 0, uint Face = 0, uint ArrayIndex = 0, uint BlockX = 0, uint BlockY = 0, uint Z = 0)
+  // TODO(Manu): Replace with BlockData that returns Type[] instead of Type*?
+  inout(Type)* BlockPointer(Type)(uint MipLevel = 0, uint Face = 0, uint ArrayIndex = 0, uint BlockX = 0, uint BlockY = 0, uint Z = 0) inout
   {
-    assert(this.Format.FormatType == ImageFormatType.Linear,
-           "PixelBlock pointer can only be retrieved for block compressed formats.");
+    assert(this.Format.FormatType == ImageFormatType.BlockCompressed,
+           "Block pointer can only be retrieved for block compressed formats.");
 
-    void* Pointer = SubImageData!void(MipLevel, Face, ArrayIndex).ptr;
+    auto Pointer = SubImageData!void(MipLevel, Face, ArrayIndex).ptr;
 
     Pointer += Z * DepthPitch(MipLevel);
 
-    const uint BlockSize = 4;
-    const uint NumBlocksX = WidthAtLevel(MipLevel) / uiBlockSize;
+    const BlockSize = 4;
+    const uint NumBlocksX = WidthAtLevel(MipLevel) / BlockSize;
     const uint BlockIndex = BlockX + NumBlocksX * BlockY;
 
     Pointer += BlockIndex * BlockSize * BlockSize * this.Format.BitsPerPixel / 8;
 
-    return cast(typeof(return))Pointer;
+    return cast(inout(Type)*)Pointer;
   }
 
   uint RowPitch(uint MipLevel = 0) const
@@ -210,6 +212,7 @@ private:
 interface IImageLoader
 {
   Flag!"Success" LoadImageFromData(void[] RawImageData, ImageContainer ResultImage);
+  Flag!"Success" WriteImageToArray(ImageContainer Image, ref Array!ubyte RawImageData);
 }
 
 extern(C)

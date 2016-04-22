@@ -2,7 +2,11 @@ module krepel.image.loader.dds;
 
 import krepel;
 import krepel.algorithm;
+import krepel.container.array;
+
 import krepel.image;
+import krepel.image.image_format_mappings;
+
 
 struct DDS_PixelFormat
 {
@@ -144,9 +148,14 @@ private size_t ConsumeAndReadInto(ref void[] Data, void[] Result)
   return Amount;
 }
 
+private void WriteInto(Type)(ref in Type Something, ref Array!ubyte OutputData)
+{
+  OutputData ~= (cast(ubyte*)&Something)[0 .. Type.sizeof];
+}
+
 class DDSImageLoader : IImageLoader
 {
-  Flag!"Success" LoadImageFromData(void[] RawImageData, ImageContainer ResultImage)
+  override Flag!"Success" LoadImageFromData(void[] RawImageData, ImageContainer ResultImage)
   {
     if(RawImageData.length == 0) return No.Success;
     if(ResultImage is null)      return No.Success;
@@ -204,28 +213,23 @@ class DDSImageLoader : IImageLoader
     // Data format specified in RGBA masks
     if((Header.DDSpf.Flags & DDPF_Flags.ALPHAPIXELS) != 0 || (Header.DDSpf.Flags & DDPF_Flags.RGB) != 0)
     {
-      Format = ImageFormatFromPixelMask(Header.DDSpf.RBitMask, Header.DDSpf.GBitMask,
-                                        Header.DDSpf.BBitMask, Header.DDSpf.ABitMask);
+      // Find format
+      Format = FindMatchingImageFormatForPixelMaskAndBitsPerPixel(Header.DDSpf.RBitMask,
+                                                                  Header.DDSpf.GBitMask,
+                                                                  Header.DDSpf.BBitMask,
+                                                                  Header.DDSpf.ABitMask,
+                                                                  Header.DDSpf.RGBBitCount);
 
       if(Format == ImageFormat.Unknown)
       {
-        Log.Failure("The pixel mask specified was not recognized (R: %x, G: %x, B: %x, A: %x).",
-          Header.DDSpf.RBitMask, Header.DDSpf.GBitMask, Header.DDSpf.BBitMask, Header.DDSpf.ABitMask);
-        return No.Success;
-      }
-
-      // Verify that the format we found is correct
-      if(Format.BitsPerPixel != Header.DDSpf.RGBBitCount)
-      {
-        Log.Failure("The number of bits per pixel specified in the file (%d) does not match the expected value of %d for the format '%s'.",
-          Header.DDSpf.RGBBitCount, Format.BitsPerPixel, Format);
+        Log.Failure("Failed to find suitable krepel format. (Bits per pixel: %u, Pixel mask R: %x, G: %x, B: %x, A: %x)",
+                    Header.DDSpf.RGBBitCount,
+                    Header.DDSpf.RBitMask, Header.DDSpf.GBitMask, Header.DDSpf.BBitMask, Header.DDSpf.ABitMask);
         return No.Success;
       }
     }
     else if((Header.DDSpf.Flags & DDPF_Flags.FOURCC) != 0)
     {
-      import krepel.image.image_format_mappings;
-
       if(Header.DDSpf.FourCC == DDS_Dxt10FourCc)
       {
         if(!RawImageData.ConsumeAndReadInto(&HeaderDxt10))
@@ -264,6 +268,7 @@ class DDSImageLoader : IImageLoader
       return No.Success;
     }
 
+    Log.Info("Using krepel format: %s", Format);
     ResultImage.Format = Format;
 
     bool IsComplex = (Header.Caps & DDS_Caps.COMPLEX) != 0;
@@ -318,8 +323,199 @@ class DDSImageLoader : IImageLoader
 
     if(RawImageData.length)
     {
-      Log.Warn("");
+      Log.Warning("After reading the entire image data there are %d bytes left.", RawImageData.length);
     }
+
+    return Yes.Success;
+  }
+
+  override Flag!"Success" WriteImageToArray(ImageContainer Image, ref Array!ubyte RawImageData)
+  {
+    bool HasMipMaps = Image.NumMipLevels > 1;
+    bool IsVolume = Image.Depth > 1;
+    bool IsCubeMap = Image.NumFaces > 1;
+    bool IsArray = Image.NumArrayIndices > 1;
+
+    bool IsDxt10 = false;
+
+    DDS_Header FileHeader;
+    DDS_HeaderDxt10 HeaderDxt10;
+
+    FileHeader.Magic = DDS_Magic;
+    FileHeader.Size = 124;
+    FileHeader.Width = Image.Width;
+    FileHeader.Height = Image.Height;
+
+    // Required in every .dds file.
+    FileHeader.Flags = DDSD_Flags.WIDTH | DDSD_Flags.HEIGHT | DDSD_Flags.CAPS | DDSD_Flags.PIXELFORMAT;
+
+    if(HasMipMaps)
+    {
+      FileHeader.Flags |= DDSD_Flags.MIPMAPCOUNT;
+      FileHeader.MipMapCount = Image.NumMipLevels;
+    }
+
+    if(IsVolume)
+    {
+      // Volume and array are incompatible
+      if(IsArray)
+      {
+        Log.Failure("The image is both an array and volume texture. This is not supported.");
+        return No.Success;
+      }
+
+      FileHeader.Flags |= DDSD_Flags.DEPTH;
+      FileHeader.Depth = Image.Depth;
+    }
+
+    switch (Image.Format.FormatType)
+    {
+    case ImageFormatType.Linear:
+      FileHeader.Flags |= DDSD_Flags.PITCH;
+      FileHeader.PitchOrLinearSize = Image.RowPitch(0);
+      break;
+
+    case ImageFormatType.BlockCompressed:
+      FileHeader.Flags |= DDSD_Flags.LINEARSIZE;
+      FileHeader.PitchOrLinearSize = 0; // TODO(Manu): sub-image size
+      break;
+
+    default:
+      Log.Failure("Unknown image format type.");
+      return No.Success;
+    }
+
+    FileHeader.Caps = DDS_Caps.TEXTURE;
+
+    if(IsCubeMap)
+    {
+      if(Image.NumFaces != 6)
+      {
+        Log.Failure("The image is a cubemap, but has %u faces instead of the expected 6.", Image.NumFaces);
+        return No.Success;
+      }
+
+      if(IsVolume)
+      {
+        Log.Failure("The image is both a cubemap and volume texture. This is not supported.");
+        return No.Success;
+      }
+
+      FileHeader.Caps |= DDS_Caps.COMPLEX;
+      FileHeader.Caps2 |= DDS_Caps2.CUBEMAP |
+        DDS_Caps2.CUBEMAP_POSITIVEX | DDS_Caps2.CUBEMAP_NEGATIVEX |
+        DDS_Caps2.CUBEMAP_POSITIVEY | DDS_Caps2.CUBEMAP_NEGATIVEY |
+        DDS_Caps2.CUBEMAP_POSITIVEZ | DDS_Caps2.CUBEMAP_NEGATIVEZ;
+    }
+
+    if(IsArray)
+    {
+      FileHeader.Caps |= DDS_Caps.COMPLEX;
+
+      // Must be written as DXT10
+      IsDxt10 = true;
+    }
+
+    if(IsVolume)
+    {
+      FileHeader.Caps |= DDS_Caps.COMPLEX;
+      FileHeader.Caps2 |= DDS_Caps2.VOLUME;
+    }
+
+    if(HasMipMaps)
+    {
+      FileHeader.Caps |= DDS_Caps.MIPMAP | DDS_Caps.COMPLEX;
+    }
+
+    FileHeader.DDSpf.Size = 32;
+
+    uint RedMask = Image.Format.RedMask;
+    uint GreenMask = Image.Format.GreenMask;
+    uint BlueMask = Image.Format.BlueMask;
+    uint AlphaMask = Image.Format.AlphaMask;
+
+    uint FourCc = Image.Format.ImageFormatToFourCC();
+    auto DxgiFormat = Image.Format.ImageFormatToDXGIFormat();
+
+    // When not required to use a DXT10 texture, try to write a legacy DDS by specifying FourCC or pixel masks
+    if(!IsDxt10)
+    {
+      // The format has a known mask and we would also recognize it as the same when reading back in, since multiple formats may have the same pixel masks
+      ImageFormat MatchingFormat = FindMatchingImageFormatForPixelMaskAndBitsPerPixel(Image.Format.RedMask,
+                                                                                      Image.Format.BlueMask,
+                                                                                      Image.Format.GreenMask,
+                                                                                      Image.Format.AlphaMask,
+                                                                                      Image.Format.BitsPerPixel);
+
+      if((RedMask | GreenMask | BlueMask | AlphaMask) && Image.Format == MatchingFormat)
+      {
+        FileHeader.DDSpf.Flags = DDPF_Flags.ALPHAPIXELS | DDPF_Flags.RGB;
+        FileHeader.DDSpf.RBitMask = RedMask;
+        FileHeader.DDSpf.GBitMask = GreenMask;
+        FileHeader.DDSpf.BBitMask = BlueMask;
+        FileHeader.DDSpf.ABitMask = AlphaMask;
+        FileHeader.DDSpf.RGBBitCount = Image.Format.BitsPerPixel;
+      }
+      // The format has a known FourCC
+      else if(FourCc != 0)
+      {
+        FileHeader.DDSpf.Flags = DDPF_Flags.FOURCC;
+        FileHeader.DDSpf.FourCC = FourCc;
+      }
+      else
+      {
+        // Fallback to DXT10 path
+        IsDxt10 = true;
+      }
+    }
+
+    if(IsDxt10)
+    {
+      // We must write a DXT10 file, but there is no matching DXGI_FORMAT - we could also try converting, but that is rarely intended when writing .dds
+      if(DxgiFormat == 0)
+      {
+        Log.Failure("The image needs to be written as a DXT10 file, but no matching DXGI format was found for '%s'.", Image.Format);
+        return No.Success;
+      }
+
+      FileHeader.DDSpf.Flags = DDPF_Flags.FOURCC;
+      FileHeader.DDSpf.FourCC = DDS_Dxt10FourCc;
+
+      HeaderDxt10.DxgiFormat = DxgiFormat;
+
+      if(IsVolume)
+      {
+        HeaderDxt10.ResourceDimension = DDS_ResourceDimension.TEXTURE3D;
+      }
+      else if(Image.Height > 1)
+      {
+        HeaderDxt10.ResourceDimension = DDS_ResourceDimension.TEXTURE2D;
+      }
+      else
+      {
+        HeaderDxt10.ResourceDimension = DDS_ResourceDimension.TEXTURE1D;
+      }
+
+      if(IsCubeMap)
+      {
+        HeaderDxt10.MiscFlag = DDS_ResourceMiscFlags.TEXTURECUBE;
+      }
+
+      // NOT multiplied by number of cubemap faces
+      HeaderDxt10.ArraySize = Image.NumArrayIndices;
+
+      // Can be used to describe the alpha channel usage, but automatically makes it incompatible with the D3DX libraries if not 0.
+      HeaderDxt10.MiscFlags2 = 0;
+    }
+
+    FileHeader.WriteInto(RawImageData);
+
+    if(IsDxt10)
+    {
+      HeaderDxt10.WriteInto(RawImageData);
+    }
+
+    RawImageData ~= Image.ImageData!ubyte;
 
     return Yes.Success;
   }
