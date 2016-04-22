@@ -86,7 +86,7 @@ bool IsNaN(float Value)
 bool NearlyEquals(float A, float B, float Epsilon = 1.0e-4f)
 {
   // Scale epsilon along the magnitude of the bigger of the two.
-  // This way we compoensate the reduced precision on bigger Values.
+  // This way we compensate the reduced precision on bigger Values.
   return Abs(A - B) < Max(Epsilon, (Epsilon * Max(Abs(A), Abs(B))));
 }
 
