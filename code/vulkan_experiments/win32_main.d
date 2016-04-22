@@ -2,12 +2,13 @@ module krepel.win32_main;
 version(Windows):
 
 import krepel;
+import krepel.system;
 import krepel.win32;
 import krepel.win32.directx.xinput;
-import krepel.memory;
 import krepel.container;
 import krepel.string;
 import krepel.math;
+import krepel.image;
 
 
 import std.string : toStringz, fromStringz;
@@ -117,6 +118,27 @@ void Verify(VkResult Result, string File = __FILE__, size_t Line = __LINE__)
   }
 }
 
+void PrintSampledTextureProperties(LogData* Log, VkPhysicalDevice Gpu, VkFormat TextureFormat)
+{
+  VkImageFormatProperties Props;
+  vkGetPhysicalDeviceImageFormatProperties(Gpu,
+                                           TextureFormat,
+                                           VK_IMAGE_TYPE_2D,
+                                           VK_IMAGE_TILING_OPTIMAL,
+                                           VK_IMAGE_USAGE_SAMPLED_BIT,
+                                           0,
+                                           &Props);
+  Log.BeginScope("Physical Device Image Format Properties (%s)", TextureFormat);
+  {
+    Log.Info("maxExtent       = %s", Props.maxExtent);
+    Log.Info("maxMipLevels    = %s", Props.maxMipLevels);
+    Log.Info("maxArrayLayers  = %s", Props.maxArrayLayers);
+    Log.Info("sampleCounts    = %s", Props.sampleCounts);
+    Log.Info("maxResourceSize = %s", Props.maxResourceSize);
+  }
+  Log.EndScope("---");
+}
+
 void Win32SetupConsole(CString Title)
 {
   static import core.stdc.stdio;
@@ -130,6 +152,7 @@ void Win32SetupConsole(CString Title)
 int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
               LPSTR CommandLine, int ShowCode)
 {
+  version(none)
   {
     import krepel.image;
 
@@ -142,7 +165,7 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
     IImageLoader Loader = CreateLoader(.Allocator);
     scope(exit) DestroyLoader(.Allocator, Loader);
 
-    auto File = OpenFile(.Allocator, "../data/Reference_D.dds");
+    auto File = OpenFile(.Allocator, "../data/ezLogo_DXT1_NoMips_D.dds");
     scope(exit) CloseFile(.Allocator, File);
 
     auto FileContent = .Allocator.NewArray!void(File.Size);
@@ -151,10 +174,10 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
     auto BytesRead = File.Read(FileContent);
     assert(BytesRead == FileContent.length);
 
-    auto TheImage = .Allocator.New!ImageContainer(.Allocator);
-    scope(exit) .Allocator.Delete(TheImage);
+    auto Image = .Allocator.New!ImageContainer(.Allocator);
+    scope(exit) .Allocator.Delete(Image);
 
-    if(Loader.LoadImageFromData(FileContent, TheImage))
+    if(Loader.LoadImageFromData(FileContent, Image))
     {
       Log.Info("Loaded image file.");
     }
@@ -162,6 +185,24 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
     {
       Log.Warning("Failed to load image file.");
     }
+
+    auto NewImageData = Array!ubyte(.Allocator);
+    if(Loader.WriteImageToArray(Image, NewImageData))
+    {
+      Log.Info("Successfully written image data.");
+    }
+    else
+    {
+      Log.Warning("Failed to write image data.");
+    }
+
+    auto OutFile = OpenFile(.Allocator, "../data/ezLogo_DXT1_NoMips_D_NEW.dds", FileOpenMode.Write);
+    scope(exit) CloseFile(.Allocator, OutFile);
+
+    OutFile.Write(NewImageData[]);
+
+    bool Exit = true;
+    if(Exit) return 0;
   }
 
   version(XInput_RuntimeLinking) LoadXInput();
@@ -169,7 +210,7 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
   auto Vulkan = Allocator.New!VulkanData(Allocator);
   scope(exit) if(Vulkan) .Allocator.Delete(Vulkan);
 
-  if(!CreateVulkanInstance(Vulkan))
+  if(!CreateVulkanInstance(Vulkan, No.InstanceValidation))
   {
     Log.Failure("Failed to create vulkan instance.");
     return 1;
@@ -203,7 +244,7 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
 
       {
         Log.BeginScope("Initializing Vulkan.");
-        VulkanInitialized = Vulkan.Initialize(Instance, Window);
+        VulkanInitialized = Vulkan.Initialize(Instance, Window, No.DeviceValidation);
         if(VulkanInitialized) Log.EndScope("Vulkan initialized successfully.");
         else                  Log.EndScope("Failed to initialize Vulkan.");
       }
@@ -391,6 +432,27 @@ LRESULT Win32MainWindowCallback(HWND Window, UINT Message,
   return Result;
 }
 
+struct VulkanPhysicalDeviceData
+{
+  size_t                           Index;
+  VkPhysicalDevice                 Handle;
+  VkPhysicalDeviceProperties       Properties;
+  VkPhysicalDeviceMemoryProperties MemoryProperties;
+  VkPhysicalDeviceFeatures         Features;
+  Array!VkQueueFamilyProperties    QueueProperties;
+
+  @property void Allocator(IAllocator NewAllocator)
+  {
+    QueueProperties.Allocator = NewAllocator;
+  }
+}
+
+struct VulkanDeviceData
+{
+  const(VulkanPhysicalDeviceData)* OwnerGpu;
+  VkDevice Handle;
+}
+
 class VulkanData
 {
   bool IsPrepared;
@@ -412,22 +474,14 @@ class VulkanData
 
     VkDebugReportCallbackEXT DebugReportCallback;
 
-    size_t GpuIndex;
-    VkPhysicalDevice Gpu;
     uint GpuCount;
-
-    VkPhysicalDeviceProperties GpuProperties;
-    VkPhysicalDeviceMemoryProperties GpuMemoryProperties;
-    VkPhysicalDeviceFeatures GpuFeatures;
-
-    uint QueueCount;
-    Array!VkQueueFamilyProperties QueueProperties;
+    VulkanPhysicalDeviceData Gpu;
+    VulkanDeviceData Device;
 
     VkSurfaceKHR Surface;
 
     uint QueueNodeIndex = uint.max; // For both graphics and presenting.
 
-    VkDevice Device;
     VkQueue Queue;
 
     VkFormat Format;
@@ -485,7 +539,7 @@ class VulkanData
   this(IAllocator Allocator)
   {
     DLLName = UString(Allocator);
-    QueueProperties.Allocator = Allocator;
+    Gpu.Allocator = Allocator;
     SwapchainBuffers.Allocator = Allocator;
     Framebuffers.Allocator = Allocator;
   }
@@ -539,7 +593,7 @@ struct IndexBufferData
   uint NumIndices;
 }
 
-bool CreateVulkanInstance(VulkanData Vulkan)
+bool CreateVulkanInstance(VulkanData Vulkan, Flag!"InstanceValidation" InstanceValidation)
 {
   with(Vulkan)
   {
@@ -652,6 +706,7 @@ bool CreateVulkanInstance(VulkanData Vulkan)
       // Instance Layers
       //
       auto LayerNames = Array!(CString)(.Allocator);
+      if(InstanceValidation)
       {
         // Required extensions:
         bool SurfaceLayerFound;
@@ -720,11 +775,11 @@ bool CreateVulkanInstance(VulkanData Vulkan)
           }
           else
           {
-            Log.Info("  [ ] %s", ExtensionName);
+            Log.Info("[ ] %s", ExtensionName);
             continue;
           }
 
-          Log.Info("  [x] %s", ExtensionName);
+          Log.Info("[x] %s", ExtensionName);
         }
 
         bool Success = true;
@@ -830,8 +885,11 @@ bool CreateVulkanInstance(VulkanData Vulkan)
       vkEnumeratePhysicalDevices(Instance, &GpuCount, Gpus.Data.ptr).Verify;
 
       // Use the first Physical Device for now.
-      GpuIndex = 0;
-      Gpu = Gpus[GpuIndex];
+      auto Index = 0;
+      auto Handle = Gpus[Index];
+
+      Gpu.Index = Index;
+      Gpu.Handle = Handle;
     }
 
     //
@@ -841,20 +899,22 @@ bool CreateVulkanInstance(VulkanData Vulkan)
       Log.BeginScope("Querying for physical device and queue properties.");
       scope(exit) Log.EndScope("Retrieved physical device and queue properties.");
 
-      vkGetPhysicalDeviceProperties(Gpu, &GpuProperties);
-      vkGetPhysicalDeviceMemoryProperties(Gpu, &GpuMemoryProperties);
-      vkGetPhysicalDeviceFeatures(Gpu, &GpuFeatures);
+      vkGetPhysicalDeviceProperties(Gpu.Handle, &Gpu.Properties);
+      vkGetPhysicalDeviceMemoryProperties(Gpu.Handle, &Gpu.MemoryProperties);
+      vkGetPhysicalDeviceFeatures(Gpu.Handle, &Gpu.Features);
 
-      vkGetPhysicalDeviceQueueFamilyProperties(Gpu, &QueueCount, null);
-      QueueProperties.Expand(QueueCount);
-      vkGetPhysicalDeviceQueueFamilyProperties(Gpu, &QueueCount, QueueProperties.Data.ptr);
+      uint QueueCount;
+      vkGetPhysicalDeviceQueueFamilyProperties(Gpu.Handle, &QueueCount, null);
+      Gpu.QueueProperties.Clear();
+      Gpu.QueueProperties.Expand(QueueCount);
+      vkGetPhysicalDeviceQueueFamilyProperties(Gpu.Handle, &QueueCount, Gpu.QueueProperties.Data.ptr);
     }
   }
 
   return true;
 }
 
-bool Initialize(VulkanData Vulkan, HINSTANCE ProcessHandle, HWND WindowHandle)
+bool Initialize(VulkanData Vulkan, HINSTANCE ProcessHandle, HWND WindowHandle, Flag!"DeviceValidation" DeviceValidation)
 {
   with(Vulkan)
   {
@@ -885,12 +945,12 @@ bool Initialize(VulkanData Vulkan, HINSTANCE ProcessHandle, HWND WindowHandle)
 
       uint GraphicsIndex = uint.max;
       uint PresentIndex = uint.max;
-      foreach(uint Index; 0 .. QueueCount)
+      foreach(uint Index, QueueProperties; Gpu.QueueProperties)
       {
         VkBool32 SupportsPresenting;
-        vkGetPhysicalDeviceSurfaceSupportKHR(Gpu, Index, Surface, &SupportsPresenting);
+        vkGetPhysicalDeviceSurfaceSupportKHR(Gpu.Handle, Index, Surface, &SupportsPresenting);
 
-        if(QueueProperties[Index].queueFlags & VK_QUEUE_GRAPHICS_BIT)
+        if(QueueProperties.queueFlags & VK_QUEUE_GRAPHICS_BIT)
         {
           if(GraphicsIndex == uint.max)
           {
@@ -940,17 +1000,18 @@ bool Initialize(VulkanData Vulkan, HINSTANCE ProcessHandle, HWND WindowHandle)
       // Device Layers
       //
       auto LayerNames = Array!(CString)(.Allocator);
+      if(DeviceValidation)
       {
         // Required extensions:
         bool SurfaceLayerFound;
         bool PlatformSurfaceLayerFound;
 
         uint LayerCount;
-        vkEnumerateDeviceLayerProperties(Gpu, &LayerCount, null).Verify;
+        vkEnumerateDeviceLayerProperties(Gpu.Handle, &LayerCount, null).Verify;
 
         auto LayerProperties = Array!VkLayerProperties(.Allocator);
         LayerProperties.Expand(LayerCount);
-        vkEnumerateDeviceLayerProperties(Gpu, &LayerCount, LayerProperties.Data.ptr).Verify;
+        vkEnumerateDeviceLayerProperties(Gpu.Handle, &LayerCount, LayerProperties.Data.ptr).Verify;
 
         Log.BeginScope("Explicitly enabled device layers:");
         scope(exit) Log.EndScope("==========");
@@ -980,11 +1041,11 @@ bool Initialize(VulkanData Vulkan, HINSTANCE ProcessHandle, HWND WindowHandle)
         bool SwapchainExtensionFound;
 
         uint ExtensionCount;
-        vkEnumerateDeviceExtensionProperties(Gpu, null, &ExtensionCount, null).Verify;
+        vkEnumerateDeviceExtensionProperties(Gpu.Handle, null, &ExtensionCount, null).Verify;
 
         auto ExtensionProperties = Array!VkExtensionProperties(.Allocator);
         ExtensionProperties.Expand(ExtensionCount);
-        vkEnumerateDeviceExtensionProperties(Gpu, null, &ExtensionCount, ExtensionProperties.Data.ptr).Verify;
+        vkEnumerateDeviceExtensionProperties(Gpu.Handle, null, &ExtensionCount, ExtensionProperties.Data.ptr).Verify;
 
         Log.BeginScope("Explicitly enabled device extensions:");
         scope(exit) Log.EndScope("==========");
@@ -1028,11 +1089,13 @@ bool Initialize(VulkanData Vulkan, HINSTANCE ProcessHandle, HWND WindowHandle)
         pQueuePriorities = QueuePriorities.ptr;
       }
 
+      // TODO(Manu): Verify the enabled features are actually supported.
       VkPhysicalDeviceFeatures EnabledFeatures;
       with(EnabledFeatures)
       {
         shaderClipDistance = VK_TRUE;
         shaderCullDistance = VK_TRUE;
+        textureCompressionBC = VK_TRUE;
       }
 
       VkDeviceCreateInfo DeviceCreateInfo;
@@ -1050,10 +1113,11 @@ bool Initialize(VulkanData Vulkan, HINSTANCE ProcessHandle, HWND WindowHandle)
         pEnabledFeatures = &EnabledFeatures;
       }
 
-      vkCreateDevice(Gpu, &DeviceCreateInfo, null, &Device).Verify;
-      assert(Device);
+      vkCreateDevice(Gpu.Handle, &DeviceCreateInfo, null, &Device.Handle).Verify;
+      assert(Device.Handle);
+      Device.OwnerGpu = &Gpu;
 
-      vkGetDeviceQueue(Device, QueueNodeIndex, 0, &Queue);
+      vkGetDeviceQueue(Device.Handle, QueueNodeIndex, 0, &Queue);
       assert(Queue);
     }
 
@@ -1065,13 +1129,13 @@ bool Initialize(VulkanData Vulkan, HINSTANCE ProcessHandle, HWND WindowHandle)
       scope(exit) Log.EndScope("Got format and color space for the previously created Win32 surface.");
 
       uint FormatCount;
-      vkGetPhysicalDeviceSurfaceFormatsKHR(Gpu, Surface, &FormatCount, null).Verify;
+      vkGetPhysicalDeviceSurfaceFormatsKHR(Gpu.Handle, Surface, &FormatCount, null).Verify;
       assert(FormatCount > 0);
 
       auto SurfaceFormats = Array!VkSurfaceFormatKHR(.Allocator);
       SurfaceFormats.Expand(FormatCount);
 
-      vkGetPhysicalDeviceSurfaceFormatsKHR(Gpu, Surface, &FormatCount, SurfaceFormats.Data.ptr).Verify;
+      vkGetPhysicalDeviceSurfaceFormatsKHR(Gpu.Handle, Surface, &FormatCount, SurfaceFormats.Data.ptr).Verify;
 
       if(FormatCount == 1 && SurfaceFormats[0].format == VK_FORMAT_UNDEFINED)
       {
@@ -1110,7 +1174,7 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
         flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
       }
 
-      vkCreateCommandPool(Device, &CreateInfo, null, &CommandPool).Verify;
+      vkCreateCommandPool(Device.Handle, &CreateInfo, null, &CommandPool).Verify;
       assert(CommandPool);
     }
 
@@ -1118,8 +1182,8 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
     // Create Command Buffer
     //
     {
-      Log.BeginScope("Creating command buffer.");
-      scope(exit) Log.EndScope("Finished creating command buffer.");
+      Log.BeginScope("Creating command buffers.");
+      scope(exit) Log.EndScope("Finished creating command buffers.");
 
       VkCommandBufferAllocateInfo AllocateInfo;
       with(AllocateInfo)
@@ -1128,7 +1192,12 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
         level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
         commandBufferCount = 1;
       }
-      vkAllocateCommandBuffers(Device, &AllocateInfo, &DrawCommand).Verify;
+
+      // Create the draw command buffer.
+      vkAllocateCommandBuffers(Device.Handle, &AllocateInfo, &DrawCommand).Verify;
+
+      // Create the setup command buffer.
+      vkAllocateCommandBuffers(Device.Handle, &AllocateInfo, &SetupCommand).Verify;
     }
 
     //
@@ -1143,15 +1212,15 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
       VkSwapchainKHR OldSwapchain = Swapchain;
 
       VkSurfaceCapabilitiesKHR SurfaceCapabilities;
-      vkGetPhysicalDeviceSurfaceCapabilitiesKHR(Gpu, Surface, &SurfaceCapabilities).Verify;
+      vkGetPhysicalDeviceSurfaceCapabilitiesKHR(Gpu.Handle, Surface, &SurfaceCapabilities).Verify;
 
       uint PresentModeCount;
-      vkGetPhysicalDeviceSurfacePresentModesKHR(Gpu, Surface, &PresentModeCount, null).Verify;
+      vkGetPhysicalDeviceSurfacePresentModesKHR(Gpu.Handle, Surface, &PresentModeCount, null).Verify;
 
       auto PresentModes = Array!VkPresentModeKHR(.Allocator);
       PresentModes.Expand(PresentModeCount);
 
-      vkGetPhysicalDeviceSurfacePresentModesKHR(Gpu, Surface, &PresentModeCount, PresentModes.Data.ptr).Verify;
+      vkGetPhysicalDeviceSurfacePresentModesKHR(Gpu.Handle, Surface, &PresentModeCount, PresentModes.Data.ptr).Verify;
 
       VkExtent2D SwapchainExtent;
 
@@ -1177,7 +1246,7 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
       // queued for display):
       uint DesiredNumberOfSwapchainImages = SurfaceCapabilities.minImageCount + 1;
 
-      if (SurfaceCapabilities.maxImageCount > 0 &&
+      if(SurfaceCapabilities.maxImageCount > 0 &&
           (DesiredNumberOfSwapchainImages > SurfaceCapabilities.maxImageCount))
       {
         // Application must settle for fewer images than desired:
@@ -1214,21 +1283,21 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
         clipped = true;
       }
 
-      vkCreateSwapchainKHR(Device, &SwapchainCreateInfo, null, &Swapchain).Verify;
+      vkCreateSwapchainKHR(Device.Handle, &SwapchainCreateInfo, null, &Swapchain).Verify;
       assert(Swapchain);
       Log.Info("Created Swapchain.");
 
       if(OldSwapchain)
       {
-        vkDestroySwapchainKHR(Device, OldSwapchain, null);
+        vkDestroySwapchainKHR(Device.Handle, OldSwapchain, null);
         Log.Info("Destroyed previous swapchain.");
       }
 
-      vkGetSwapchainImagesKHR(Device, Swapchain, &SwapchainImageCount, null).Verify;
+      vkGetSwapchainImagesKHR(Device.Handle, Swapchain, &SwapchainImageCount, null).Verify;
 
       auto SwapchainImages = Array!VkImage(.Allocator);
       SwapchainImages.Expand(SwapchainImageCount);
-      vkGetSwapchainImagesKHR(Device, Swapchain, &SwapchainImageCount, SwapchainImages.Data.ptr).Verify;
+      vkGetSwapchainImagesKHR(Device.Handle, Swapchain, &SwapchainImageCount, SwapchainImages.Data.ptr).Verify;
 
       SwapchainBuffers.Clear();
       SwapchainBuffers.Expand(SwapchainImageCount);
@@ -1261,7 +1330,8 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
         // VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
         // layout and will change to COLOR_ATTACHMENT_OPTIMAL, so init the image
         // to that state.
-        SetImageLayout(Vulkan, SwapchainBuffers[Index].Image,
+        SetImageLayout(Vulkan.SetupCommand,
+                       SwapchainBuffers[Index].Image,
                        cast(VkImageAspectFlags)VK_IMAGE_ASPECT_COLOR_BIT,
                        cast(VkImageLayout)VK_IMAGE_LAYOUT_UNDEFINED,
                        cast(VkImageLayout)VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
@@ -1269,7 +1339,7 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
 
         ColorAttachmentCreateInfo.image = SwapchainBuffers[Index].Image;
 
-        vkCreateImageView(Device, &ColorAttachmentCreateInfo, null,
+        vkCreateImageView(Device.Handle, &ColorAttachmentCreateInfo, null,
                           &SwapchainBuffers[Index].View).Verify;
       }
     }
@@ -1296,28 +1366,34 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
       }
 
       // Create image.
-      vkCreateImage(Device, &ImageCreateInfo, null, &Depth.Image).Verify;
+      vkCreateImage(Device.Handle, &ImageCreateInfo, null, &Depth.Image).Verify;
 
       // Get memory requirements for this object.
       VkMemoryRequirements MemoryRequirements;
-      vkGetImageMemoryRequirements(Device, Depth.Image, &MemoryRequirements);
+      vkGetImageMemoryRequirements(Device.Handle, Depth.Image, &MemoryRequirements);
 
       // Select memory size and type.
       VkMemoryAllocateInfo MemoryAllocateInfo;
       MemoryAllocateInfo.allocationSize = MemoryRequirements.size;
-      auto Result = ExtractMemoryTypeFromProperties(Vulkan,
+      auto Result = ExtractMemoryTypeFromProperties(Vulkan.Gpu.MemoryProperties,
                                                     MemoryRequirements.memoryTypeBits,
                                                     0, // No requirements.
                                                     &MemoryAllocateInfo.memoryTypeIndex);
       assert(Result);
 
       // Allocate memory.
-      vkAllocateMemory(Device, &MemoryAllocateInfo, null, &Depth.Memory).Verify;
+      vkAllocateMemory(Device.Handle, &MemoryAllocateInfo, null, &Depth.Memory).Verify;
 
       // Bind memory.
-      vkBindImageMemory(Device, Depth.Image, Depth.Memory, 0).Verify;
+      vkBindImageMemory(Device.Handle, Depth.Image, Depth.Memory, 0).Verify;
 
-      SetImageLayout(Vulkan, Depth.Image,
+      // Begin recording in the setup command buffer.
+      VkCommandBufferInheritanceInfo InheritanceInfo;
+      VkCommandBufferBeginInfo BeginInfo;
+      BeginInfo.pInheritanceInfo = &InheritanceInfo;
+      vkBeginCommandBuffer(SetupCommand, &BeginInfo).Verify;
+
+      SetImageLayout(SetupCommand, Depth.Image,
                      cast(VkImageAspectFlags)VK_IMAGE_ASPECT_DEPTH_BIT,
                      cast(VkImageLayout)VK_IMAGE_LAYOUT_UNDEFINED,
                      cast(VkImageLayout)VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
@@ -1331,12 +1407,60 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
         format = Depth.Format;
         subresourceRange = VkImageSubresourceRange(VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1);
       }
-      vkCreateImageView(Device, &ImageViewCreateInfo, null, &Depth.View).Verify;
+      vkCreateImageView(Device.Handle, &ImageViewCreateInfo, null, &Depth.View).Verify;
     }
 
     //
     // Prepare Textures
     //
+    version(all)
+    {
+      {
+        auto CreateLoader = cast(PFN_CreateLoader)GetProcAddress(null, "krCreateImageLoader_DDS");
+        assert(CreateLoader !is null);
+
+        auto DestroyLoader = cast(PFN_DestroyLoader)GetProcAddress(null, "krDestroyImageLoader_DDS");
+        assert(DestroyLoader !is null);
+
+        IImageLoader Loader = CreateLoader(.Allocator);
+        scope(exit) DestroyLoader(.Allocator, Loader);
+
+        auto File = OpenFile(.Allocator, "../data/pups.dds");
+        scope(exit) CloseFile(.Allocator, File);
+
+        auto FileContent = .Allocator.NewArray!void(File.Size);
+        scope(exit) .Allocator.Delete(FileContent);
+
+        auto BytesRead = File.Read(FileContent);
+        assert(BytesRead == FileContent.length);
+
+        auto Image = .Allocator.New!ImageContainer(.Allocator);
+        scope(exit) .Allocator.Delete(Image);
+
+        if(Loader.LoadImageFromData(FileContent, Image))
+        {
+          Log.Info("Loaded image file.");
+        }
+        else
+        {
+          Log.Warning("Failed to load image file.");
+        }
+
+        assert(IsImageCompatibleWithGpu(Vulkan.Gpu, Image),
+               "Physical device is not compatible with the image.");
+
+        UploadedTextureData Texture;
+        if(UploadTexture(Vulkan.Device, Vulkan.SetupCommand, Image, /* out */ Texture))
+        {
+          Log.Info("Texture uploaded successfully.");
+        }
+        else
+        {
+          Log.Failure("Failed to upload texture data.");
+        }
+      }
+    }
+    else
     {
       Log.BeginScope("Preparing textures.");
       scope(exit) Log.EndScope("Finished preparing textures.");
@@ -1350,41 +1474,170 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
 
       vkGetPhysicalDeviceFormatProperties(Gpu, TextureFormat, &FormatProperties);
 
+      Log.PrintSampledTextureProperties(Gpu, VK_FORMAT_R8G8B8A8_UNORM);
+      Log.PrintSampledTextureProperties(Gpu, VK_FORMAT_B8G8R8A8_UNORM);
+      Log.PrintSampledTextureProperties(Gpu, VK_FORMAT_BC1_RGBA_UNORM_BLOCK);
+      Log.PrintSampledTextureProperties(Gpu, VK_FORMAT_BC2_UNORM_BLOCK);
+      Log.PrintSampledTextureProperties(Gpu, VK_FORMAT_BC3_UNORM_BLOCK);
+      Log.PrintSampledTextureProperties(Gpu, VK_FORMAT_BC4_UNORM_BLOCK);
+      Log.PrintSampledTextureProperties(Gpu, VK_FORMAT_BC5_UNORM_BLOCK);
+      Log.PrintSampledTextureProperties(Gpu, VK_FORMAT_BC7_UNORM_BLOCK);
+
       foreach(Index; 0 .. TextureCount)
       {
         Log.Info("Setting up texture %u", Index);
 
-        if ((FormatProperties.linearTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT) &&
+        if((FormatProperties.linearTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT) &&
             !UseStagingBuffer)
         {
           // Device can texture using linear textures.
-          PrepareTextureImage(Vulkan, TextureColors[Index], &Vulkan.Textures[Index],
-                              VK_IMAGE_TILING_LINEAR,
-                              VK_IMAGE_USAGE_SAMPLED_BIT,
-                              VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+          //PrepareTextureImage(Vulkan, TextureColors[Index], &Vulkan.Textures[Index],
+          //                    VK_IMAGE_TILING_LINEAR,
+          //                    VK_IMAGE_USAGE_SAMPLED_BIT,
+          //                    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+
+          auto CreateLoader = cast(PFN_CreateLoader)GetProcAddress(null, "krCreateImageLoader_DDS");
+          assert(CreateLoader !is null);
+
+          auto DestroyLoader = cast(PFN_DestroyLoader)GetProcAddress(null, "krDestroyImageLoader_DDS");
+          assert(DestroyLoader !is null);
+
+          IImageLoader Loader = CreateLoader(.Allocator);
+          scope(exit) DestroyLoader(.Allocator, Loader);
+
+          auto File = OpenFile(.Allocator, "../data/pups.dds");
+          scope(exit) CloseFile(.Allocator, File);
+
+          auto FileContent = .Allocator.NewArray!void(File.Size);
+          scope(exit) .Allocator.Delete(FileContent);
+
+          auto BytesRead = File.Read(FileContent);
+          assert(BytesRead == FileContent.length);
+
+          auto Image = .Allocator.New!ImageContainer(.Allocator);
+          scope(exit) .Allocator.Delete(Image);
+
+          if(Loader.LoadImageFromData(FileContent, Image))
+          {
+            Log.Info("Loaded image file.");
+          }
+          else
+          {
+            Log.Warning("Failed to load image file.");
+          }
+
+          auto Texture = &Textures[Index];
+
+          // TODO(Manu): These should not be needed.
+          Texture.TextureWidth = Image.Width;
+          Texture.TextureHeight = Image.Height;
+
+          VkImageCreateInfo ImageCreateInfo;
+          with(ImageCreateInfo)
+          {
+            imageType = VK_IMAGE_TYPE_2D;
+            format = VK_FORMAT_R8G8B8A8_UNORM;
+            extent = VkExtent3D(Image.Width, Image.Height, 1);
+            mipLevels = 1;
+            arrayLayers = 1;
+            samples = VK_SAMPLE_COUNT_1_BIT;
+            tiling = VK_IMAGE_TILING_LINEAR;
+            initialLayout = VK_IMAGE_LAYOUT_PREINITIALIZED;
+            usage = VK_IMAGE_USAGE_SAMPLED_BIT;
+            sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+          }
+          Log.Info("Number of MIP levels: %d", ImageCreateInfo.mipLevels);
+
+          vkCreateImage(Vulkan.Device.Handle, &ImageCreateInfo, null, &Texture.Image).Verify;
+
+          VkMemoryRequirements MemoryRequirements;
+          vkGetImageMemoryRequirements(Vulkan.Device.Handle, Texture.Image, &MemoryRequirements);
+
+          VkMemoryAllocateInfo MemoryAllocateInfo;
+          MemoryAllocateInfo.allocationSize = MemoryRequirements.size;
+          auto Result = ExtractMemoryTypeFromProperties(Vulkan.Gpu.MemoryProperties,
+                                                        MemoryRequirements.memoryTypeBits,
+                                                        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+                                                        &MemoryAllocateInfo.memoryTypeIndex);
+          assert(Result);
+
+          // Allocate memory
+          vkAllocateMemory(Vulkan.Device.Handle, &MemoryAllocateInfo, null, &Texture.Memory).Verify;
+
+          // Bind memory
+          vkBindImageMemory(Vulkan.Device.Handle, Texture.Image, Texture.Memory, 0).Verify;
+
+          // Uploading the data to the GPU.
+          {
+            VkImageSubresource Subresource;
+            Subresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            VkSubresourceLayout Layout;
+            vkGetImageSubresourceLayout(Vulkan.Device.Handle, Texture.Image, &Subresource,
+                                        &Layout);
+
+            void* TargetData;
+            vkMapMemory(Vulkan.Device.Handle, Texture.Memory, 0, MemoryAllocateInfo.allocationSize, 0, &TargetData).Verify;
+
+            version(all)
+            {
+              auto SourceData = Image.ImageData!void();
+            }
+            else
+            {
+              auto UncompressedImage = .Allocator.New!ImageContainer(.Allocator);
+              scope(exit) .Allocator.Delete(UncompressedImage);
+
+              import krepel.image.converters.image_conversion_interface;
+
+              auto CreateImageConverter = cast(PFN_CreateImageConverter)GetProcAddress(null, "krCreateImageConverter_BC1_BGRA");
+              auto DestroyImageConverter = cast(PFN_DestroyImageConverter)GetProcAddress(null, "krDestroyImageConverter_BC1_BGRA");
+
+              auto Converter = CreateImageConverter(.Allocator);
+              scope(exit) DestroyImageConverter(.Allocator, Converter);
+
+              Converter.ConvertImage(Image, UncompressedImage, ImageFormat.B8G8R8A8_UNorm);
+
+              auto SourceData = UncompressedImage.ImageData!void;
+            }
+
+            // Blit the data over.
+            TargetData[0 .. SourceData.length] = SourceData;
+
+            vkUnmapMemory(Vulkan.Device.Handle, Texture.Memory);
+          }
+
+          Texture.ImageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+          SetImageLayout(Vulkan.SetupCommand, Texture.Image,
+                         cast(VkImageAspectFlags)VK_IMAGE_ASPECT_COLOR_BIT,
+                         cast(VkImageLayout)VK_IMAGE_LAYOUT_PREINITIALIZED,
+                         Texture.ImageLayout,
+                         cast(VkAccessFlags)VK_ACCESS_HOST_WRITE_BIT);
+          // Setting the image layout does not reference the actual memory so no need to add a mem ref.
         }
-        else if (FormatProperties.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT)
+        else if(FormatProperties.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT)
         {
           // Must use staging buffer to copy linear texture to optimized.
           TextureData StagingTexture;
 
-          PrepareTextureImage(Vulkan, TextureColors[Index], &StagingTexture,
+          PrepareTextureImage(Vulkan.Device, Vulkan.SetupCommand,
+                              TextureColors[Index], &StagingTexture,
                               VK_IMAGE_TILING_LINEAR,
                               VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
                               VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
 
-          PrepareTextureImage(Vulkan, TextureColors[Index], &Vulkan.Textures[Index],
+          PrepareTextureImage(Vulkan.Device, Vulkan.SetupCommand,
+                              TextureColors[Index], &Vulkan.Textures[Index],
                               VK_IMAGE_TILING_OPTIMAL,
                               (VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT),
                               VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
-          SetImageLayout(Vulkan, StagingTexture.Image,
+          SetImageLayout(Vulkan.SetupCommand, StagingTexture.Image,
                          VK_IMAGE_ASPECT_COLOR_BIT,
                          StagingTexture.ImageLayout,
                          VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                          0);
 
-          SetImageLayout(Vulkan, Vulkan.Textures[Index].Image,
+          SetImageLayout(Vulkan.SetupCommand, Vulkan.Textures[Index].Image,
                          VK_IMAGE_ASPECT_COLOR_BIT,
                          Vulkan.Textures[Index].ImageLayout,
                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
@@ -1405,7 +1658,7 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
                          VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, Vulkan.Textures[Index].Image,
                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &CopyRegion);
 
-          SetImageLayout(Vulkan, Vulkan.Textures[Index].Image,
+          SetImageLayout(Vulkan.SetupCommand, Vulkan.Textures[Index].Image,
                          VK_IMAGE_ASPECT_COLOR_BIT,
                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                          Vulkan.Textures[Index].ImageLayout,
@@ -1414,8 +1667,8 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
           Vulkan.FlushSetupCommand();
 
           // Clean up staging resources.
-          vkDestroyImage(Vulkan.Device, StagingTexture.Image, null);
-          vkFreeMemory(Vulkan.Device, StagingTexture.Memory, null);
+          vkDestroyImage(Vulkan.Device.Handle, StagingTexture.Image, null);
+          vkFreeMemory(Vulkan.Device.Handle, StagingTexture.Memory, null);
         }
         else
         {
@@ -1440,7 +1693,7 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
             borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
             unnormalizedCoordinates = VK_FALSE;
           }
-          vkCreateSampler(Vulkan.Device, &SamplerCreateInfo, null, &Vulkan.Textures[Index].Sampler).Verify;
+          vkCreateSampler(Vulkan.Device.Handle, &SamplerCreateInfo, null, &Vulkan.Textures[Index].Sampler).Verify;
         }
 
         // Create image view.
@@ -1457,7 +1710,7 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
             subresourceRange = VkImageSubresourceRange(VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1);
             image = Vulkan.Textures[Index].Image;
           }
-          vkCreateImageView(Vulkan.Device, &ImageViewCreateInfo, null, &Vulkan.Textures[Index].View).Verify;
+          vkCreateImageView(Vulkan.Device.Handle, &ImageViewCreateInfo, null, &Vulkan.Textures[Index].View).Verify;
         }
       }
     }
@@ -1501,35 +1754,35 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
           size = Geometry.ByteCount;
           usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
         }
-        vkCreateBuffer(Device, &BufferCreateInfo, null, &Vertices.Buffer).Verify;
+        vkCreateBuffer(Device.Handle, &BufferCreateInfo, null, &Vertices.Buffer).Verify;
 
         VkMemoryRequirements MemoryRequirements;
-        vkGetBufferMemoryRequirements(Device, Vertices.Buffer, &MemoryRequirements);
+        vkGetBufferMemoryRequirements(Device.Handle, Vertices.Buffer, &MemoryRequirements);
 
         VkMemoryAllocateInfo MemoryAllocateInfo;
         with(MemoryAllocateInfo)
         {
           allocationSize = MemoryRequirements.size;
-          auto Result = ExtractMemoryTypeFromProperties(Vulkan,
+          auto Result = ExtractMemoryTypeFromProperties(Vulkan.Gpu.MemoryProperties,
                                                         MemoryRequirements.memoryTypeBits,
                                                         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
                                                         &memoryTypeIndex);
           assert(Result);
         }
 
-        vkAllocateMemory(Device, &MemoryAllocateInfo, null, &Vertices.Memory).Verify;
+        vkAllocateMemory(Device.Handle, &MemoryAllocateInfo, null, &Vertices.Memory).Verify;
 
         // Copy data from host to the device.
         {
           void* RawData;
-          vkMapMemory(Device, Vertices.Memory, 0, MemoryAllocateInfo.allocationSize, 0, &RawData).Verify;
-          scope(success) vkUnmapMemory(Device, Vertices.Memory);
+          vkMapMemory(Device.Handle, Vertices.Memory, 0, MemoryAllocateInfo.allocationSize, 0, &RawData).Verify;
+          scope(success) vkUnmapMemory(Device.Handle, Vertices.Memory);
 
           auto Target = (cast(VertexData*)RawData)[0 .. Geometry.length];
           Target[] = Geometry[];
         }
 
-        vkBindBufferMemory(Device, Vertices.Buffer, Vertices.Memory, 0).Verify;
+        vkBindBufferMemory(Device.Handle, Vertices.Buffer, Vertices.Memory, 0).Verify;
 
         Vertices.BindID = 0;
 
@@ -1565,35 +1818,35 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
           size = IndexData.ByteCount;
           usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
         }
-        vkCreateBuffer(Device, &BufferCreateInfo, null, &Indices.Buffer).Verify;
+        vkCreateBuffer(Device.Handle, &BufferCreateInfo, null, &Indices.Buffer).Verify;
 
         VkMemoryRequirements MemoryRequirements;
-        vkGetBufferMemoryRequirements(Device, Indices.Buffer, &MemoryRequirements);
+        vkGetBufferMemoryRequirements(Device.Handle, Indices.Buffer, &MemoryRequirements);
 
         VkMemoryAllocateInfo MemoryAllocateInfo;
         with(MemoryAllocateInfo)
         {
           allocationSize = MemoryRequirements.size;
-          auto Result = ExtractMemoryTypeFromProperties(Vulkan,
+          auto Result = ExtractMemoryTypeFromProperties(Vulkan.Gpu.MemoryProperties,
                                                         MemoryRequirements.memoryTypeBits,
                                                         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
                                                         &memoryTypeIndex);
           assert(Result);
         }
 
-        vkAllocateMemory(Device, &MemoryAllocateInfo, null, &Indices.Memory).Verify;
+        vkAllocateMemory(Device.Handle, &MemoryAllocateInfo, null, &Indices.Memory).Verify;
 
         // Copy data from host to the device.
         {
           void* RawData;
-          vkMapMemory(Device, Indices.Memory, 0, MemoryAllocateInfo.allocationSize, 0, &RawData).Verify;
-          scope(success) vkUnmapMemory(Device, Indices.Memory);
+          vkMapMemory(Device.Handle, Indices.Memory, 0, MemoryAllocateInfo.allocationSize, 0, &RawData).Verify;
+          scope(success) vkUnmapMemory(Device.Handle, Indices.Memory);
 
           auto Target = (cast(uint*)RawData)[0 .. IndexData.length];
           Target[] = IndexData[];
         }
 
-        vkBindBufferMemory(Device, Indices.Buffer, Indices.Memory, 0).Verify;
+        vkBindBufferMemory(Device.Handle, Indices.Buffer, Indices.Memory, 0).Verify;
       }
     }
 
@@ -1620,7 +1873,7 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
         pBindings = &LayoutBinding;
       }
 
-      vkCreateDescriptorSetLayout(Device, &DescriptorLayoutCreateInfo, null, &DescriptorSetLayout).Verify;
+      vkCreateDescriptorSetLayout(Device.Handle, &DescriptorLayoutCreateInfo, null, &DescriptorSetLayout).Verify;
 
       VkPipelineLayoutCreateInfo PipelineLayoutCreateInfo;
       with(PipelineLayoutCreateInfo)
@@ -1628,7 +1881,7 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
         setLayoutCount = 1;
         pSetLayouts = &DescriptorSetLayout;
       }
-      vkCreatePipelineLayout(Device, &PipelineLayoutCreateInfo, null, &PipelineLayout).Verify;
+      vkCreatePipelineLayout(Device.Handle, &PipelineLayoutCreateInfo, null, &PipelineLayout).Verify;
     }
 
     //
@@ -1695,7 +1948,7 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
         pSubpasses = &SubpassDesc;
       }
 
-      vkCreateRenderPass(Device, &RenderPassCreateInfo, null, &RenderPass).Verify;
+      vkCreateRenderPass(Device.Handle, &RenderPassCreateInfo, null, &RenderPass).Verify;
     }
 
     //
@@ -1735,9 +1988,9 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
           codeSize = ShaderCode.length; // In bytes, regardless of the fact that typeof(*pCode) == uint.
           pCode = cast(const(uint)*)ShaderCode.ptr; // As a const(uint)*, for some reason...
         }
-        vkCreateShaderModule(Device, &ShaderModuleCreateInfo, null, &VertexShaderStage._module).Verify;
+        vkCreateShaderModule(Device.Handle, &ShaderModuleCreateInfo, null, &VertexShaderStage._module).Verify;
       }
-      scope(exit) vkDestroyShaderModule(Device, VertexShaderStage._module, null);
+      scope(exit) vkDestroyShaderModule(Device.Handle, VertexShaderStage._module, null);
 
       //
       // Fragment Shader
@@ -1766,9 +2019,9 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
           codeSize = ShaderCode.length; // In bytes, regardless of the fact that typeof(*pCode) == uint.
           pCode = cast(const(uint)*)ShaderCode.ptr; // As a const(uint)*, for some reason...
         }
-        vkCreateShaderModule(Device, &ShaderModuleCreateInfo, null, &FragmentShaderStage._module).Verify;
+        vkCreateShaderModule(Device.Handle, &ShaderModuleCreateInfo, null, &FragmentShaderStage._module).Verify;
       }
-      scope(exit) vkDestroyShaderModule(Device, FragmentShaderStage._module, null);
+      scope(exit) vkDestroyShaderModule(Device.Handle, FragmentShaderStage._module, null);
 
       VkPipelineVertexInputStateCreateInfo VertexInputState;
       with(VertexInputState)
@@ -1865,10 +2118,10 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
 
       VkPipelineCacheCreateInfo PipelineCacheCreateInfo;
       VkPipelineCache PipelineCache;
-      vkCreatePipelineCache(Device, &PipelineCacheCreateInfo, null, &PipelineCache).Verify;
-      scope(exit) vkDestroyPipelineCache(Device, PipelineCache, null);
+      vkCreatePipelineCache(Device.Handle, &PipelineCacheCreateInfo, null, &PipelineCache).Verify;
+      scope(exit) vkDestroyPipelineCache(Device.Handle, PipelineCache, null);
 
-      vkCreateGraphicsPipelines(Device, PipelineCache,
+      vkCreateGraphicsPipelines(Device.Handle, PipelineCache,
                                 1, &GraphicsPipelineCreateInfo,
                                 null,
                                 &Pipeline).Verify;
@@ -1895,7 +2148,7 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
         pPoolSizes = &TypeCount;
       }
 
-      vkCreateDescriptorPool(Device, &DescriptorPoolCreateInfo, null, &DescriptorPool).Verify;
+      vkCreateDescriptorPool(Device.Handle, &DescriptorPoolCreateInfo, null, &DescriptorPool).Verify;
     }
 
     //
@@ -1912,7 +2165,7 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
         descriptorSetCount = 1;
         pSetLayouts = &DescriptorSetLayout;
       }
-      vkAllocateDescriptorSets(Device, &DescriptorSetAllocateInfo, &DescriptorSet).Verify;
+      vkAllocateDescriptorSets(Device.Handle, &DescriptorSetAllocateInfo, &DescriptorSet).Verify;
 
       VkDescriptorImageInfo[TextureCount] TextureDescriptors;
       foreach(Index; 0 .. TextureCount)
@@ -1930,7 +2183,7 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
         descriptorCount = TextureDescriptors.length;
         pImageInfo = TextureDescriptors.ptr;
       }
-      vkUpdateDescriptorSets(Device,
+      vkUpdateDescriptorSets(Device.Handle,
                              1, &WriteDescriptorSet,
                              0, null);
     }
@@ -1962,7 +2215,7 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
       foreach(Index; 0 .. SwapchainImageCount)
       {
         Attachments[0] = SwapchainBuffers[Index].View;
-        vkCreateFramebuffer(Device, &FramebufferCreateInfo, null, &Framebuffers[Index]).Verify;
+        vkCreateFramebuffer(Device.Handle, &FramebufferCreateInfo, null, &Framebuffers[Index]).Verify;
       }
     }
   }
@@ -1971,31 +2224,13 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
   return true;
 }
 
-void SetImageLayout(VulkanData Vulkan,
+void SetImageLayout(VkCommandBuffer CommandBuffer,
                     VkImage Image,
                     VkImageAspectFlags AspectMask,
                     VkImageLayout OldImageLayout,
                     VkImageLayout NewImageLayout,
                     VkAccessFlags SourceAccessMask)
 {
-  if(Vulkan.SetupCommand == VK_NULL_HANDLE)
-  {
-    VkCommandBufferAllocateInfo SetupCommandBufferAllocateInfo;
-    with(SetupCommandBufferAllocateInfo)
-    {
-      commandPool = Vulkan.CommandPool;
-      level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-      commandBufferCount = 1;
-    }
-
-    vkAllocateCommandBuffers(Vulkan.Device, &SetupCommandBufferAllocateInfo, &Vulkan.SetupCommand).Verify;
-
-    VkCommandBufferInheritanceInfo InheritanceInfo;
-    VkCommandBufferBeginInfo BeginInfo;
-    BeginInfo.pInheritanceInfo = &InheritanceInfo;
-    vkBeginCommandBuffer(Vulkan.SetupCommand, &BeginInfo).Verify;
-  }
-
   VkImageMemoryBarrier ImageMemoryBarrier;
   with(ImageMemoryBarrier)
   {
@@ -2031,7 +2266,7 @@ void SetImageLayout(VulkanData Vulkan,
   VkPipelineStageFlags SourceStages = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
   VkPipelineStageFlags DestinationStages = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
 
-  vkCmdPipelineBarrier(Vulkan.SetupCommand,             // commandBuffer
+  vkCmdPipelineBarrier(CommandBuffer,                   // commandBuffer
                        SourceStages, DestinationStages, // dstStageMask, srcStageMask
                        0,                               // dependencyFlags
                        0, null,                         // memoryBarrierCount, pMemoryBarriers
@@ -2039,32 +2274,31 @@ void SetImageLayout(VulkanData Vulkan,
                        1, &ImageMemoryBarrier);         // imageMemoryBarrierCount, pImageMemoryBarriers
 }
 
-bool ExtractMemoryTypeFromProperties(VulkanData Vulkan,
-                                     uint TypeBits,
-                                     VkFlags RequirementsMask,
-                                     uint* TypeIndex)
+Flag!"PerfectMatch" ExtractMemoryTypeFromProperties(VkPhysicalDeviceMemoryProperties GpuMemoryProperties,
+                                                  uint TypeBits,
+                                                  VkFlags RequirementsMask,
+                                                  uint* TypeIndex)
 {
   // Search memtypes to find first index with those properties
   foreach(Index; 0 .. 32)
   {
-    if(TypeBits & 1)
+    if(TypeBits.HasBit(Index))
     {
       // Type is available, does it match user properties?
-      const PropertyFlags = Vulkan.GpuMemoryProperties.memoryTypes[Index].propertyFlags;
-      if((PropertyFlags & RequirementsMask) == RequirementsMask)
+      const PropertyFlags = GpuMemoryProperties.memoryTypes[Index].propertyFlags;
+      const FilteredFlags = PropertyFlags * RequirementsMask;
+      if(FilteredFlags == RequirementsMask)
       {
         *TypeIndex = Index;
-        return true;
+        return Yes.PerfectMatch;
       }
     }
-    TypeBits >>= 1;
   }
 
-  // No memory types matched, return failure
-  return false;
+  return No.PerfectMatch;
 }
 
-void PrepareTextureImage(VulkanData Vulkan,
+void PrepareTextureImage(VulkanDeviceData Device, VkCommandBuffer CommandBuffer,
                          uint[2] TextureColors,
                          TextureData* Texture,
                          VkImageTiling Tiling,
@@ -2092,36 +2326,40 @@ void PrepareTextureImage(VulkanData Vulkan,
     initialLayout = VK_IMAGE_LAYOUT_PREINITIALIZED;
   }
 
-  vkCreateImage(Vulkan.Device, &ImageCreateInfo, null, &Texture.Image).Verify;
+  vkCreateImage(Device.Handle, &ImageCreateInfo, null, &Texture.Image).Verify;
 
   VkMemoryRequirements MemoryRequirements;
-  vkGetImageMemoryRequirements(Vulkan.Device, Texture.Image, &MemoryRequirements);
+  vkGetImageMemoryRequirements(Device.Handle, Texture.Image, &MemoryRequirements);
 
   VkMemoryAllocateInfo MemoryAllocateInfo;
-  MemoryAllocateInfo.allocationSize = MemoryRequirements.size;
-  auto Result = ExtractMemoryTypeFromProperties(Vulkan,
-                                                MemoryRequirements.memoryTypeBits,
-                                                RequiredProperties,
-                                                &MemoryAllocateInfo.memoryTypeIndex);
-  assert(Result);
+  with(MemoryAllocateInfo)
+  {
+    allocationSize = MemoryRequirements.size;
+    auto HasMatch = ExtractMemoryTypeFromProperties(Device.OwnerGpu.MemoryProperties,
+                                                    MemoryRequirements.memoryTypeBits,
+                                                    RequiredProperties,
+                                                    &memoryTypeIndex);
+
+    assert(HasMatch);
+  }
 
   // Allocate memory
-  vkAllocateMemory(Vulkan.Device, &MemoryAllocateInfo, null, &Texture.Memory).Verify;
+  vkAllocateMemory(Device.Handle, &MemoryAllocateInfo, null, &Texture.Memory).Verify;
 
   // Bind memory
-  vkBindImageMemory(Vulkan.Device, Texture.Image, Texture.Memory, 0).Verify;
+  vkBindImageMemory(Device.Handle, Texture.Image, Texture.Memory, 0).Verify;
 
-  if (RequiredProperties & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)
+  if(RequiredProperties & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)
   {
     VkImageSubresource Subresource;
     Subresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
     VkSubresourceLayout Layout;
     void* Data;
 
-    vkGetImageSubresourceLayout(Vulkan.Device, Texture.Image, &Subresource,
+    vkGetImageSubresourceLayout(Device.Handle, Texture.Image, &Subresource,
                                 &Layout);
 
-    vkMapMemory(Vulkan.Device, Texture.Memory, 0, MemoryAllocateInfo.allocationSize, 0, &Data).Verify;
+    vkMapMemory(Device.Handle, Texture.Memory, 0, MemoryAllocateInfo.allocationSize, 0, &Data).Verify;
 
     for(int Y = 0; Y < TextureHeight; Y++)
     {
@@ -2133,11 +2371,11 @@ void PrepareTextureImage(VulkanData Vulkan,
       }
     }
 
-    vkUnmapMemory(Vulkan.Device, Texture.Memory);
+    vkUnmapMemory(Device.Handle, Texture.Memory);
   }
 
   Texture.ImageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-  SetImageLayout(Vulkan, Texture.Image,
+  SetImageLayout(CommandBuffer, Texture.Image,
                  cast(VkImageAspectFlags)VK_IMAGE_ASPECT_COLOR_BIT,
                  cast(VkImageLayout)VK_IMAGE_LAYOUT_PREINITIALIZED,
                  Texture.ImageLayout,
@@ -2164,7 +2402,7 @@ void FlushSetupCommand(VulkanData Vulkan)
 
     vkQueueWaitIdle(Queue).Verify;
 
-    vkFreeCommandBuffers(Device, CommandPool, 1, &SetupCommand);
+    vkFreeCommandBuffers(Device.Handle, CommandPool, 1, &SetupCommand);
     SetupCommand = VK_NULL_HANDLE;
   }
 }
@@ -2184,13 +2422,13 @@ void Draw(VulkanData Vulkan)
     VkSemaphore PresentCompleteSemaphore;
     {
       VkSemaphoreCreateInfo PresentCompleteSemaphoreCreateInfo;
-      vkCreateSemaphore(Device, &PresentCompleteSemaphoreCreateInfo, null, &PresentCompleteSemaphore).Verify;
+      vkCreateSemaphore(Device.Handle, &PresentCompleteSemaphoreCreateInfo, null, &PresentCompleteSemaphore).Verify;
     }
-    scope(exit) vkDestroySemaphore(Device, PresentCompleteSemaphore, null);
+    scope(exit) vkDestroySemaphore(Device.Handle, PresentCompleteSemaphore, null);
 
     // Get the index of the next available swapchain image:
     auto Timeout = ulong.max;
-    Error = vkAcquireNextImageKHR(Device, Swapchain, Timeout,
+    Error = vkAcquireNextImageKHR(Device.Handle, Swapchain, Timeout,
                                   PresentCompleteSemaphore, NullFence,
                                   &CurrentBufferIndex);
 
@@ -2213,11 +2451,12 @@ void Draw(VulkanData Vulkan)
 
     // Assume the command buffer has been run on current_buffer before so
     // we need to set the image layout back to COLOR_ATTACHMENT_OPTIMAL
-    Vulkan.SetImageLayout(SwapchainBuffers[CurrentBufferIndex].Image,
-                          VK_IMAGE_ASPECT_COLOR_BIT,
-                          VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-                          VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                          0);
+    SetImageLayout(Vulkan.SetupCommand,
+                   SwapchainBuffers[CurrentBufferIndex].Image,
+                   VK_IMAGE_ASPECT_COLOR_BIT,
+                   VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                   VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                   0);
     Vulkan.FlushSetupCommand();
 
     // Wait for the present complete semaphore to be signaled to ensure
@@ -2439,47 +2678,47 @@ void DestroySwapchainData(VulkanData Vulkan)
 
   foreach(Framebuffer; Vulkan.Framebuffers)
   {
-    vkDestroyFramebuffer(Vulkan.Device, Framebuffer, null);
+    vkDestroyFramebuffer(Vulkan.Device.Handle, Framebuffer, null);
   }
   Vulkan.Framebuffers.Clear();
 
-  vkDestroyDescriptorPool(Vulkan.Device, Vulkan.DescriptorPool, null);
+  vkDestroyDescriptorPool(Vulkan.Device.Handle, Vulkan.DescriptorPool, null);
 
   if(Vulkan.SetupCommand)
   {
-    vkFreeCommandBuffers(Vulkan.Device, Vulkan.CommandPool, 1, &Vulkan.SetupCommand);
+    vkFreeCommandBuffers(Vulkan.Device.Handle, Vulkan.CommandPool, 1, &Vulkan.SetupCommand);
   }
-  vkFreeCommandBuffers(Vulkan.Device, Vulkan.CommandPool, 1, &Vulkan.DrawCommand);
-  vkDestroyCommandPool(Vulkan.Device, Vulkan.CommandPool, null);
+  vkFreeCommandBuffers(Vulkan.Device.Handle, Vulkan.CommandPool, 1, &Vulkan.DrawCommand);
+  vkDestroyCommandPool(Vulkan.Device.Handle, Vulkan.CommandPool, null);
 
-  vkDestroyPipeline(Vulkan.Device, Vulkan.Pipeline, null);
-  vkDestroyRenderPass(Vulkan.Device, Vulkan.RenderPass, null);
-  vkDestroyPipelineLayout(Vulkan.Device, Vulkan.PipelineLayout, null);
-  vkDestroyDescriptorSetLayout(Vulkan.Device, Vulkan.DescriptorSetLayout, null);
+  vkDestroyPipeline(Vulkan.Device.Handle, Vulkan.Pipeline, null);
+  vkDestroyRenderPass(Vulkan.Device.Handle, Vulkan.RenderPass, null);
+  vkDestroyPipelineLayout(Vulkan.Device.Handle, Vulkan.PipelineLayout, null);
+  vkDestroyDescriptorSetLayout(Vulkan.Device.Handle, Vulkan.DescriptorSetLayout, null);
 
-  vkDestroyBuffer(Vulkan.Device, Vulkan.Indices.Buffer, null);
-  vkFreeMemory(Vulkan.Device, Vulkan.Indices.Memory, null);
+  vkDestroyBuffer(Vulkan.Device.Handle, Vulkan.Indices.Buffer, null);
+  vkFreeMemory(Vulkan.Device.Handle, Vulkan.Indices.Memory, null);
 
-  vkDestroyBuffer(Vulkan.Device, Vulkan.Vertices.Buffer, null);
-  vkFreeMemory(Vulkan.Device, Vulkan.Vertices.Memory, null);
+  vkDestroyBuffer(Vulkan.Device.Handle, Vulkan.Vertices.Buffer, null);
+  vkFreeMemory(Vulkan.Device.Handle, Vulkan.Vertices.Memory, null);
 
   foreach(ref Texture; Vulkan.Textures)
   {
-    vkDestroyImageView(Vulkan.Device, Texture.View, null);
-    vkDestroyImage(Vulkan.Device,     Texture.Image, null);
-    vkFreeMemory(Vulkan.Device,       Texture.Memory, null);
-    vkDestroySampler(Vulkan.Device,   Texture.Sampler, null);
+    vkDestroyImageView(Vulkan.Device.Handle, Texture.View, null);
+    vkDestroyImage(Vulkan.Device.Handle,     Texture.Image, null);
+    vkFreeMemory(Vulkan.Device.Handle,       Texture.Memory, null);
+    vkDestroySampler(Vulkan.Device.Handle,   Texture.Sampler, null);
   }
 
   foreach(ref Buffer; Vulkan.SwapchainBuffers)
   {
-    vkDestroyImageView(Vulkan.Device, Buffer.View, null);
+    vkDestroyImageView(Vulkan.Device.Handle, Buffer.View, null);
   }
   Vulkan.SwapchainBuffers.Clear();
 
-  vkDestroyImageView(Vulkan.Device, Vulkan.Depth.View, null);
-  vkDestroyImage(Vulkan.Device,     Vulkan.Depth.Image, null);
-  vkFreeMemory(Vulkan.Device,       Vulkan.Depth.Memory, null);
+  vkDestroyImageView(Vulkan.Device.Handle, Vulkan.Depth.View, null);
+  vkDestroyImage(Vulkan.Device.Handle,     Vulkan.Depth.Image, null);
+  vkFreeMemory(Vulkan.Device.Handle,       Vulkan.Depth.Memory, null);
 }
 
 void Cleanup(VulkanData Vulkan)
@@ -2492,14 +2731,12 @@ void Cleanup(VulkanData Vulkan)
     Vulkan.DestroySwapchainData();
   }
 
-  vkDestroySwapchainKHR(Vulkan.Device, Vulkan.Swapchain, null);
-  vkDestroyDevice(Vulkan.Device, null);
+  vkDestroySwapchainKHR(Vulkan.Device.Handle, Vulkan.Swapchain, null);
+  vkDestroyDevice(Vulkan.Device.Handle, null);
   vkDestroyDebugReportCallbackEXT(Vulkan.Instance, Vulkan.DebugReportCallback, null);
 
   vkDestroySurfaceKHR(Vulkan.Instance, Vulkan.Surface, null);
   vkDestroyInstance(Vulkan.Instance, null);
-
-  Vulkan.QueueProperties.Clear();
 }
 
 extern(Windows) VkBool32 DebugMessageCallback(
@@ -2522,4 +2759,218 @@ extern(Windows) VkBool32 DebugMessageCallback(
   }
 
   return false;
+}
+
+Flag!"IsCompatible" IsImageCompatibleWithGpu(VulkanPhysicalDeviceData Gpu, ImageContainer Image)
+{
+  VkFormat VulkanTextureFormat = ImageFormatToVulkan(Image.Format);
+  if(VulkanTextureFormat == VK_FORMAT_UNDEFINED)
+  {
+    Log.Failure("Unable to find corresponding Vulkan format for %s.", Image.Format);
+    return No.IsCompatible;
+  }
+
+  VkFormatProperties FormatProperties;
+  vkGetPhysicalDeviceFormatProperties(Gpu.Handle, VulkanTextureFormat, &FormatProperties);
+
+  bool SupportsImageSampling = FormatProperties.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT;
+  if(!SupportsImageSampling)
+  {
+    Log.Failure("%s: Cannot sample this format with optimal tiling.", VulkanTextureFormat);
+    return No.IsCompatible;
+  }
+
+  VkImageFormatProperties ImageProperties;
+  vkGetPhysicalDeviceImageFormatProperties(Gpu.Handle,
+                                           VulkanTextureFormat,
+                                           VK_IMAGE_TYPE_2D,
+                                           VK_IMAGE_TILING_OPTIMAL,
+                                           VK_IMAGE_USAGE_SAMPLED_BIT,
+                                           0,
+                                           &ImageProperties);
+
+  auto ImageExtent = VkExtent3D(Image.Width, Image.Height, 1);
+  if(ImageProperties.maxExtent.width  < ImageExtent.width ||
+     ImageProperties.maxExtent.height < ImageExtent.height ||
+     ImageProperties.maxExtent.depth  < ImageExtent.depth)
+  {
+    Log.Failure("Given image extent (%s) does not fit the devices' maximum extent (%s).",
+                ImageExtent,
+                ImageProperties.maxExtent);
+    return No.IsCompatible;
+  }
+
+  if(Image.NumMipLevels > ImageProperties.maxMipLevels)
+  {
+    Log.Failure("Physical device accepts a maximum of %d Mip levels, the given image has %d",
+                ImageProperties.maxMipLevels, Image.NumMipLevels);
+    return No.IsCompatible;
+  }
+
+  if(Image.NumArrayIndices > ImageProperties.maxArrayLayers)
+  {
+    Log.Failure("Physical device accepts a maximum of %d array layers, the given image has %d",
+                ImageProperties.maxArrayLayers, Image.NumArrayIndices);
+    return No.IsCompatible;
+  }
+
+  // TODO(Manu): sampleCounts, maxResourceSize?
+
+  return Yes.IsCompatible;
+}
+
+struct UploadedTextureData
+{
+  @disable this(this);
+
+  VkImage ImageHandle;
+  VkImageLayout ImageLayoutHandle;
+  VkDeviceMemory MemoryHandle;
+  VkImageView ImageViewHandle;
+}
+
+/// Note: You should verify that it's possible to uploading the given Image to
+/// the device using IsImageCompatibleWithGpu.
+Flag!"Success" UploadTexture(VulkanDeviceData Device, VkCommandBuffer CommandBuffer, ImageContainer Image,
+                             out UploadedTextureData Result)
+{
+  //
+  // 1. Allocate a temporary buffer.
+  // 2. Blit the image data into that.
+  // 3. Allocate an image with optimal tiling
+  // 4. Blit the buffer data into the image.
+  // 5. Deallocate the temporary buffer.
+  //
+
+  //
+  // Create the temporary buffer and upload the data to it.
+  //
+    auto ImageData = Image.ImageData!void;
+
+    VkBufferCreateInfo Temp_BufferCreateInfo;
+    with(Temp_BufferCreateInfo)
+    {
+      usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+      size = ImageData.length;
+    }
+
+    VkBuffer Temp_Buffer;
+    vkCreateBuffer(Device.Handle, &Temp_BufferCreateInfo, null, &Temp_Buffer).Verify;
+    scope(exit) vkDestroyBuffer(Device.Handle, Temp_Buffer, null);
+
+    VkMemoryRequirements Temp_MemoryRequirements;
+    vkGetBufferMemoryRequirements(Device.Handle, Temp_Buffer, &Temp_MemoryRequirements);
+
+    VkMemoryAllocateInfo Temp_MemoryAllocationInfo;
+    with(Temp_MemoryAllocationInfo)
+    {
+      allocationSize = Temp_MemoryRequirements.size;
+      bool Succeeded = ExtractMemoryTypeFromProperties(Device.OwnerGpu.MemoryProperties,
+                                                       Temp_MemoryRequirements.memoryTypeBits,
+                                                       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+                                                       &memoryTypeIndex);
+      assert(Succeeded);
+    }
+
+    VkDeviceMemory Temp_Memory;
+    vkAllocateMemory(Device.Handle, &Temp_MemoryAllocationInfo, null, &Temp_Memory).Verify;
+    scope(exit) vkFreeMemory(Device.Handle, Temp_Memory, null);
+
+    // Copy over the image data to the temporary buffer.
+    {
+      void* RawData;
+      vkMapMemory(Device.Handle,
+                  Temp_Memory,
+                  0, // offset
+                  VK_WHOLE_SIZE,
+                  0, // flags
+                  &RawData).Verify;
+      scope(exit) vkUnmapMemory(Device.Handle, Temp_Memory);
+
+      RawData[0 .. ImageData.length] = ImageData;
+    }
+
+    vkBindBufferMemory(Device.Handle, Temp_Buffer, Temp_Memory, 0).Verify;
+
+  //
+  // Create the actual texture image.
+  //
+    // Now that we have the buffer in place, holding the texture data, we copy
+    // it over to an image.
+    VkFormat VulkanTextureFormat = ImageFormatToVulkan(Image.Format);
+    assert(VulkanTextureFormat != VK_FORMAT_UNDEFINED);
+
+    VkImageCreateInfo Image_CreateInfo;
+    with(Image_CreateInfo)
+    {
+      imageType = VK_IMAGE_TYPE_2D;
+      format = VulkanTextureFormat;
+      extent = VkExtent3D(Image.Width, Image.Height, 1);
+      // TODO(Manu): Support all mip levels!
+      //mipLevels = Image.NumMipLevels;
+      //arrayLayers = Image.NumArrayIndices;
+      mipLevels = 1;
+      arrayLayers = 1;
+      samples = VK_SAMPLE_COUNT_1_BIT; // TODO(Manu): Should probably be passed in, because it must be consistent with the renderpass, etc.
+      tiling = VK_IMAGE_TILING_OPTIMAL;
+      initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+      usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+      sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    }
+    vkCreateImage(Device.Handle, &Image_CreateInfo, null, &Result.ImageHandle).Verify;
+
+    VkMemoryRequirements Image_MemoryRequirements;
+    vkGetImageMemoryRequirements(Device.Handle, Result.ImageHandle, &Image_MemoryRequirements);
+
+    VkMemoryAllocateInfo Image_MemoryAllocateInfo;
+    with(Image_MemoryAllocateInfo)
+    {
+      allocationSize = Image_MemoryRequirements.size;
+      auto HasMatch = ExtractMemoryTypeFromProperties(Device.OwnerGpu.MemoryProperties,
+                                                      Image_MemoryRequirements.memoryTypeBits,
+                                                      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+                                                      &memoryTypeIndex);
+      assert(HasMatch);
+      if(!HasMatch) return No.Success;
+    }
+
+    // Allocate image memory
+    vkAllocateMemory(Device.Handle, &Image_MemoryAllocateInfo, null, &Result.MemoryHandle).Verify;
+
+    // Bind image and image memory
+    vkBindImageMemory(Device.Handle, Result.ImageHandle, Result.MemoryHandle, 0).Verify;
+
+    // Since the initial layout is VK_IMAGE_LAYOUT_UNDEFINED, and this image
+    // is a blit-target, we set its current layout to
+    // VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL.
+    SetImageLayout(CommandBuffer,
+                   Result.ImageHandle,
+                   VK_IMAGE_ASPECT_COLOR_BIT,
+                   VK_IMAGE_LAYOUT_UNDEFINED,
+                   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                   0);
+
+  //
+  // Copy the buffered data over to the image memory.
+  //
+    VkBufferImageCopy Copy;
+    with(Copy)
+    {
+      imageExtent = Image_CreateInfo.extent;
+      with(imageSubresource)
+      {
+        aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        mipLevel = 0; // TODO(Manu): Support all mip levels.
+        baseArrayLayer = 0;
+        layerCount = 1; // TODO(Manu): Should be more than 1.
+      }
+    }
+    vkCmdCopyBufferToImage(CommandBuffer,
+                           Temp_Buffer,
+                           Result.ImageHandle,
+                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                           1,
+                           &Copy);
+
+  return Yes.Success;
 }
