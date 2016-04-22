@@ -63,6 +63,49 @@ alias Yes  = std.typecons.Yes;
 alias No   = std.typecons.No;
 alias Flag = std.typecons.Flag;
 
+/// A bidirectional range yielding all enum values from .min to .max.
+static struct EnumIterator(EnumType)
+  // TODO(Manu): Constraint to ensure EnumType is actually an enum.
+{
+  EnumType _Front = EnumType.min;
+  EnumType _Back = EnumType.max;
+
+  @property bool empty() const { return _Front > _Back; }
+  @property inout(EnumType) front() inout { assert(!empty); return _Front; }
+  @property inout(EnumType) back() inout { assert(!empty); return _Back; }
+  void popFront() { _Front = cast(EnumType)(cast(ulong)_Front + 1); }
+  void popBack()  { _Back  = cast(EnumType)(cast(ulong)_Back  - 1); }
+}
+
+//
+// Unit Tests
+//
+
+unittest
+{
+  enum Foo
+  {
+    Bar,
+    Baz
+  }
+  // TODO(Manu): Find out why EnumIterator is not a bidirectional range in
+  // terms of Meta.IsBidirectionalRange, even though it behaves like one.
+  //static assert(Meta.IsBidirectionalRange!(EnumIterator!Foo),
+  //              "The EnumIterator template should be a bidirectional range.");
+  static assert(Meta.IsInputRange!(EnumIterator!Foo));
+
+  auto Iter = EnumIterator!Foo();
+  assert(Iter.front == Foo.Bar);
+  Iter.popFront();
+  assert(Iter.front == Foo.Baz);
+  Iter.popFront();
+  assert(Iter.empty);
+
+  int Count;
+  foreach(_; EnumIterator!Foo()) { Count++; }
+  assert(Count == 2);
+}
+
 version(none)
 void main()
 {
