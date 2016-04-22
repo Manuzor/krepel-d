@@ -1,5 +1,7 @@
 module vulkan_experiments.helper;
 
+import krepel.image;
+
 import vulkan;
 import krepel.log;
 
@@ -367,4 +369,115 @@ void LoadAllDeviceFunctions(typeof(vkGetDeviceProcAddr) GetDeviceProcAddr,
   vkUnmapMemory = LoadDeviceFunction(GetDeviceProcAddr, Device, "vkUnmapMemory".ptr, .vkUnmapMemory);
   vkUpdateDescriptorSets = LoadDeviceFunction(GetDeviceProcAddr, Device, "vkUpdateDescriptorSets".ptr, .vkUpdateDescriptorSets);
   vkWaitForFences = LoadDeviceFunction(GetDeviceProcAddr, Device, "vkWaitForFences".ptr, .vkWaitForFences);
+}
+
+VkFormat ImageFormatToVulkan(ImageFormat KrepelFormat)
+{
+  // TODO(Manu): final switch.
+  switch(KrepelFormat)
+  {
+    default: return VK_FORMAT_UNDEFINED;
+
+    //
+    // BGR formats
+    //
+    case ImageFormat.B8G8R8_UNorm:        return VK_FORMAT_B8G8R8_UNORM;
+
+    //
+    // RGBA formats
+    //
+    case ImageFormat.R8G8B8A8_UNorm:      return VK_FORMAT_R8G8B8A8_UNORM;
+    case ImageFormat.R8G8B8A8_SNorm:      return VK_FORMAT_R8G8B8A8_SNORM;
+    case ImageFormat.R8G8B8A8_UNorm_sRGB: return VK_FORMAT_R8G8B8A8_SRGB;
+    //case ImageFormat.R8G8B8A8_Typeless:   return VK_FORMAT_R8G8B8A8_SSCALED;
+    case ImageFormat.R8G8B8A8_UInt:       return VK_FORMAT_R8G8B8A8_UINT;
+    case ImageFormat.R8G8B8A8_SInt:       return VK_FORMAT_R8G8B8A8_SINT;
+
+    //
+    // BGRA formats
+    //
+    case ImageFormat.B8G8R8A8_UNorm:      return VK_FORMAT_B8G8R8A8_UNORM;
+    //case ImageFormat.B8G8R8A8_Typeless:   return VK_FORMAT_B8G8R8A8_SSCALED;
+    case ImageFormat.B8G8R8A8_UNorm_sRGB: return VK_FORMAT_B8G8R8A8_SRGB;
+
+    //
+    // Block compressed formats
+    //
+    case ImageFormat.BC1_UNorm:           return VK_FORMAT_BC1_RGBA_UNORM_BLOCK;
+    case ImageFormat.BC1_UNorm_sRGB:      return VK_FORMAT_BC1_RGBA_SRGB_BLOCK;
+
+    case ImageFormat.BC2_UNorm:           return VK_FORMAT_BC2_UNORM_BLOCK;
+    case ImageFormat.BC2_UNorm_sRGB:      return VK_FORMAT_BC2_SRGB_BLOCK;
+
+    case ImageFormat.BC3_UNorm:           return VK_FORMAT_BC3_UNORM_BLOCK;
+    case ImageFormat.BC3_UNorm_sRGB:      return VK_FORMAT_BC3_SRGB_BLOCK;
+
+    case ImageFormat.BC4_UNorm:           return VK_FORMAT_BC4_UNORM_BLOCK;
+    case ImageFormat.BC4_SNorm:           return VK_FORMAT_BC4_SNORM_BLOCK;
+
+    case ImageFormat.BC5_UNorm:           return VK_FORMAT_BC5_UNORM_BLOCK;
+    case ImageFormat.BC5_SNorm:           return VK_FORMAT_BC5_SNORM_BLOCK;
+
+    case ImageFormat.BC6H_UF16:           return VK_FORMAT_BC6H_UFLOAT_BLOCK;
+    case ImageFormat.BC6H_SF16:           return VK_FORMAT_BC6H_SFLOAT_BLOCK;
+
+    case ImageFormat.BC7_UNorm:           return VK_FORMAT_BC7_UNORM_BLOCK;
+    case ImageFormat.BC7_UNorm_sRGB:      return VK_FORMAT_BC7_SRGB_BLOCK;
+  }
+}
+
+ImageFormat ImageFormatFromVulkan(VkFormat VulkanFormat)
+{
+  // TODO(Manu): Complete this. Check out whether the ones that are commented
+  // out are correct.
+  switch(VulkanFormat)
+  {
+    default: return ImageFormat.Unknown;
+
+    //
+    // BGR formats
+    //
+    case VK_FORMAT_B8G8R8_UNORM: return ImageFormat.B8G8R8_UNorm;
+
+    //
+    // RGBA formats
+    //
+    case VK_FORMAT_R8G8B8A8_UNORM:   return ImageFormat.R8G8B8A8_UNorm;
+    case VK_FORMAT_R8G8B8A8_SNORM:   return ImageFormat.R8G8B8A8_SNorm;
+    case VK_FORMAT_R8G8B8A8_SRGB:    return ImageFormat.R8G8B8A8_UNorm_sRGB;
+    //case VK_FORMAT_R8G8B8A8_SSCALED: return ImageFormat.R8G8B8A8_Typeless;
+    case VK_FORMAT_R8G8B8A8_UINT:    return ImageFormat.R8G8B8A8_UInt;
+    case VK_FORMAT_R8G8B8A8_SINT:    return ImageFormat.R8G8B8A8_SInt;
+
+    //
+    // BGRA formats
+    //
+    case VK_FORMAT_B8G8R8A8_UNORM:      return ImageFormat.B8G8R8A8_UNorm;
+    //case VK_FORMAT_B8G8R8A8_SSCALED:    return ImageFormat.B8G8R8A8_Typeless;
+    case VK_FORMAT_B8G8R8A8_SRGB: return ImageFormat.B8G8R8A8_UNorm_sRGB;
+
+    //
+    // Block compressed formats
+    //
+    case VK_FORMAT_BC1_RGBA_UNORM_BLOCK: return ImageFormat.BC1_UNorm;
+    case VK_FORMAT_BC1_RGBA_SRGB_BLOCK:  return ImageFormat.BC1_UNorm_sRGB;
+
+    case VK_FORMAT_BC2_UNORM_BLOCK:      return ImageFormat.BC2_UNorm;
+    case VK_FORMAT_BC2_SRGB_BLOCK:       return ImageFormat.BC2_UNorm_sRGB;
+
+    case VK_FORMAT_BC3_UNORM_BLOCK:      return ImageFormat.BC3_UNorm;
+    case VK_FORMAT_BC3_SRGB_BLOCK:       return ImageFormat.BC3_UNorm_sRGB;
+
+    case VK_FORMAT_BC4_UNORM_BLOCK:      return ImageFormat.BC4_UNorm;
+    case VK_FORMAT_BC4_SNORM_BLOCK:      return ImageFormat.BC4_SNorm;
+
+    case VK_FORMAT_BC5_UNORM_BLOCK:      return ImageFormat.BC5_UNorm;
+    case VK_FORMAT_BC5_SNORM_BLOCK:      return ImageFormat.BC5_SNorm;
+
+    case VK_FORMAT_BC6H_UFLOAT_BLOCK:    return ImageFormat.BC6H_UF16;
+    case VK_FORMAT_BC6H_SFLOAT_BLOCK:    return ImageFormat.BC6H_SF16;
+
+    case VK_FORMAT_BC7_UNORM_BLOCK:      return ImageFormat.BC7_UNorm;
+    case VK_FORMAT_BC7_SRGB_BLOCK:       return ImageFormat.BC7_UNorm_sRGB;
+  }
 }
