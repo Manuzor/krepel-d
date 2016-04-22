@@ -66,11 +66,14 @@ struct ARC(Type)
 
   ~this()
   {
-    assert(_StoredInstance);
-    _StoredInstance.RefCountPayload.RemoveRef();
-    if(_StoredInstance.RefCountPayload.RefCount <= 0)
+    if(_StoredInstance)
     {
-      _StoredInstance.RefCountPayload.Allocator.Delete(_StoredInstance);
+      _StoredInstance.RefCountPayload.RemoveRef();
+      if(_StoredInstance.RefCountPayload.RefCount <= 0)
+      {
+        _StoredInstance.RefCountPayload.Allocator.Delete(_StoredInstance);
+      }
+      _StoredInstance = null;
     }
   }
 
