@@ -152,59 +152,6 @@ void Win32SetupConsole(CString Title)
 int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
               LPSTR CommandLine, int ShowCode)
 {
-  version(none)
-  {
-    import krepel.image;
-
-    auto CreateLoader = cast(PFN_CreateLoader)GetProcAddress(null, "krCreateImageLoader_DDS");
-    assert(CreateLoader !is null);
-
-    auto DestroyLoader = cast(PFN_DestroyLoader)GetProcAddress(null, "krDestroyImageLoader_DDS");
-    assert(DestroyLoader !is null);
-
-    IImageLoader Loader = CreateLoader(.Allocator);
-    scope(exit) DestroyLoader(.Allocator, Loader);
-
-    auto File = OpenFile(.Allocator, "../data/ezLogo_DXT1_NoMips_D.dds");
-    scope(exit) CloseFile(.Allocator, File);
-
-    auto FileContent = .Allocator.NewArray!void(File.Size);
-    scope(exit) .Allocator.Delete(FileContent);
-
-    auto BytesRead = File.Read(FileContent);
-    assert(BytesRead == FileContent.length);
-
-    auto Image = .Allocator.New!ImageContainer(.Allocator);
-    scope(exit) .Allocator.Delete(Image);
-
-    if(Loader.LoadImageFromData(FileContent, Image))
-    {
-      Log.Info("Loaded image file.");
-    }
-    else
-    {
-      Log.Warning("Failed to load image file.");
-    }
-
-    auto NewImageData = Array!ubyte(.Allocator);
-    if(Loader.WriteImageToArray(Image, NewImageData))
-    {
-      Log.Info("Successfully written image data.");
-    }
-    else
-    {
-      Log.Warning("Failed to write image data.");
-    }
-
-    auto OutFile = OpenFile(.Allocator, "../data/ezLogo_DXT1_NoMips_D_NEW.dds", FileOpenMode.Write);
-    scope(exit) CloseFile(.Allocator, OutFile);
-
-    OutFile.Write(NewImageData[]);
-
-    bool Exit = true;
-    if(Exit) return 0;
-  }
-
   version(XInput_RuntimeLinking) LoadXInput();
 
   auto Vulkan = Allocator.New!VulkanData(Allocator);
@@ -1425,7 +1372,7 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
         IImageLoader Loader = CreateLoader(.Allocator);
         scope(exit) DestroyLoader(.Allocator, Loader);
 
-        auto File = OpenFile(.Allocator, "../data/pups.dds");
+        auto File = OpenFile(.Allocator, "../data/ezLogo_DXT1_NoMips_D.dds");
         scope(exit) CloseFile(.Allocator, File);
 
         auto FileContent = .Allocator.NewArray!void(File.Size);
