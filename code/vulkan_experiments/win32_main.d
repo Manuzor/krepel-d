@@ -490,8 +490,9 @@ struct DepthData
 
 struct TextureData
 {
-  VkSampler Sampler;
+  VkSampler SamplerHandle;
   GpuImageData GpuImage;
+  VkImageView ImageViewHandle;
 }
 
 struct VertexBufferData
@@ -1393,7 +1394,7 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
             borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
             unnormalizedCoordinates = VK_FALSE;
           }
-          vkCreateSampler(Vulkan.Device.Handle, &SamplerCreateInfo, null, &Texture.Sampler).Verify;
+          vkCreateSampler(Vulkan.Device.Handle, &SamplerCreateInfo, null, &Texture.SamplerHandle).Verify;
         }
 
         // Create image view.
@@ -1410,7 +1411,7 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
             subresourceRange = VkImageSubresourceRange(VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1);
             image = Texture.GpuImage.ImageHandle;
           }
-          vkCreateImageView(Vulkan.Device.Handle, &ImageViewCreateInfo, null, &Texture.GpuImage.ImageViewHandle).Verify;
+          vkCreateImageView(Vulkan.Device.Handle, &ImageViewCreateInfo, null, &Texture.ImageViewHandle).Verify;
         }
       }
     }
@@ -1868,8 +1869,8 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
       VkDescriptorImageInfo[TextureCount] TextureDescriptors;
       foreach(Index; 0 .. TextureCount)
       {
-        TextureDescriptors[Index].sampler = Textures[Index].Sampler;
-        TextureDescriptors[Index].imageView = Textures[Index].GpuImage.ImageViewHandle;
+        TextureDescriptors[Index].sampler = Textures[Index].SamplerHandle;
+        TextureDescriptors[Index].imageView = Textures[Index].ImageViewHandle;
         TextureDescriptors[Index].imageLayout = VK_IMAGE_LAYOUT_GENERAL;
       }
 
@@ -2337,8 +2338,8 @@ void DestroySwapchainData(VulkanData Vulkan)
 
   foreach(ref Texture; Vulkan.Textures)
   {
-    vkDestroySampler(Vulkan.Device.Handle,   Texture.Sampler, null);
-    vkDestroyImageView(Vulkan.Device.Handle, Texture.GpuImage.ImageViewHandle, null);
+    vkDestroySampler(Vulkan.Device.Handle,   Texture.SamplerHandle, null);
+    vkDestroyImageView(Vulkan.Device.Handle, Texture.ImageViewHandle, null);
     vkDestroyImage(Vulkan.Device.Handle,     Texture.GpuImage.ImageHandle, null);
     vkFreeMemory(Vulkan.Device.Handle,       Texture.GpuImage.MemoryHandle, null);
   }
@@ -2403,9 +2404,6 @@ struct GpuImageData
   VkFormat ImageFormat;
 
   VkDeviceMemory MemoryHandle;
-
-  // TODO(Manu): Separate ImageViewHandle from GpuImageData.
-  VkImageView ImageViewHandle;
 }
 
 Flag!"IsCompatible" IsImageCompatibleWithGpu(ref VulkanPhysicalDeviceData Gpu, ImageContainer Image)
