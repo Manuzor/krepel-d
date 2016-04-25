@@ -1342,7 +1342,7 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
         IImageLoader Loader = CreateLoader(.Allocator);
         scope(exit) DestroyLoader(.Allocator, Loader);
 
-        auto File = OpenFile(.Allocator, "../data/Kitten_DXT1_NoMipmaps.dds");
+        auto File = OpenFile(.Allocator, "../data/Kitten_DXT1_Mipmaps.dds");
         scope(exit) CloseFile(.Allocator, File);
 
         auto FileContent = .Allocator.NewArray!void(File.Size);
