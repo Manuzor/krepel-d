@@ -1341,7 +1341,7 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
         IImageLoader Loader = CreateLoader(.Allocator);
         scope(exit) DestroyLoader(.Allocator, Loader);
 
-        auto File = OpenFile(.Allocator, "../data/ezLogo_DXT1_Mips_D.dds");
+        auto File = OpenFile(.Allocator, "../data/Kitten_DXT1_NoMipmaps.dds");
         scope(exit) CloseFile(.Allocator, File);
 
         auto FileContent = .Allocator.NewArray!void(File.Size);
@@ -1379,8 +1379,8 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
           VkSamplerCreateInfo SamplerCreateInfo;
           with(SamplerCreateInfo)
           {
-            magFilter = VK_FILTER_NEAREST;
-            minFilter = VK_FILTER_NEAREST;
+            magFilter = VK_FILTER_LINEAR;
+            minFilter = VK_FILTER_LINEAR;
             mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
             addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
             addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
