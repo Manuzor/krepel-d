@@ -376,7 +376,7 @@ struct VulkanPhysicalDeviceData
 
 struct VulkanDeviceData
 {
-  VulkanPhysicalDeviceData* OwnerGpu;
+  const(VulkanPhysicalDeviceData)* OwnerGpu;
 
   VkDevice Handle;
 }
