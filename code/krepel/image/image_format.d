@@ -158,19 +158,19 @@ enum ImageFormat
 @property uint            AlphaMask(ImageFormat Format)    { return LookupTable[Format].AlphaMask;    }
 @property ImageFormatType FormatType(ImageFormat Format)   { return LookupTable[Format].FormatType;   }
 
-ImageFormat FindMatchingImageFormatForPixelMaskAndBitsPerPixel(uint RedMask, uint BlueMask, uint GreenMask, uint AlphaMask,
+ImageFormat FindMatchingImageFormatForPixelMaskAndBitsPerPixel(uint RedMask, uint GreenMask, uint BlueMask, uint AlphaMask,
                                                                uint BitsPerPixel,
                                                                LogData* Log = null)
 {
-  foreach(Candidate; EnumIterator!ImageFormat())
+  foreach(Candidate; LookupTable)
   {
     if(Candidate.RedMask == RedMask &&
        Candidate.GreenMask == GreenMask &&
        Candidate.BlueMask == BlueMask &&
        Candidate.AlphaMask == AlphaMask)
     {
-      if(Candidate.BitsPerPixel == BitsPerPixel) return Candidate;
-      Log.Warning("%s matches the pixel mask but does not match with the requested bits per pixel.", Candidate);
+      if(Candidate.BitsPerPixel == BitsPerPixel) return Candidate.Format;
+      Log.Warning("%s matches the pixel mask but does not match with the requested bits per pixel.", Candidate.Format);
     }
   }
 
