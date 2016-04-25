@@ -2403,6 +2403,8 @@ struct GpuImageData
   VkFormat ImageFormat;
 
   VkDeviceMemory MemoryHandle;
+
+  // TODO(Manu): Separate ImageViewHandle from GpuImageData.
   VkImageView ImageViewHandle;
 }
 
@@ -2464,71 +2466,163 @@ Flag!"IsCompatible" IsImageCompatibleWithGpu(ref VulkanPhysicalDeviceData Gpu, I
   return Yes.IsCompatible;
 }
 
-// TODO(Manu): staged upload, optimal tiling, all mip-levels.
+// TODO(Manu): Upload all mip-levels instead of 1.
 Flag!"Success" UploadImageToGpu(VulkanDeviceData Device, VkCommandPool CommandPool, VkCommandBuffer CommandBuffer,
                                 ImageContainer Image, ref GpuImageData GpuImage,
                                 LogData* Log = null)
 {
+  //
+  // 1. Allocate a temporary buffer.
+  // 2. Blit the image data into that.
+  // 3. Allocate an image with optimal tiling
+  // 4. Blit the buffer data into the image.
+  // 5. Deallocate the temporary buffer.
+  //
+
   GpuImage.ImageFormat = Image.Format.ImageFormatToVulkan();
-  Log.Info("Image format (Krepel => Vulkan): %s", Image.Format, GpuImage.ImageFormat);
+  Log.Info("Image format (Krepel => Vulkan): %s => %s", Image.Format, GpuImage.ImageFormat);
 
   assert(GpuImage.ImageFormat != ImageFormat.Unknown,
          "Could not convert Krepel to Vulkan image format. Did you run IsImageCompatibleWithGpu before calling this function?");
 
-  VkImageCreateInfo ImageCreateInfo;
-  with(ImageCreateInfo)
-  {
-    imageType = VK_IMAGE_TYPE_2D;
-    format = GpuImage.ImageFormat;
-    extent = VkExtent3D(Image.Width, Image.Height, 1);
-    mipLevels = 1;
-    arrayLayers = 1;
-    samples = VK_SAMPLE_COUNT_1_BIT;
-    tiling = VK_IMAGE_TILING_LINEAR;
-    usage = VK_IMAGE_USAGE_SAMPLED_BIT;
-    initialLayout = VK_IMAGE_LAYOUT_PREINITIALIZED;
-  }
-  Log.Info("Using Vulkan format %s", ImageCreateInfo.format);
+  //
+  // Create the temporary buffer and upload the data to it.
+  //
+    auto ImageData = Image.ImageData!void;
 
-  vkCreateImage(Device.Handle, &ImageCreateInfo, null, &GpuImage.ImageHandle).Verify;
+    VkBufferCreateInfo Temp_BufferCreateInfo;
+    with(Temp_BufferCreateInfo)
+    {
+      usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+      size = ImageData.length;
+    }
 
-  VkMemoryRequirements MemoryRequirements;
-  vkGetImageMemoryRequirements(Device.Handle, GpuImage.ImageHandle, &MemoryRequirements);
+    VkBuffer Temp_Buffer;
+    vkCreateBuffer(Device.Handle, &Temp_BufferCreateInfo, null, &Temp_Buffer).Verify;
+    scope(exit) vkDestroyBuffer(Device.Handle, Temp_Buffer, null);
 
-  VkMemoryAllocateInfo MemoryAllocateInfo;
-  with(MemoryAllocateInfo)
-  {
-    allocationSize = MemoryRequirements.size;
-    memoryTypeIndex = DetermineMemoryTypeIndex(Device.OwnerGpu.MemoryProperties,
-                                               MemoryRequirements.memoryTypeBits,
-                                               VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
-    assert(memoryTypeIndex != cast(uint)-1);
-  }
+    VkMemoryRequirements Temp_MemoryRequirements;
+    vkGetBufferMemoryRequirements(Device.Handle, Temp_Buffer, &Temp_MemoryRequirements);
 
-  // Allocate memory
-  vkAllocateMemory(Device.Handle, &MemoryAllocateInfo, null, &GpuImage.MemoryHandle).Verify;
+    VkMemoryAllocateInfo Temp_MemoryAllocationInfo;
+    with(Temp_MemoryAllocationInfo)
+    {
+      allocationSize = Temp_MemoryRequirements.size;
+      memoryTypeIndex = DetermineMemoryTypeIndex(Device.OwnerGpu.MemoryProperties,
+                                                 Temp_MemoryRequirements.memoryTypeBits,
+                                                 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+      assert(memoryTypeIndex != cast(uint)-1);
+    }
 
-  // Copy data using vkMapMemory
-  {
-    const NumBytes = MemoryAllocateInfo.allocationSize;
-    void* RawData;
-    vkMapMemory(Device.Handle, GpuImage.MemoryHandle, 0, NumBytes, 0, &RawData).Verify;
+    VkDeviceMemory Temp_Memory;
+    vkAllocateMemory(Device.Handle, &Temp_MemoryAllocationInfo, null, &Temp_Memory).Verify;
+    scope(exit) vkFreeMemory(Device.Handle, Temp_Memory, null);
 
-    RawData[0 .. NumBytes] = Image.ImageData!void[0 .. NumBytes];
+    // Copy over the image data to the temporary buffer.
+    {
+      void* RawData;
+      vkMapMemory(Device.Handle,
+                  Temp_Memory,
+                  0, // offset
+                  VK_WHOLE_SIZE,
+                  0, // flags
+                  &RawData).Verify;
+      scope(exit) vkUnmapMemory(Device.Handle, Temp_Memory);
 
-    vkUnmapMemory(Device.Handle, GpuImage.MemoryHandle);
-  }
+      RawData[0 .. ImageData.length] = ImageData;
+    }
 
-  // Bind memory
-  vkBindImageMemory(Device.Handle, GpuImage.ImageHandle, GpuImage.MemoryHandle, 0).Verify;
+    vkBindBufferMemory(Device.Handle, Temp_Buffer, Temp_Memory, 0).Verify;
 
-  GpuImage.ImageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-  SetImageLayout(Device, CommandPool, CommandBuffer, GpuImage.ImageHandle,
-                 VK_IMAGE_ASPECT_COLOR_BIT,
-                 ImageCreateInfo.initialLayout,
-                 GpuImage.ImageLayout,
-                 VK_ACCESS_HOST_WRITE_BIT);
-  // Setting the image layout does not reference the actual memory so no need to add a mem ref.
+  //
+  // Create the actual texture image.
+  //
+    // Now that we have the buffer in place, holding the texture data, we copy
+    // it over to an image.
+    VkImageCreateInfo Image_CreateInfo;
+    with(Image_CreateInfo)
+    {
+      imageType = VK_IMAGE_TYPE_2D;
+      format = GpuImage.ImageFormat;
+      extent = VkExtent3D(Image.Width, Image.Height, 1);
+      // TODO(Manu): Support all mip levels!
+      //mipLevels = Image.NumMipLevels;
+      //arrayLayers = Image.NumArrayIndices;
+      mipLevels = 1;
+      arrayLayers = 1;
+      samples = VK_SAMPLE_COUNT_1_BIT; // TODO(Manu): Should probably be passed in as a parameter to this function, because it must be consistent with the renderpass, etc.
+      sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+      tiling = VK_IMAGE_TILING_OPTIMAL;
+      initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+      usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+    }
+    vkCreateImage(Device.Handle, &Image_CreateInfo, null, &GpuImage.ImageHandle).Verify;
+
+    VkMemoryRequirements Image_MemoryRequirements;
+    vkGetImageMemoryRequirements(Device.Handle, GpuImage.ImageHandle, &Image_MemoryRequirements);
+
+    Log.Info("Requiring %d bytes on the GPU for the given image data.", Image_MemoryRequirements.size);
+
+    VkMemoryAllocateInfo Image_MemoryAllocateInfo;
+    with(Image_MemoryAllocateInfo)
+    {
+      allocationSize = Image_MemoryRequirements.size;
+      memoryTypeIndex =  DetermineMemoryTypeIndex(Device.OwnerGpu.MemoryProperties,
+                                                  Image_MemoryRequirements.memoryTypeBits,
+                                                  VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+      assert(memoryTypeIndex != cast(uint)-1);
+      if(memoryTypeIndex == cast(uint)-1) return No.Success;
+    }
+
+    // Allocate image memory
+    vkAllocateMemory(Device.Handle, &Image_MemoryAllocateInfo, null, &GpuImage.MemoryHandle).Verify;
+
+    // Bind image and image memory
+    vkBindImageMemory(Device.Handle, GpuImage.ImageHandle, GpuImage.MemoryHandle, 0).Verify;
+
+    // Since the initial layout is VK_IMAGE_LAYOUT_UNDEFINED, and this image
+    // is a blit-target, we set its current layout to
+    // VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL.
+    SetImageLayout(Device, CommandPool, CommandBuffer,
+                   GpuImage.ImageHandle,
+                   VK_IMAGE_ASPECT_COLOR_BIT,
+                   VK_IMAGE_LAYOUT_UNDEFINED,
+                   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                   0);
+
+  //
+  // Copy the buffered data over to the image memory.
+  //
+    VkBufferImageCopy Copy;
+    with(Copy)
+    {
+      imageExtent = Image_CreateInfo.extent;
+      with(imageSubresource)
+      {
+        aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        mipLevel = 0; // TODO(Manu): Support all mip levels.
+        baseArrayLayer = 0;
+        layerCount = 1; // TODO(Manu): Should be more than 1.
+      }
+    }
+    vkCmdCopyBufferToImage(CommandBuffer,
+                           Temp_Buffer,
+                           GpuImage.ImageHandle,
+                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                           1,
+                           &Copy);
+  //
+  // Set the image layout.
+  //
+    SetImageLayout(Device, CommandPool, CommandBuffer,
+                   GpuImage.ImageHandle,
+                   VK_IMAGE_ASPECT_COLOR_BIT,
+                   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                   VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                   0);
+
+  // TODO(Manu): Synchronization?
 
   return Yes.Success;
 }
