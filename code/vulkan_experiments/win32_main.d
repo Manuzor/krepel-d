@@ -1293,12 +1293,14 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
 
       // Select memory size and type.
       VkMemoryAllocateInfo MemoryAllocateInfo;
-      MemoryAllocateInfo.allocationSize = MemoryRequirements.size;
-      auto Result = ExtractMemoryTypeFromProperties(Vulkan,
-                                                    MemoryRequirements.memoryTypeBits,
-                                                    0, // No requirements.
-                                                    &MemoryAllocateInfo.memoryTypeIndex);
-      assert(Result);
+      with(MemoryAllocateInfo)
+      {
+        allocationSize = MemoryRequirements.size;
+        memoryTypeIndex = DetermineMemoryTypeIndex(Vulkan.Gpu.MemoryProperties,
+                                                   MemoryRequirements.memoryTypeBits,
+                                              0); // No requirements.
+        assert(memoryTypeIndex != cast(uint)-1);
+      }
 
       // Allocate memory.
       vkAllocateMemory(Device.Handle, &MemoryAllocateInfo, null, &Depth.Memory).Verify;
@@ -1394,12 +1396,14 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
           vkGetImageMemoryRequirements(Vulkan.Device.Handle, Texture.Image, &MemoryRequirements);
 
           VkMemoryAllocateInfo MemoryAllocateInfo;
-          MemoryAllocateInfo.allocationSize = MemoryRequirements.size;
-          auto Result = ExtractMemoryTypeFromProperties(Vulkan,
-                                                        MemoryRequirements.memoryTypeBits,
-                                                        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
-                                                        &MemoryAllocateInfo.memoryTypeIndex);
-          assert(Result);
+          with(MemoryAllocateInfo)
+          {
+            allocationSize = MemoryRequirements.size;
+            memoryTypeIndex = DetermineMemoryTypeIndex(Vulkan.Gpu.MemoryProperties,
+                                                       MemoryRequirements.memoryTypeBits,
+                                                       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+            assert(memoryTypeIndex != cast(uint)-1);
+          }
 
           // Allocate memory
           vkAllocateMemory(Vulkan.Device.Handle, &MemoryAllocateInfo, null, &Texture.Memory).Verify;
@@ -1514,11 +1518,10 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
         with(MemoryAllocateInfo)
         {
           allocationSize = MemoryRequirements.size;
-          auto Result = ExtractMemoryTypeFromProperties(Vulkan,
-                                                        MemoryRequirements.memoryTypeBits,
-                                                        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
-                                                        &memoryTypeIndex);
-          assert(Result);
+          memoryTypeIndex = DetermineMemoryTypeIndex(Vulkan.Gpu.MemoryProperties,
+                                                     MemoryRequirements.memoryTypeBits,
+                                                     VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+          assert(memoryTypeIndex != cast(uint)-1);
         }
 
         vkAllocateMemory(Device.Handle, &MemoryAllocateInfo, null, &Vertices.Memory).Verify;
@@ -1578,11 +1581,10 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
         with(MemoryAllocateInfo)
         {
           allocationSize = MemoryRequirements.size;
-          auto Result = ExtractMemoryTypeFromProperties(Vulkan,
-                                                        MemoryRequirements.memoryTypeBits,
-                                                        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
-                                                        &memoryTypeIndex);
-          assert(Result);
+          memoryTypeIndex = DetermineMemoryTypeIndex(Vulkan.Gpu.MemoryProperties,
+                                                     MemoryRequirements.memoryTypeBits,
+                                                     VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+          assert(memoryTypeIndex != cast(uint)-1);
         }
 
         vkAllocateMemory(Device.Handle, &MemoryAllocateInfo, null, &Indices.Memory).Verify;
@@ -2043,31 +2045,28 @@ void SetImageLayout(VulkanData Vulkan,
                        1, &ImageMemoryBarrier);         // imageMemoryBarrierCount, pImageMemoryBarriers
 }
 
-bool ExtractMemoryTypeFromProperties(VulkanData Vulkan,
-                                     uint TypeBits,
-                                     VkFlags RequirementsMask,
-                                     uint* TypeIndex)
+uint DetermineMemoryTypeIndex(VkPhysicalDeviceMemoryProperties MemoryProperties,
+                              uint TypeBits,
+                              VkFlags RequirementsMask)
 {
-  // TODO(Manu): Simplify using krepel.memory.common stuff.
-
   // Search memtypes to find first index with those properties
-  foreach(Index; 0 .. 32)
+  foreach(uint Index; 0 .. 32)
   {
-    if(TypeBits & 1)
+    if(TypeBits.HasBit(Index))
     {
       // Type is available, does it match user properties?
-      const PropertyFlags = Vulkan.Gpu.MemoryProperties.memoryTypes[Index].propertyFlags;
-      if((PropertyFlags & RequirementsMask) == RequirementsMask)
+      const PropertyFlags = MemoryProperties.memoryTypes[Index].propertyFlags;
+      const FilteredFlags = PropertyFlags & RequirementsMask;
+      if(FilteredFlags == RequirementsMask)
       {
-        *TypeIndex = Index;
-        return true;
+        // Perfect match.
+        return Index;
       }
     }
-    TypeBits >>= 1;
   }
 
-  // No memory types matched, return failure
-  return false;
+  // No memory types matched.
+  return cast(uint)-1;
 }
 
 void PrepareTextureImage(VulkanData Vulkan,
@@ -2104,12 +2103,14 @@ void PrepareTextureImage(VulkanData Vulkan,
   vkGetImageMemoryRequirements(Vulkan.Device.Handle, Texture.Image, &MemoryRequirements);
 
   VkMemoryAllocateInfo MemoryAllocateInfo;
-  MemoryAllocateInfo.allocationSize = MemoryRequirements.size;
-  auto Result = ExtractMemoryTypeFromProperties(Vulkan,
-                                                MemoryRequirements.memoryTypeBits,
-                                                RequiredProperties,
-                                                &MemoryAllocateInfo.memoryTypeIndex);
-  assert(Result);
+  with(MemoryAllocateInfo)
+  {
+    allocationSize = MemoryRequirements.size;
+    memoryTypeIndex = DetermineMemoryTypeIndex(Vulkan.Gpu.MemoryProperties,
+                                               MemoryRequirements.memoryTypeBits,
+                                               RequiredProperties);
+    assert(memoryTypeIndex != cast(uint)-1);
+  }
 
   // Allocate memory
   vkAllocateMemory(Vulkan.Device.Handle, &MemoryAllocateInfo, null, &Texture.Memory).Verify;
