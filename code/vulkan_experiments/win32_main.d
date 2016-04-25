@@ -1250,7 +1250,7 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
         // VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
         // layout and will change to COLOR_ATTACHMENT_OPTIMAL, so init the image
         // to that state.
-        SetImageLayout(Vulkan, SwapchainBuffers[Index].Image,
+        SetImageLayout(Vulkan.Device, Vulkan.CommandPool, Vulkan.SetupCommand, SwapchainBuffers[Index].Image,
                        cast(VkImageAspectFlags)VK_IMAGE_ASPECT_COLOR_BIT,
                        cast(VkImageLayout)VK_IMAGE_LAYOUT_UNDEFINED,
                        cast(VkImageLayout)VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
@@ -1308,7 +1308,7 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
       // Bind memory.
       vkBindImageMemory(Device.Handle, Depth.Image, Depth.Memory, 0).Verify;
 
-      SetImageLayout(Vulkan, Depth.Image,
+      SetImageLayout(Vulkan.Device, Vulkan.CommandPool, Vulkan.SetupCommand, Depth.Image,
                      cast(VkImageAspectFlags)VK_IMAGE_ASPECT_DEPTH_BIT,
                      cast(VkImageLayout)VK_IMAGE_LAYOUT_UNDEFINED,
                      cast(VkImageLayout)VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
@@ -1423,7 +1423,7 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
           vkBindImageMemory(Vulkan.Device.Handle, Texture.Image, Texture.Memory, 0).Verify;
 
           Texture.ImageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-          SetImageLayout(Vulkan, Texture.Image,
+          SetImageLayout(Vulkan.Device, Vulkan.CommandPool, Vulkan.SetupCommand, Texture.Image,
                          cast(VkImageAspectFlags)VK_IMAGE_ASPECT_COLOR_BIT,
                          cast(VkImageLayout)VK_IMAGE_LAYOUT_PREINITIALIZED,
                          Texture.ImageLayout,
@@ -1977,15 +1977,14 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
   return true;
 }
 
-void SetImageLayout(VulkanData Vulkan,
+void SetImageLayout(VulkanDeviceData Device, VkCommandPool CommandPool, ref VkCommandBuffer CommandBuffer,
                     VkImage Image,
                     VkImageAspectFlags AspectMask,
                     VkImageLayout OldImageLayout,
                     VkImageLayout NewImageLayout,
                     VkAccessFlags SourceAccessMask)
 {
-  EnsureSetupCommandIsReady(Vulkan.Device, Vulkan.CommandPool, Vulkan.SetupCommand);
-  assert(Vulkan.SetupCommand);
+  EnsureSetupCommandIsReady(Device, CommandPool, CommandBuffer);
 
   VkImageMemoryBarrier ImageMemoryBarrier;
   with(ImageMemoryBarrier)
@@ -2022,7 +2021,7 @@ void SetImageLayout(VulkanData Vulkan,
   VkPipelineStageFlags SourceStages = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
   VkPipelineStageFlags DestinationStages = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
 
-  vkCmdPipelineBarrier(Vulkan.SetupCommand,             // commandBuffer
+  vkCmdPipelineBarrier(CommandBuffer,                   // commandBuffer
                        SourceStages, DestinationStages, // dstStageMask, srcStageMask
                        0,                               // dependencyFlags
                        0, null,                         // memoryBarrierCount, pMemoryBarriers
@@ -2140,7 +2139,7 @@ void Draw(VulkanData Vulkan)
 
     // Assume the command buffer has been run on current_buffer before so
     // we need to set the image layout back to COLOR_ATTACHMENT_OPTIMAL
-    SetImageLayout(Vulkan,
+    SetImageLayout(Vulkan.Device, Vulkan.CommandPool, Vulkan.SetupCommand,
                    SwapchainBuffers[CurrentBufferIndex].Image,
                    VK_IMAGE_ASPECT_COLOR_BIT,
                    VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
