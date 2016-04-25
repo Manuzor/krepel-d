@@ -82,6 +82,7 @@ class ImageContainer
     return cast(typeof(return))DataSlice;
   }
 
+  // TODO(Manu): The length of the returned range is probably wrong. Correct this.
   inout(Type)[] SubImageData(Type)(uint MipLevel = 0, uint Face = 0, uint ArrayIndex = 0) inout
   {
     const Offset = PointerToSubImageAt(MipLevel, Face, ArrayIndex).DataOffset;
