@@ -200,7 +200,7 @@ private:
   inout(SubImage)* PointerToSubImageAt(uint MipLevel, uint Face, uint ArrayIndex) inout
   {
     assert(MipLevel < this.NumMipLevels, "Invalid mip level");
-    assert(Face < this.NumFaces, "Invalid uiFace");
+    assert(Face < this.NumFaces, "Invalid face index");
     assert(ArrayIndex < this.NumArrayIndices, "Invalid array slice");
     return &SubImages[MipLevel + NumMipLevels * (Face + NumFaces * ArrayIndex)];
   }

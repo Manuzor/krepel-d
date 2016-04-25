@@ -2464,7 +2464,6 @@ Flag!"IsCompatible" IsImageCompatibleWithGpu(ref VulkanPhysicalDeviceData Gpu, I
   return Yes.IsCompatible;
 }
 
-// TODO(Manu): Upload all mip-levels instead of 1.
 Flag!"Success" UploadImageToGpu(VulkanDeviceData Device, VkCommandPool CommandPool, VkCommandBuffer CommandBuffer,
                                 ImageContainer Image, ref GpuImageData GpuImage,
                                 LogData* Log = null)
@@ -2543,11 +2542,8 @@ Flag!"Success" UploadImageToGpu(VulkanDeviceData Device, VkCommandPool CommandPo
       imageType = VK_IMAGE_TYPE_2D;
       format = GpuImage.ImageFormat;
       extent = VkExtent3D(Image.Width, Image.Height, 1);
-      // TODO(Manu): Support all mip levels!
-      //mipLevels = Image.NumMipLevels;
-      //arrayLayers = Image.NumArrayIndices;
-      mipLevels = 1;
-      arrayLayers = 1;
+      mipLevels = Image.NumMipLevels;
+      arrayLayers = Image.NumArrayIndices;
       samples = VK_SAMPLE_COUNT_1_BIT; // TODO(Manu): Should probably be passed in as a parameter to this function, because it must be consistent with the renderpass, etc.
       sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
@@ -2592,14 +2588,18 @@ Flag!"Success" UploadImageToGpu(VulkanDeviceData Device, VkCommandPool CommandPo
   //
   // Copy the buffered data over to the image memory.
   //
-    VkBufferImageCopy Copy;
-    with(Copy)
+  {
+    auto Regions = Array!VkBufferImageCopy(.Allocator);
+    // TODO(Manu): Upload all MIP levels.
+    foreach(MipLevel; 0 .. 1 /*Image.NumMipLevels*/)
     {
-      imageExtent = Image_CreateInfo.extent;
-      with(imageSubresource)
+      auto Region = &Regions.Expand();
+      //Region.bufferOffset = ;
+      Region.imageExtent = Image_CreateInfo.extent;
+      with(Region.imageSubresource)
       {
         aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        mipLevel = 0; // TODO(Manu): Support all mip levels.
+        mipLevel = MipLevel;
         baseArrayLayer = 0;
         layerCount = 1; // TODO(Manu): Should be more than 1.
       }
@@ -2608,8 +2608,9 @@ Flag!"Success" UploadImageToGpu(VulkanDeviceData Device, VkCommandPool CommandPo
                            Temp_Buffer,
                            GpuImage.ImageHandle,
                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                           1,
-                           &Copy);
+                           cast(uint)Regions.length,
+                           Regions.Data.ptr);
+  }
   //
   // Set the image layout.
   //
