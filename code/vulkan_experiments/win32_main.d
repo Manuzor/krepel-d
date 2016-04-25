@@ -1984,23 +1984,8 @@ void SetImageLayout(VulkanData Vulkan,
                     VkImageLayout NewImageLayout,
                     VkAccessFlags SourceAccessMask)
 {
-  if(Vulkan.SetupCommand == VK_NULL_HANDLE)
-  {
-    VkCommandBufferAllocateInfo SetupCommandBufferAllocateInfo;
-    with(SetupCommandBufferAllocateInfo)
-    {
-      commandPool = Vulkan.CommandPool;
-      level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-      commandBufferCount = 1;
-    }
-
-    vkAllocateCommandBuffers(Vulkan.Device.Handle, &SetupCommandBufferAllocateInfo, &Vulkan.SetupCommand).Verify;
-
-    VkCommandBufferInheritanceInfo InheritanceInfo;
-    VkCommandBufferBeginInfo BeginInfo;
-    BeginInfo.pInheritanceInfo = &InheritanceInfo;
-    vkBeginCommandBuffer(Vulkan.SetupCommand, &BeginInfo).Verify;
-  }
+  EnsureSetupCommandIsReady(Vulkan.Device, Vulkan.CommandPool, Vulkan.SetupCommand);
+  assert(Vulkan.SetupCommand);
 
   VkImageMemoryBarrier ImageMemoryBarrier;
   with(ImageMemoryBarrier)
@@ -2069,28 +2054,46 @@ uint DetermineMemoryTypeIndex(VkPhysicalDeviceMemoryProperties MemoryProperties,
   return cast(uint)-1;
 }
 
-void FlushSetupCommand(VulkanData Vulkan)
+/// Create and begin setup command buffer.
+void EnsureSetupCommandIsReady(VulkanDeviceData Device, VkCommandPool CommandPool, ref VkCommandBuffer CommandBuffer)
 {
-  with(Vulkan)
-  {
-    if(SetupCommand is VK_NULL_HANDLE) return;
+  if(CommandBuffer) return;
 
-    vkEndCommandBuffer(SetupCommand).Verify;
+  VkCommandBufferAllocateInfo SetupCommandBufferAllocateInfo;
+  with(SetupCommandBufferAllocateInfo)
+  {
+    commandPool = CommandPool;
+    level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    commandBufferCount = 1;
+  }
+
+  vkAllocateCommandBuffers(Device.Handle, &SetupCommandBufferAllocateInfo, &CommandBuffer).Verify;
+
+  VkCommandBufferInheritanceInfo InheritanceInfo;
+  VkCommandBufferBeginInfo BeginInfo;
+  BeginInfo.pInheritanceInfo = &InheritanceInfo;
+  vkBeginCommandBuffer(CommandBuffer, &BeginInfo).Verify;
+}
+
+void FlushSetupCommand(VulkanDeviceData Device, VkQueue Queue, VkCommandPool CommandPool, ref VkCommandBuffer CommandBuffer)
+{
+  if(CommandBuffer is VK_NULL_HANDLE) return;
+
+  vkEndCommandBuffer(CommandBuffer).Verify;
 
     VkSubmitInfo SubmitInfo;
     with(SubmitInfo)
     {
       commandBufferCount = 1;
-      pCommandBuffers = &SetupCommand;
+    pCommandBuffers = &CommandBuffer;
     }
     VkFence NullFence;
     vkQueueSubmit(Queue, 1, &SubmitInfo, NullFence).Verify;
 
     vkQueueWaitIdle(Queue).Verify;
 
-    vkFreeCommandBuffers(Device.Handle, CommandPool, 1, &SetupCommand);
-    SetupCommand = VK_NULL_HANDLE;
-  }
+  vkFreeCommandBuffers(Device.Handle, CommandPool, 1, &CommandBuffer);
+  CommandBuffer = VK_NULL_HANDLE;
 }
 
 __gshared bool IsDrawing;
@@ -2137,12 +2140,13 @@ void Draw(VulkanData Vulkan)
 
     // Assume the command buffer has been run on current_buffer before so
     // we need to set the image layout back to COLOR_ATTACHMENT_OPTIMAL
-    Vulkan.SetImageLayout(SwapchainBuffers[CurrentBufferIndex].Image,
-                          VK_IMAGE_ASPECT_COLOR_BIT,
-                          VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-                          VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                          0);
-    Vulkan.FlushSetupCommand();
+    SetImageLayout(Vulkan,
+                   SwapchainBuffers[CurrentBufferIndex].Image,
+                   VK_IMAGE_ASPECT_COLOR_BIT,
+                   VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                   VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                   0);
+    FlushSetupCommand(Vulkan.Device, Vulkan.Queue, Vulkan.CommandPool, Vulkan.SetupCommand);
 
     // Wait for the present complete semaphore to be signaled to ensure
     // that the image won't be rendered to until the presentation
@@ -2150,7 +2154,7 @@ void Draw(VulkanData Vulkan)
     // okay to render to the image.
 
     // FIXME/TODO: DEAL WITH VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
-    Vulkan.CreateDrawCommand();
+    CreateDrawCommand(Vulkan);
 
     // Submit the draw command to the queue.
     {
