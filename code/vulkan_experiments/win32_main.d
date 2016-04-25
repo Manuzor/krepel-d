@@ -360,7 +360,6 @@ LRESULT Win32MainWindowCallback(HWND Window, UINT Message,
 
 struct VulkanPhysicalDeviceData
 {
-  size_t Index;
   VkPhysicalDevice Handle;
 
   VkPhysicalDeviceProperties Properties;
@@ -492,14 +491,7 @@ struct DepthData
 struct TextureData
 {
   VkSampler Sampler;
-
-  VkImage Image;
-  VkImageLayout ImageLayout;
-
-  VkDeviceMemory Memory;
-  VkImageView View;
-  int TextureWidth;
-  int TextureHeight;
+  GpuImageData GpuImage;
 }
 
 struct VertexBufferData
@@ -815,8 +807,8 @@ bool CreateVulkanInstance(VulkanData Vulkan)
       vkEnumeratePhysicalDevices(Instance, &GpuCount, Gpus.Data.ptr).Verify;
 
       // Use the first Physical Device for now.
-      Gpu.Index = 0;
-      Gpu.Handle = Gpus[Gpu.Index];
+      const GpuIndex = 0;
+      Gpu.Handle = Gpus[GpuIndex];
     }
 
     //
@@ -1336,7 +1328,9 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
       {
         Log.Info("Setting up texture %u", Index);
 
-        assert(!UseStagingBuffer);
+        auto Texture = &Vulkan.Textures[Index];
+
+        assert(!UseStagingBuffer, "Not implemented.");
 
         auto CreateLoader = cast(PFN_CreateLoader)GetProcAddress(null, "krCreateImageLoader_DDS");
         assert(CreateLoader !is null);
@@ -1368,67 +1362,16 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
           Log.Warning("Failed to load image file.");
         }
 
-        auto VulkanImageFormat = TheImage.Format.ImageFormatToVulkan();
-
+        if(UploadImageToGpu(Vulkan.Device, Vulkan.CommandPool, Vulkan.SetupCommand,
+                            TheImage, Texture.GpuImage,
+                            Log))
         {
-          Log.Info("Image format (Krepel => Vulkan): %s", TheImage.Format, VulkanImageFormat);
-
-          auto Texture = &Textures[Index];
-
-          VkImageCreateInfo ImageCreateInfo;
-          with(ImageCreateInfo)
-          {
-            imageType = VK_IMAGE_TYPE_2D;
-            format = VulkanImageFormat;
-            extent = VkExtent3D(TheImage.Width, TheImage.Height, 1);
-            mipLevels = 1;
-            arrayLayers = 1;
-            samples = VK_SAMPLE_COUNT_1_BIT;
-            tiling = VK_IMAGE_TILING_LINEAR;
-            usage = VK_IMAGE_USAGE_SAMPLED_BIT;
-            initialLayout = VK_IMAGE_LAYOUT_PREINITIALIZED;
-          }
-          Log.Info("Using Vulkan format %s", ImageCreateInfo.format);
-
-          vkCreateImage(Vulkan.Device.Handle, &ImageCreateInfo, null, &Texture.Image).Verify;
-
-          VkMemoryRequirements MemoryRequirements;
-          vkGetImageMemoryRequirements(Vulkan.Device.Handle, Texture.Image, &MemoryRequirements);
-
-          VkMemoryAllocateInfo MemoryAllocateInfo;
-          with(MemoryAllocateInfo)
-          {
-            allocationSize = MemoryRequirements.size;
-            memoryTypeIndex = DetermineMemoryTypeIndex(Vulkan.Gpu.MemoryProperties,
-                                                       MemoryRequirements.memoryTypeBits,
-                                                       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
-            assert(memoryTypeIndex != cast(uint)-1);
-          }
-
-          // Allocate memory
-          vkAllocateMemory(Vulkan.Device.Handle, &MemoryAllocateInfo, null, &Texture.Memory).Verify;
-
-          // Copy data using vkMapMemory
-          {
-            const NumBytes = MemoryAllocateInfo.allocationSize;
-            void* RawData;
-            vkMapMemory(Vulkan.Device.Handle, Texture.Memory, 0, NumBytes, 0, &RawData).Verify;
-
-            RawData[0 .. NumBytes] = TheImage.ImageData!void[0 .. NumBytes];
-
-            vkUnmapMemory(Vulkan.Device.Handle, Texture.Memory);
-          }
-
-          // Bind memory
-          vkBindImageMemory(Vulkan.Device.Handle, Texture.Image, Texture.Memory, 0).Verify;
-
-          Texture.ImageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-          SetImageLayout(Vulkan.Device, Vulkan.CommandPool, Vulkan.SetupCommand, Texture.Image,
-                         cast(VkImageAspectFlags)VK_IMAGE_ASPECT_COLOR_BIT,
-                         cast(VkImageLayout)VK_IMAGE_LAYOUT_PREINITIALIZED,
-                         Texture.ImageLayout,
-                         cast(VkAccessFlags)VK_ACCESS_HOST_WRITE_BIT);
-          // Setting the image layout does not reference the actual memory so no need to add a mem ref.
+          // TODO(Manu): Better messages.
+          Log.Info("Yay!");
+        }
+        else
+        {
+          Log.Failure("Foo.");
         }
 
         // Create sampler.
@@ -1448,7 +1391,7 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
             borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
             unnormalizedCoordinates = VK_FALSE;
           }
-          vkCreateSampler(Vulkan.Device.Handle, &SamplerCreateInfo, null, &Vulkan.Textures[Index].Sampler).Verify;
+          vkCreateSampler(Vulkan.Device.Handle, &SamplerCreateInfo, null, &Texture.Sampler).Verify;
         }
 
         // Create image view.
@@ -1457,15 +1400,15 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
           with(ImageViewCreateInfo)
           {
             viewType = VK_IMAGE_VIEW_TYPE_2D;
-            format = VulkanImageFormat;
+            format = Texture.GpuImage.ImageFormat;
             components = VkComponentMapping(VK_COMPONENT_SWIZZLE_R,
                                             VK_COMPONENT_SWIZZLE_G,
                                             VK_COMPONENT_SWIZZLE_B,
                                             VK_COMPONENT_SWIZZLE_A);
             subresourceRange = VkImageSubresourceRange(VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1);
-            image = Vulkan.Textures[Index].Image;
+            image = Texture.GpuImage.ImageHandle;
           }
-          vkCreateImageView(Vulkan.Device.Handle, &ImageViewCreateInfo, null, &Vulkan.Textures[Index].View).Verify;
+          vkCreateImageView(Vulkan.Device.Handle, &ImageViewCreateInfo, null, &Texture.GpuImage.ImageViewHandle).Verify;
         }
       }
     }
@@ -1924,7 +1867,7 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
       foreach(Index; 0 .. TextureCount)
       {
         TextureDescriptors[Index].sampler = Textures[Index].Sampler;
-        TextureDescriptors[Index].imageView = Textures[Index].View;
+        TextureDescriptors[Index].imageView = Textures[Index].GpuImage.ImageViewHandle;
         TextureDescriptors[Index].imageLayout = VK_IMAGE_LAYOUT_GENERAL;
       }
 
@@ -2392,10 +2335,10 @@ void DestroySwapchainData(VulkanData Vulkan)
 
   foreach(ref Texture; Vulkan.Textures)
   {
-    vkDestroyImageView(Vulkan.Device.Handle, Texture.View, null);
-    vkDestroyImage(Vulkan.Device.Handle,     Texture.Image, null);
-    vkFreeMemory(Vulkan.Device.Handle,       Texture.Memory, null);
     vkDestroySampler(Vulkan.Device.Handle,   Texture.Sampler, null);
+    vkDestroyImageView(Vulkan.Device.Handle, Texture.GpuImage.ImageViewHandle, null);
+    vkDestroyImage(Vulkan.Device.Handle,     Texture.GpuImage.ImageHandle, null);
+    vkFreeMemory(Vulkan.Device.Handle,       Texture.GpuImage.MemoryHandle, null);
   }
 
   foreach(ref Buffer; Vulkan.SwapchainBuffers)
@@ -2449,4 +2392,80 @@ extern(Windows) VkBool32 DebugMessageCallback(
   }
 
   return false;
+}
+
+struct GpuImageData
+{
+  VkImage ImageHandle;
+  VkImageLayout ImageLayout;
+  VkFormat ImageFormat;
+
+  VkDeviceMemory MemoryHandle;
+  VkImageView ImageViewHandle;
+}
+
+// TODO(Manu): staged upload, optimal tiling, all mip-levels.
+Flag!"Success" UploadImageToGpu(VulkanDeviceData Device, VkCommandPool CommandPool, VkCommandBuffer CommandBuffer,
+                                ImageContainer Image, ref GpuImageData GpuImage,
+                                LogData* Log = null)
+{
+  GpuImage.ImageFormat = Image.Format.ImageFormatToVulkan();
+  Log.Info("Image format (Krepel => Vulkan): %s", Image.Format, GpuImage.ImageFormat);
+
+  VkImageCreateInfo ImageCreateInfo;
+  with(ImageCreateInfo)
+  {
+    imageType = VK_IMAGE_TYPE_2D;
+    format = GpuImage.ImageFormat;
+    extent = VkExtent3D(Image.Width, Image.Height, 1);
+    mipLevels = 1;
+    arrayLayers = 1;
+    samples = VK_SAMPLE_COUNT_1_BIT;
+    tiling = VK_IMAGE_TILING_LINEAR;
+    usage = VK_IMAGE_USAGE_SAMPLED_BIT;
+    initialLayout = VK_IMAGE_LAYOUT_PREINITIALIZED;
+  }
+  Log.Info("Using Vulkan format %s", ImageCreateInfo.format);
+
+  vkCreateImage(Device.Handle, &ImageCreateInfo, null, &GpuImage.ImageHandle).Verify;
+
+  VkMemoryRequirements MemoryRequirements;
+  vkGetImageMemoryRequirements(Device.Handle, GpuImage.ImageHandle, &MemoryRequirements);
+
+  VkMemoryAllocateInfo MemoryAllocateInfo;
+  with(MemoryAllocateInfo)
+  {
+    allocationSize = MemoryRequirements.size;
+    memoryTypeIndex = DetermineMemoryTypeIndex(Device.OwnerGpu.MemoryProperties,
+                                               MemoryRequirements.memoryTypeBits,
+                                               VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+    assert(memoryTypeIndex != cast(uint)-1);
+  }
+
+  // Allocate memory
+  vkAllocateMemory(Device.Handle, &MemoryAllocateInfo, null, &GpuImage.MemoryHandle).Verify;
+
+  // Copy data using vkMapMemory
+  {
+    const NumBytes = MemoryAllocateInfo.allocationSize;
+    void* RawData;
+    vkMapMemory(Device.Handle, GpuImage.MemoryHandle, 0, NumBytes, 0, &RawData).Verify;
+
+    RawData[0 .. NumBytes] = Image.ImageData!void[0 .. NumBytes];
+
+    vkUnmapMemory(Device.Handle, GpuImage.MemoryHandle);
+  }
+
+  // Bind memory
+  vkBindImageMemory(Device.Handle, GpuImage.ImageHandle, GpuImage.MemoryHandle, 0).Verify;
+
+  GpuImage.ImageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+  SetImageLayout(Device, CommandPool, CommandBuffer, GpuImage.ImageHandle,
+                 VK_IMAGE_ASPECT_COLOR_BIT,
+                 ImageCreateInfo.initialLayout,
+                 GpuImage.ImageLayout,
+                 VK_ACCESS_HOST_WRITE_BIT);
+  // Setting the image layout does not reference the actual memory so no need to add a mem ref.
+
+  return Yes.Success;
 }
