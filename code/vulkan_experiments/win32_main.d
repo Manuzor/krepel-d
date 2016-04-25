@@ -376,7 +376,7 @@ struct VulkanPhysicalDeviceData
 
 struct VulkanDeviceData
 {
-  const(VulkanPhysicalDeviceData)* OwnerGpu;
+  VulkanPhysicalDeviceData* OwnerGpu;
 
   VkDevice Handle;
 }
@@ -1362,16 +1362,18 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
           Log.Warning("Failed to load image file.");
         }
 
+        assert(IsImageCompatibleWithGpu(*Vulkan.Device.OwnerGpu, TheImage));
+
         if(UploadImageToGpu(Vulkan.Device, Vulkan.CommandPool, Vulkan.SetupCommand,
                             TheImage, Texture.GpuImage,
                             Log))
         {
-          // TODO(Manu): Better messages.
-          Log.Info("Yay!");
+          Log.Info("Image data has been uploaded to the GPU.");
         }
         else
         {
-          Log.Failure("Foo.");
+          Log.Failure("Failed to upload image data to GPU.");
+          return false;
         }
 
         // Create sampler.
@@ -2404,6 +2406,64 @@ struct GpuImageData
   VkImageView ImageViewHandle;
 }
 
+Flag!"IsCompatible" IsImageCompatibleWithGpu(ref VulkanPhysicalDeviceData Gpu, ImageContainer Image)
+{
+  VkFormat VulkanTextureFormat = ImageFormatToVulkan(Image.Format);
+  if(VulkanTextureFormat == VK_FORMAT_UNDEFINED)
+  {
+    Log.Failure("Unable to find corresponding Vulkan format for %s.", Image.Format);
+    return No.IsCompatible;
+  }
+
+  VkFormatProperties FormatProperties;
+  vkGetPhysicalDeviceFormatProperties(Gpu.Handle, VulkanTextureFormat, &FormatProperties);
+
+  bool SupportsImageSampling = FormatProperties.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT;
+  if(!SupportsImageSampling)
+  {
+    Log.Failure("%s: Cannot sample this format with optimal tiling.", VulkanTextureFormat);
+    return No.IsCompatible;
+  }
+
+  VkImageFormatProperties ImageProperties;
+  vkGetPhysicalDeviceImageFormatProperties(Gpu.Handle,
+                                           VulkanTextureFormat,
+                                           VK_IMAGE_TYPE_2D,
+                                           VK_IMAGE_TILING_OPTIMAL,
+                                           VK_IMAGE_USAGE_SAMPLED_BIT,
+                                           0,
+                                           &ImageProperties);
+
+  auto ImageExtent = VkExtent3D(Image.Width, Image.Height, 1);
+  if(ImageProperties.maxExtent.width  < ImageExtent.width ||
+     ImageProperties.maxExtent.height < ImageExtent.height ||
+     ImageProperties.maxExtent.depth  < ImageExtent.depth)
+  {
+    Log.Failure("Given image extent (%s) does not fit the devices' maximum extent (%s).",
+                ImageExtent,
+                ImageProperties.maxExtent);
+    return No.IsCompatible;
+  }
+
+  if(Image.NumMipLevels > ImageProperties.maxMipLevels)
+  {
+    Log.Failure("Physical device accepts a maximum of %d Mip levels, the given image has %d",
+                ImageProperties.maxMipLevels, Image.NumMipLevels);
+    return No.IsCompatible;
+  }
+
+  if(Image.NumArrayIndices > ImageProperties.maxArrayLayers)
+  {
+    Log.Failure("Physical device accepts a maximum of %d array layers, the given image has %d",
+                ImageProperties.maxArrayLayers, Image.NumArrayIndices);
+    return No.IsCompatible;
+  }
+
+  // TODO(Manu): sampleCounts, maxResourceSize?
+
+  return Yes.IsCompatible;
+}
+
 // TODO(Manu): staged upload, optimal tiling, all mip-levels.
 Flag!"Success" UploadImageToGpu(VulkanDeviceData Device, VkCommandPool CommandPool, VkCommandBuffer CommandBuffer,
                                 ImageContainer Image, ref GpuImageData GpuImage,
@@ -2411,6 +2471,9 @@ Flag!"Success" UploadImageToGpu(VulkanDeviceData Device, VkCommandPool CommandPo
 {
   GpuImage.ImageFormat = Image.Format.ImageFormatToVulkan();
   Log.Info("Image format (Krepel => Vulkan): %s", Image.Format, GpuImage.ImageFormat);
+
+  assert(GpuImage.ImageFormat != ImageFormat.Unknown,
+         "Could not convert Krepel to Vulkan image format. Did you run IsImageCompatibleWithGpu before calling this function?");
 
   VkImageCreateInfo ImageCreateInfo;
   with(ImageCreateInfo)
