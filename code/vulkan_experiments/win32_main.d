@@ -128,6 +128,116 @@ void Win32SetupConsole(CString Title)
   SetConsoleTitleA(Title);
 }
 
+struct WindowConstructionData
+{
+  Required!HINSTANCE ProcessHandle;
+  Required!string WindowClassName;
+  Required!int ClientWidth;
+  Required!int ClientHeight;
+
+  Optional!int WindowX;
+  Optional!int WindowY;
+}
+
+HWND CreateWindow(IAllocator Allocator, WindowConstructionData Args,
+                  LogData* Log = null)
+{
+  if(!Args.ProcessHandle.IsSet)
+  {
+    Log.Failure("Need a valid process handle.");
+    return null;
+  }
+  assert(Args.ProcessHandle.Value);
+
+  if(!Args.WindowClassName.IsSet)
+  {
+    Log.Failure("Need a window class name.");
+    return null;
+  }
+  assert(Args.WindowClassName.Value);
+
+  if(!Args.ClientWidth.IsSet)
+  {
+    Log.Failure("Need a window client width.");
+    return null;
+  }
+
+  if(!Args.ClientHeight.IsSet)
+  {
+    Log.Failure("Need a window client height.");
+    return null;
+  }
+
+  WNDCLASSA WindowClass;
+  with(WindowClass)
+  {
+    style = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;
+    lpfnWndProc = cast(WNDPROC)cast(void*)&Win32MainWindowCallback;
+    hInstance = Args.ProcessHandle.Value;
+    auto ClassName = UString(Args.WindowClassName.Value, Allocator);
+    lpszClassName = ClassName.ptr;
+  }
+
+  if(!RegisterClassA(&WindowClass))
+  {
+    Log.Failure("Failed to register window class: %s", WindowClass.lpszClassName.fromStringz);
+    return null;
+  }
+
+  enum WindowStyleEx = 0;
+  enum WindowStyle = WS_OVERLAPPEDWINDOW | WS_VISIBLE;
+
+  RECT WindowRect = { top: 0, left: 0, right: Args.ClientWidth.Value, bottom: Args.ClientHeight.Value };
+  AdjustWindowRectEx(&WindowRect, WindowStyle, FALSE, WindowStyleEx);
+
+  with(WindowRect)
+  {
+    right -= left;
+    bottom -= top;
+
+    // Apply user translation
+    left = cast(LONG)Args.WindowX.ValueOr(0);
+    right += left;
+    top = cast(LONG)Args.WindowY.ValueOr(0);
+    bottom += top;
+  }
+
+  RECT WindowWorkArea;
+  SystemParametersInfoW(SPI_GETWORKAREA, 0, &WindowWorkArea, 0);
+  WindowRect.left  += WindowWorkArea.left;
+  WindowRect.right += WindowWorkArea.left;
+  WindowRect.top    += WindowWorkArea.top;
+  WindowRect.bottom += WindowWorkArea.top;
+
+  HWND WindowHandle;
+  const WindowX = Args.WindowX.IsSet ? WindowRect.left : CW_USEDEFAULT;
+  const WindowY = Args.WindowY.IsSet ? WindowRect.top : CW_USEDEFAULT;
+  const WindowWidth = WindowRect.right - WindowRect.left;
+  const WindowHeight = WindowRect.bottom - WindowRect.top;
+  WindowHandle = CreateWindowExA(WindowStyleEx,             // _In_     DWORD     dwExStyle
+                                 WindowClass.lpszClassName, // _In_opt_ LPCWSTR   lpClassName
+                                 "The Title Text".ptr,      // _In_opt_ LPCWSTR   lpWindowName
+                                 WindowStyle,               // _In_     DWORD     dwStyle
+                                 WindowX, WindowY,          // _In_     int       X, Y
+                                 WindowWidth, WindowHeight, // _In_     int       nWidth, nHeight
+                                 null,                      // _In_opt_ HWND      hWndParent
+                                 null,                      // _In_opt_ HMENU     hMenu
+                                 Args.ProcessHandle.Value,  // _In_opt_ HINSTANCE hInstance
+                                 null);                     // _In_opt_ LPVOID    lpParam
+
+  if(WindowHandle is null)
+  {
+    Log.Failure("Failed to create window.");
+  }
+
+  return WindowHandle;
+}
+
+void DestroyWindow(HWND WindowHandle)
+{
+  // TODO(Manu): Implement?
+}
+
 int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
               LPSTR CommandLine, int ShowCode)
 {
@@ -142,102 +252,80 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
     return 1;
   }
 
-  WNDCLASSA WindowClass;
-  with(WindowClass)
-  {
-    style = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;
-    lpfnWndProc = cast(WNDPROC)cast(void*)&Win32MainWindowCallback;
-    hInstance = Instance;
-    lpszClassName = "D_WindowClass";
-  }
+  WindowConstructionData WindowArgs = {
+    ProcessHandle: Instance,
+    WindowClassName: "KrepelVulkanWindowClass",
+    ClientWidth: 768,
+    ClientHeight: 768,
+  };
+  HWND Window = CreateWindow(.Allocator, WindowArgs,
+                             .Log);
 
-  if(RegisterClassA(&WindowClass))
+  if(Window)
   {
-    HWND Window = CreateWindowExA(0,
-                                  WindowClass.lpszClassName,
-                                  "The Title Text".ptr,
-                                  WS_OVERLAPPEDWINDOW | WS_VISIBLE,
-                                  CW_USEDEFAULT, CW_USEDEFAULT,
-                                  CW_USEDEFAULT, CW_USEDEFAULT,
-                                  null,
-                                  null,
-                                  Instance,
-                                  null);
+    bool VulkanInitialized;
 
-    if(Window)
     {
-      bool VulkanInitialized;
-
-      {
-        Log.BeginScope("Initializing Vulkan.");
-        VulkanInitialized = Vulkan.Initialize(Instance, Window);
-        if(VulkanInitialized) Log.EndScope("Vulkan initialized successfully.");
-        else                  Log.EndScope("Failed to initialize Vulkan.");
-      }
-
+      Log.BeginScope("Initializing Vulkan.");
+      VulkanInitialized = Vulkan.Initialize(Instance, Window);
       if(VulkanInitialized) Log.EndScope("Vulkan initialized successfully.");
       else                  Log.EndScope("Failed to initialize Vulkan.");
+    }
 
-      if(VulkanInitialized)
+    if(VulkanInitialized) Log.EndScope("Vulkan initialized successfully.");
+    else                  Log.EndScope("Failed to initialize Vulkan.");
+
+    if(VulkanInitialized)
+    {
+      scope(success) Vulkan.Cleanup();
+
+      SetWindowLongPtr(Window, GWLP_USERDATA, cast(LONG_PTR)Vulkan.AsPointerTo!void);
+      scope(exit) SetWindowLongPtr(Window, GWLP_USERDATA, cast(LONG_PTR)null);
+
       {
-        scope(success) Vulkan.Cleanup();
+        Log.BeginScope("Preparing Swapchain for the first time.");
+        Vulkan.IsPrepared = Vulkan.PrepareSwapchain(1200, 720);
+        if(Vulkan.IsPrepared) Log.EndScope("Swapchain is prepared.");
+        else                  Log.EndScope("Failed to prepare Swapchain.");
+      }
 
-        SetWindowLongPtr(Window, GWLP_USERDATA, cast(LONG_PTR)Vulkan.AsPointerTo!void);
-        scope(exit) SetWindowLongPtr(Window, GWLP_USERDATA, cast(LONG_PTR)null);
-
+      if(Vulkan.IsPrepared)
+      {
+        //
+        // Main Loop
+        //
+        Vulkan.DepthStencilValue = 1.0f;
+        Vulkan.DepthStencilIncrement = 0.0f;
+        .Running = true;
+        while(.Running)
         {
-          Log.BeginScope("Preparing Swapchain for the first time.");
-          Vulkan.IsPrepared = Vulkan.PrepareSwapchain(1200, 720);
-          if(Vulkan.IsPrepared) Log.EndScope("Swapchain is prepared.");
-          else                  Log.EndScope("Failed to prepare Swapchain.");
-        }
+          Win32ProcessPendingMessages();
 
-        if(Vulkan.IsPrepared)
-        {
-          //
-          // Main Loop
-          //
-          Vulkan.DepthStencilValue = 1.0f;
-          Vulkan.DepthStencilIncrement = 0.0f;
-          .Running = true;
-          while(.Running)
+          Vulkan.DepthStencilValue = Clamp(Vulkan.DepthStencilValue + Vulkan.DepthStencilIncrement, 0.8f, 1.0f);
+
+          if(Vulkan.DepthStencilValue == 1.0f)
           {
-            Win32ProcessPendingMessages();
-
-            Vulkan.DepthStencilValue = Clamp(Vulkan.DepthStencilValue + Vulkan.DepthStencilIncrement, 0.8f, 1.0f);
-
-            if(Vulkan.DepthStencilValue == 1.0f)
-            {
-              Vulkan.DepthStencilIncrement = -0.001;
-            }
-            else if(Vulkan.DepthStencilValue == 0.8f)
-            {
-              Vulkan.DepthStencilIncrement = 0.001;
-            }
-
-            //Log.Info("Depth Stencil Value Sample: %f", Vulkan.DepthStencilValue);
-
-            if(.IsResizeRequested)
-            {
-              Log.BeginScope("Resizing swapchain.");
-              scope(exit) Log.EndScope("Finished resizing swapchain.");
-              Vulkan.Resize(.ResizeRequest_Width, .ResizeRequest_Height);
-              .IsResizeRequested = false;
-            }
-
-            RedrawWindow(Window, null, null, RDW_INTERNALPAINT);
+            Vulkan.DepthStencilIncrement = -0.001;
           }
+          else if(Vulkan.DepthStencilValue == 0.8f)
+          {
+            Vulkan.DepthStencilIncrement = 0.001;
+          }
+
+          //Log.Info("Depth Stencil Value Sample: %f", Vulkan.DepthStencilValue);
+
+          if(.IsResizeRequested)
+          {
+            Log.BeginScope("Resizing swapchain.");
+            scope(exit) Log.EndScope("Finished resizing swapchain.");
+            Vulkan.Resize(.ResizeRequest_Width, .ResizeRequest_Height);
+            .IsResizeRequested = false;
+          }
+
+          RedrawWindow(Window, null, null, RDW_INTERNALPAINT);
         }
       }
     }
-    else
-    {
-      Log.Failure("Unable to create window.");
-    }
-  }
-  else
-  {
-    Log.Failure("Failed to create window class.");
   }
 
   return 0;
