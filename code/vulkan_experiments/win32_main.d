@@ -1150,7 +1150,7 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
       }
       Width = SwapchainExtent.width;
       Height = SwapchainExtent.height;
-      Log.Info("Swapchain extents: ", SwapchainExtent);
+      Log.Info("Swapchain extents: %s", SwapchainExtent);
 
       VkPresentModeKHR SwapchainPresentMode = VK_PRESENT_MODE_FIFO_KHR;
 
@@ -2375,28 +2375,6 @@ void Cleanup(VulkanData Vulkan)
   Vulkan.Gpu.QueueProperties.Clear();
 }
 
-extern(Windows) VkBool32 DebugMessageCallback(
-  VkDebugReportFlagsEXT Flags,
-  VkDebugReportObjectTypeEXT ObjectType,
-  ulong SourceObject,
-  size_t Location,
-  int MessageCode,
-  in char* LayerPrefix,
-  in char* Message,
-  void* UserData)
-{
-  if(Flags & VK_DEBUG_REPORT_ERROR_BIT_EXT)
-  {
-    Log.Failure("[%s] %d: %s", fromStringz(LayerPrefix), MessageCode, fromStringz(Message));
-  }
-  else if(Flags & VK_DEBUG_REPORT_WARNING_BIT_EXT)
-  {
-    Log.Warning("[%s] %d: %s", fromStringz(LayerPrefix), MessageCode, fromStringz(Message));
-  }
-
-  return false;
-}
-
 struct GpuImageData
 {
   VkImage ImageHandle;
@@ -2624,4 +2602,30 @@ Flag!"Success" UploadImageToGpu(VulkanDeviceData Device, VkCommandPool CommandPo
   // TODO(Manu): Synchronization?
 
   return Yes.Success;
+}
+
+extern(Windows) VkBool32 DebugMessageCallback(
+  VkDebugReportFlagsEXT Flags,
+  VkDebugReportObjectTypeEXT ObjectType,
+  ulong SourceObject,
+  size_t Location,
+  int MessageCode,
+  in char* LayerPrefix,
+  in char* Message,
+  void* UserData)
+{
+  if(Flags & VK_DEBUG_REPORT_ERROR_BIT_EXT)
+  {
+    Log.Failure("[%s] Code %d: %s", fromStringz(LayerPrefix), MessageCode, fromStringz(Message));
+  }
+  else if(Flags & VK_DEBUG_REPORT_WARNING_BIT_EXT)
+  {
+    Log.Warning("[%s] Code %d: %s", fromStringz(LayerPrefix), MessageCode, fromStringz(Message));
+  }
+  else
+  {
+    Log.Info("[%s] Code %d: %s", fromStringz(LayerPrefix), MessageCode, fromStringz(Message));
+  }
+
+  return false;
 }
