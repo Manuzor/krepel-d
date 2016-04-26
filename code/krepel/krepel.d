@@ -77,6 +77,55 @@ static struct EnumIterator(EnumType)
   void popBack()  { _Back  = cast(EnumType)(cast(ulong)_Back  - 1); }
 }
 
+/// Tracks whether the value of a given type was set or not.
+///
+/// Mostly useful for members of structs/classes.
+struct TrackedValue(Type)
+{
+  bool IsSet;
+  Type _Value = void;
+
+  this(AssignType)(AssignType Value)
+  {
+    this.Value = Value;
+  }
+
+  /// Getter
+  @property inout(Type) Value() inout
+  {
+    assert(this.IsSet);
+    return cast(typeof(return))this._Value;
+  }
+
+  /// Setter
+  @property void Value(AssignType)(AssignType NewValue)
+  {
+    this._Value = NewValue;
+    this.IsSet = true;
+  }
+
+  void opAssign(AssignType)(AssignType NewValue)
+  {
+    this.Value = NewValue;
+  }
+
+  inout(Type) ValueOr(FallbackType : Type)(FallbackType FallbackValue) inout
+  {
+    return this.IsSet ? this._Value : FallbackValue;
+  }
+
+  inout(To) opCast(To)() inout
+  {
+    return cast(typeof(return))this.Value;
+  }
+}
+
+// A nicer name for optional values, e.g. `Optional!int Count;`.
+alias Optional = TrackedValue;
+
+// A nicer name for required values, e.g. `Optional!Vector3 Extents;`.
+alias Required = TrackedValue;
+
 //
 // Unit Tests
 //
@@ -106,24 +155,44 @@ unittest
   assert(Count == 2);
 }
 
-version(none)
-void main()
+unittest
 {
-  import krepel.memory;
+  import core.exception : AssertError;
+  import std.exception : assertThrown;
 
-  import std.c.stdlib;
+  TrackedValue!int Integer;
+  assert(!Integer.IsSet);
+  assertThrown!AssertError(Integer.Value == 0);
+  assertThrown!AssertError(cast(byte)Integer == 0);
+  assert(Integer.ValueOr(1337) == 1337);
+  Integer.Value = 42;
+  assert(Integer.Value == 42);
+  assert(Integer.ValueOr(1337) == 42);
+  assert(cast(float)Integer == 42.0f);
 
-  const BufferSize = 1.MiB;
-  auto BufferPtr = cast(ubyte*)malloc(BufferSize);
-  scope(exit) free(BufferPtr);
+  static struct FooData
+  {
+    int Data;
 
-  GlobalAllocator.Memory.Initialize(BufferPtr[0 .. BufferSize]);
-  scope(exit) GlobalAllocator.Memory.Deinitialize();
+    inout(To) opCast(To : int)() inout { return this.Data; }
 
-  Log.Sinks ~= ToDelegate(&StdoutLogSink);
+    void opAssign(Type)(Type Value)
+    {
+      this.Data = cast(int)Value;
+    }
+  }
 
-  Log.Info("Hello");
-  Log.Info("World");
+  static struct BarData
+  {
+    float Data;
 
-  return;
+    To opCast(To)()
+    {
+      return cast(typeof(return))this.Data;
+    }
+  }
+
+  TrackedValue!FooData Foo;
+  Foo = BarData(42.0f);
+  assert(cast(int)Foo == 42);
 }
