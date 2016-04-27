@@ -1,4 +1,4 @@
-module win32_experiments.win32_vkmap;
+module krepel.input.win32_vkmap;
 
 import krepel.input;
 

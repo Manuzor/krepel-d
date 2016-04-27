@@ -154,8 +154,6 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
 
 void Win32ProcessPendingMessages(ref InputQueue Queue)
 {
-  import win32_experiments.win32_vkmap;
-
   MSG Message;
   if(PeekMessageA(&Message, null, 0, 0, PM_REMOVE))
   {
@@ -416,6 +414,8 @@ bool InitDevice(StateData* State)
   D3D11_VIEWPORT ViewPort;
   with(ViewPort)
   {
+    TopLeftX = 0.0f;
+    TopLeftY = 0.0f;
     Width = cast(FLOAT)WindowWidth;
     Height = cast(FLOAT)WindowHeight;
     MinDepth = 0.0f;
