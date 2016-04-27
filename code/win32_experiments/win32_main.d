@@ -4,6 +4,7 @@ version(Windows):
 import krepel;
 import krepel.win32;
 import krepel.math;
+import krepel.input;
 
 import krepel.win32.directx.dxgi;
 import krepel.win32.directx.d3d11;
@@ -113,11 +114,27 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
 
       version(XInput_RuntimeLinking) LoadXInput();
 
+      auto SystemInput = MainAllocator.New!InputContext(MainAllocator);
+      scope(exit) MainAllocator.Delete(SystemInput);
+
+      SystemInput.RegisterInput(InputSource(InputType.Button, "MoveForward"), Keyboard.W);
+
+      auto Queue = InputQueue(MainAllocator);
+
       GlobalRunning = true;
 
       while(GlobalRunning)
       {
-        Win32ProcessPendingMessages();
+        scope(exit) Queue.Clear();
+        Win32ProcessPendingMessages(Queue);
+
+        foreach(ref Input; Queue)
+        {
+          SystemInput.MapInput(Input);
+        }
+
+        auto ForwardInput = SystemInput["MoveForward"];
+        if(ForwardInput && ForwardInput.Button.IsDown) Log.Info("W is down!");
 
         XINPUT_STATE ControllerState;
         if(XInputGetState(0, &ControllerState) == ERROR_SUCCESS)
@@ -135,7 +152,7 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
   return 0;
 }
 
-void Win32ProcessPendingMessages()
+void Win32ProcessPendingMessages(ref InputQueue Queue)
 {
   MSG Message;
   if(PeekMessageA(&Message, null, 0, 0, PM_REMOVE))
@@ -153,15 +170,26 @@ void Win32ProcessPendingMessages()
       case WM_KEYUP:
       {
         auto VKCode = Message.wParam;
+        auto WasDown = (Message.lParam & (1 << 30)) != 0;
+        auto IsDown = (Message.lParam & (1 << 31)) == 0;
 
-        if(VKCode == VK_SPACE)
+        if(WasDown == IsDown)
         {
-          Log.Info("Space");
+          // No change.
+          break;
         }
-        else if(VKCode == VK_ESCAPE)
+
+        auto KeyName = Win32VirtualKeyToInputId(VKCode, Message.lParam);
+
+        if(KeyName is null)
         {
-          GlobalRunning = false;
+          Log.Warning("Unknown virtual key: 0x%x", VKCode);
+          break;
         }
+
+        InputButton Key;
+        Key.IsDown = IsDown;
+        Queue ~= InputSource(KeyName, Key);
 
       } break;
 
@@ -386,6 +414,8 @@ bool InitDevice(StateData* State)
   D3D11_VIEWPORT ViewPort;
   with(ViewPort)
   {
+    TopLeftX = 0.0f;
+    TopLeftY = 0.0f;
     Width = cast(FLOAT)WindowWidth;
     Height = cast(FLOAT)WindowHeight;
     MinDepth = 0.0f;
