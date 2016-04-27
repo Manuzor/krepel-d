@@ -117,6 +117,7 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
       auto SystemInput = MainAllocator.New!InputContext(MainAllocator);
       scope(exit) MainAllocator.Delete(SystemInput);
 
+      SystemInput.RegisterInput(InputSource(InputType.Button, "Quit"), Keyboard.Escape);
       SystemInput.RegisterInput(InputSource(InputType.Button, "MoveForward"), Keyboard.W);
 
       auto Queue = InputQueue(MainAllocator);
@@ -126,12 +127,15 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
       while(GlobalRunning)
       {
         scope(exit) Queue.Clear();
-        Win32ProcessPendingMessages(Queue);
+        Win32MessagePump(State.WindowHandle, Queue);
 
         foreach(ref Input; Queue)
         {
           SystemInput.MapInput(Input);
         }
+
+        auto QuitInput = SystemInput["Quit"];
+        if(QuitInput && QuitInput.Button.IsDown) .GlobalRunning = false;
 
         auto ForwardInput = SystemInput["MoveForward"];
         if(ForwardInput && ForwardInput.Button.IsDown) Log.Info("W is down!");
@@ -152,7 +156,9 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
   return 0;
 }
 
-void Win32ProcessPendingMessages(ref InputQueue Queue)
+/// Params:
+///   WindowHandle = Can be $(D null).
+void Win32MessagePump(HWND WindowHandle, ref InputQueue Queue)
 {
   MSG Message;
   if(PeekMessageA(&Message, null, 0, 0, PM_REMOVE))
@@ -167,30 +173,13 @@ void Win32ProcessPendingMessages(ref InputQueue Queue)
       case WM_SYSKEYDOWN: goto case; // fallthrough
       case WM_SYSKEYUP:   goto case; // fallthrough
       case WM_KEYDOWN:    goto case; // fallthrough
-      case WM_KEYUP:
+      case WM_KEYUP:      goto case; // fallthrough
+      case WM_INPUT:
       {
-        auto VKCode = Message.wParam;
-        auto WasDown = (Message.lParam & (1 << 30)) != 0;
-        auto IsDown = (Message.lParam & (1 << 31)) == 0;
-
-        if(WasDown == IsDown)
-        {
-          // No change.
-          break;
-        }
-
-        auto KeyName = Win32VirtualKeyToInputId(VKCode, Message.lParam);
-
-        if(KeyName is null)
-        {
-          Log.Warning("Unknown virtual key: 0x%x", VKCode);
-          break;
-        }
-
-        InputButton Key;
-        Key.IsDown = IsDown;
-        Queue ~= InputSource(KeyName, Key);
-
+        // TODO(Manu): Deal with the return value.
+        Win32ProcessInputMessage(WindowHandle, Message,
+                                 Queue,
+                                 .Log);
       } break;
 
       default:
@@ -225,7 +214,8 @@ LRESULT Win32MainWindowCallback(HWND Window, UINT Message,
     case WM_SYSKEYDOWN: goto case; // fallthrough
     case WM_SYSKEYUP:   goto case; // fallthrough
     case WM_KEYDOWN:    goto case; // fallthrough
-    case WM_KEYUP: assert(0, "Keyboard messages are handled in the main loop.");
+    case WM_KEYUP:      goto case; // fallthrough
+    case WM_INPUT: assert(0, "Input messages are handled in the main loop.");
 
     case WM_ACTIVATEAPP:
     {

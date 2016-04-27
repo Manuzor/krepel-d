@@ -1,8 +1,61 @@
 module krepel.input.win32_vkmap;
 
-import krepel.input;
+import krepel;
+import krepel.win32;
 
-import core.sys.windows.windows;
+import krepel.input.input;
+import krepel.input.keyboard;
+import krepel.input.mouse;
+
+
+Flag!"Processed" Win32ProcessInputMessage(HWND WindowHandle, MSG Message,
+                                          ref InputQueue Queue,
+                                          LogData* Log = null)
+{
+  //
+  // Keyboard messages
+  //
+  if(Message.message >= WM_KEYFIRST && Message.message <= WM_KEYLAST)
+  {
+    //Log.Info("Keyboard message: %s", Win32MessageIdToString(Message.message));
+
+    auto VKCode = Message.wParam;
+    auto WasDown = (Message.lParam & (1 << 30)) != 0;
+    auto IsDown = (Message.lParam & (1 << 31)) == 0;
+
+    if(WasDown == IsDown)
+    {
+      // No change.
+      return Yes.Processed;
+    }
+
+    auto KeyName = Win32VirtualKeyToInputId(VKCode, Message.lParam);
+
+    if(KeyName is null)
+    {
+      Log.Warning("Unable to map virtual key code %d (Hex: 0x%x)", VKCode, VKCode);
+      return Yes.Processed;
+    }
+
+    InputButton Key;
+    Key.IsDown = IsDown;
+    Queue ~= InputSource(KeyName, Key);
+
+    return Yes.Processed;
+  }
+
+  //
+  // Raw input messages
+  //
+  if(Message.message == WM_INPUT)
+  {
+    Log.Info("Raw input message: %s", Win32MessageIdToString(Message.message));
+
+    return Yes.Processed;
+  }
+
+  return No.Processed;
+}
 
 InputId Win32VirtualKeyToInputId(WPARAM VKCode, LPARAM lParam)
 {
