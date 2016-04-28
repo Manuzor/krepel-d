@@ -134,9 +134,13 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
         }
       }
 
-      RenderInputLayoutDescription[1] Layout =
+      RenderInputLayoutDescription[5] Layout =
       [
         RenderInputLayoutDescription(UString("POSITION", MainAllocator), 0, InputDescriptionDataType.Float, 3, true),
+        RenderInputLayoutDescription(UString("UV", MainAllocator), 0, InputDescriptionDataType.Float, 2, true),
+        RenderInputLayoutDescription(UString("NORMAL", MainAllocator), 0, InputDescriptionDataType.Float, 3, true),
+        RenderInputLayoutDescription(UString("TANGENT", MainAllocator), 0, InputDescriptionDataType.Float, 4, true),
+        RenderInputLayoutDescription(UString("BINORMAL", MainAllocator), 0, InputDescriptionDataType.Float, 3, true),
       ];
       auto InputLayoutDescription = Device.CreateInputLayoutDescription(Layout);
       scope(exit) Device.DestroyInputLayoutDescription(InputLayoutDescription);

@@ -130,6 +130,41 @@ class DxInputLayoutDescription : IRenderInputLayoutDescription
     SourceDescriptions.Allocator = Allocator;
   }
 
+  DXGI_FORMAT GetFormatFromDescription(RenderInputLayoutDescription Desc)
+  {
+    final switch(Desc.DataType)
+    {
+      case InputDescriptionDataType.Int:
+        switch(Desc.NumberOfElements)
+        {
+          case 1:
+            return DXGI_FORMAT_R32_UINT;
+          case 2:
+            return DXGI_FORMAT_R32G32_UINT;
+          case 3:
+            return DXGI_FORMAT_R32G32B32_UINT;
+          case 4:
+            return DXGI_FORMAT_R32G32B32A32_UINT;
+          default:
+            return DXGI_FORMAT_UNKNOWN;
+        }
+      case InputDescriptionDataType.Float:
+        switch(Desc.NumberOfElements)
+        {
+          case 1:
+            return DXGI_FORMAT_R32_FLOAT;
+          case 2:
+            return DXGI_FORMAT_R32G32_FLOAT;
+          case 3:
+            return DXGI_FORMAT_R32G32B32_FLOAT;
+          case 4:
+            return DXGI_FORMAT_R32G32B32A32_FLOAT;
+          default:
+            return DXGI_FORMAT_UNKNOWN;
+        }
+    }
+  }
+
   void SetDescription(RenderInputLayoutDescription[] Desc)
   {
     SourceDescriptions.Clear();
@@ -137,13 +172,18 @@ class DxInputLayoutDescription : IRenderInputLayoutDescription
     InputDescription.Clear();
     foreach(SourceDescription; SourceDescriptions)
     {
+      auto Format = GetFormatFromDescription(SourceDescription);
+      if (Format == DXGI_FORMAT_UNKNOWN)
+      {
+        Log.Failure("Not suppported InputLayout Format");
+      }
       with(SourceDescription)
       {
         InputDescription.PushBack(
           D3D11_INPUT_ELEMENT_DESC(
             SemanticName.Data.Data.ptr,
             SemanticIndex,
-            DXGI_FORMAT_R32G32B32_FLOAT, //TODO(Marvin): Properly set format
+            Format,
             0,
             0,
             PerVertexData ? D3D11_INPUT_PER_VERTEX_DATA : D3D11_INPUT_PER_INSTANCE_DATA,
