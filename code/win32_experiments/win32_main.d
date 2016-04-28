@@ -87,7 +87,10 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
   with(WindowClass)
   {
     style = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;
-    lpfnWndProc = &Win32MainWindowCallback;
+    // The wrapped WinAPI of D requires a nothrow callback, which is a
+    // ridiculous requirement since there's probably not even a single C++
+    // application that passes a nothrow callback here.
+    lpfnWndProc = cast(typeof(lpfnWndProc))cast(void*)&Win32MainWindowCallback;
     hInstance = Instance;
     lpszClassName = "D_WindowClass";
   }
@@ -119,17 +122,23 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
 
       SystemInput.RegisterInput(InputSource(InputType.Button, "Quit"), Keyboard.Escape);
       SystemInput.RegisterInput(InputSource(InputType.Button, "MoveForward"), Keyboard.W);
+      SystemInput.RegisterInput(InputSource(InputType.Button, "Select"), Mouse.LeftButton);
 
-      auto Queue = InputQueue(MainAllocator);
+      auto Window = MainAllocator.New!WindowData(MainAllocator);
+      scope(exit) MainAllocator.Delete(Window);
+
+      SetWindowLongPtrA(State.WindowHandle, GWLP_USERDATA, *cast(LONG_PTR*)&Window);
+      scope(exit) SetWindowLongPtrA(State.WindowHandle, GWLP_USERDATA, cast(LONG_PTR)null);
 
       GlobalRunning = true;
 
       while(GlobalRunning)
       {
-        scope(exit) Queue.Clear();
-        Win32MessagePump(State.WindowHandle, Queue);
+        scope(exit) Window.InputQueue.Clear();
 
-        foreach(ref Input; Queue)
+        Win32MessagePump();
+
+        foreach(ref Input; Window.InputQueue)
         {
           SystemInput.MapInput(Input);
         }
@@ -138,7 +147,10 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
         if(QuitInput && QuitInput.Button.IsDown) .GlobalRunning = false;
 
         auto ForwardInput = SystemInput["MoveForward"];
-        if(ForwardInput && ForwardInput.Button.IsDown) Log.Info("W is down!");
+        if(ForwardInput && ForwardInput.Button.IsDown) Log.Info("Moving Forward!");
+
+        auto SelectionInput = SystemInput["Select"];
+        if(SelectionInput && SelectionInput.Button.IsDown) Log.Info("Select something.");
 
         XINPUT_STATE ControllerState;
         if(XInputGetState(0, &ControllerState) == ERROR_SUCCESS)
@@ -158,7 +170,7 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
 
 /// Params:
 ///   WindowHandle = Can be $(D null).
-void Win32MessagePump(HWND WindowHandle, ref InputQueue Queue)
+void Win32MessagePump()
 {
   MSG Message;
   if(PeekMessageA(&Message, null, 0, 0, PM_REMOVE))
@@ -168,18 +180,6 @@ void Win32MessagePump(HWND WindowHandle, ref InputQueue Queue)
       case WM_QUIT:
       {
         GlobalRunning = false;
-      } break;
-
-      case WM_SYSKEYDOWN: goto case; // fallthrough
-      case WM_SYSKEYUP:   goto case; // fallthrough
-      case WM_KEYDOWN:    goto case; // fallthrough
-      case WM_KEYUP:      goto case; // fallthrough
-      case WM_INPUT:
-      {
-        // TODO(Manu): Deal with the return value.
-        Win32ProcessInputMessage(WindowHandle, Message,
-                                 Queue,
-                                 .Log);
       } break;
 
       default:
@@ -192,9 +192,11 @@ void Win32MessagePump(HWND WindowHandle, ref InputQueue Queue)
 }
 
 extern(Windows)
-LRESULT Win32MainWindowCallback(HWND Window, UINT Message,
-                                WPARAM WParam, LPARAM LParam) nothrow
+LRESULT Win32MainWindowCallback(HWND WindowHandle, UINT Message,
+                                WPARAM WParam, LPARAM LParam)
 {
+  auto Window = cast(WindowData)cast(void*)GetWindowLongPtrW(WindowHandle, GWLP_USERDATA);
+
   LRESULT Result = 0;
 
   switch(Message)
@@ -211,11 +213,15 @@ LRESULT Win32MainWindowCallback(HWND Window, UINT Message,
       GlobalRunning = false;
     } break;
 
-    case WM_SYSKEYDOWN: goto case; // fallthrough
-    case WM_SYSKEYUP:   goto case; // fallthrough
-    case WM_KEYDOWN:    goto case; // fallthrough
-    case WM_KEYUP:      goto case; // fallthrough
-    case WM_INPUT: assert(0, "Input messages are handled in the main loop.");
+    case WM_KEYFIRST:   .. case WM_KEYLAST:   goto case; // fallthrough
+    case WM_MOUSEFIRST: .. case WM_MOUSELAST: goto case; // fallthrough
+    case WM_INPUT:
+    {
+      // TODO(Manu): Deal with the return value?
+      Win32ProcessInputMessage(WindowHandle, Message, WParam, LParam,
+                               Window.InputQueue,
+                               .Log);
+    } break;
 
     case WM_ACTIVATEAPP:
     {
@@ -225,22 +231,32 @@ LRESULT Win32MainWindowCallback(HWND Window, UINT Message,
     case WM_PAINT:
     {
       PAINTSTRUCT Paint;
-      HDC DeviceContext = BeginPaint(Window, &Paint);
-      //win32_main_dimension WindowDim = Win32GetWindowDimension(Window);
+      HDC DeviceContext = BeginPaint(WindowHandle, &Paint);
+      //win32_main_dimension WindowDim = Win32GetWindowDimension(WindowHandle);
       //Win32DisplayBufferInWindow(&GlobalBackbuffer, DeviceContext,
       //                           WindowDim.Width, WindowDim.Height);
 
-      EndPaint(Window, &Paint);
+      EndPaint(WindowHandle, &Paint);
     } break;
 
     default:
     {
       // OutputDebugStringA("Default\n");
-      Result = DefWindowProcA(Window, Message, WParam, LParam);
+      Result = DefWindowProcA(WindowHandle, Message, WParam, LParam);
     } break;
   }
 
   return Result;
+}
+
+class WindowData
+{
+  InputQueueData InputQueue;
+
+  this(IAllocator Allocator)
+  {
+    this.InputQueue.Allocator = Allocator;
+  }
 }
 
 struct StateData

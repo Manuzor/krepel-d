@@ -66,17 +66,7 @@ struct InputSource
   }
 }
 
-struct InputQueue
-{
-  Array!InputSource Data;
-
-  this(IAllocator Allocator)
-  {
-    Data.Allocator = Allocator;
-  }
-
-  alias Data this;
-}
+alias InputQueueData = Array!InputSource;
 
 class InputContext
 {
@@ -112,16 +102,8 @@ class InputContext
   {
     foreach(TriggerId; TriggerIds)
     {
-      auto Slot = InputMap.Get(TriggerId);
-      if(Slot)
-      {
-        // TODO(Manu): We are overwriting an existing input slot, is that ok?
-        *Slot = Input;
-      }
-      else
-      {
-        InputMap[TriggerId] = Input;
-      }
+      // TODO(Manu): We are potentially overwriting existing input slots. Is that ok?
+      InputMap[TriggerId] = Input;
     }
   }
 

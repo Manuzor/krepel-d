@@ -8,20 +8,20 @@ import krepel.input.keyboard;
 import krepel.input.mouse;
 
 
-Flag!"Processed" Win32ProcessInputMessage(HWND WindowHandle, MSG Message,
-                                          ref InputQueue Queue,
+Flag!"Processed" Win32ProcessInputMessage(HWND WindowHandle, UINT Message, WPARAM WParam, LPARAM LParam,
+                                          ref InputQueueData InputQueue,
                                           LogData* Log = null)
 {
   //
   // Keyboard messages
   //
-  if(Message.message >= WM_KEYFIRST && Message.message <= WM_KEYLAST)
+  if(Message >= WM_KEYFIRST && Message <= WM_KEYLAST)
   {
-    //Log.Info("Keyboard message: %s", Win32MessageIdToString(Message.message));
+    //Log.Info("Keyboard message: %s", Win32MessageIdToString(Message));
 
-    auto VKCode = Message.wParam;
-    auto WasDown = (Message.lParam & (1 << 30)) != 0;
-    auto IsDown = (Message.lParam & (1 << 31)) == 0;
+    auto VKCode = WParam;
+    auto WasDown = (LParam & (1 << 30)) != 0;
+    auto IsDown = (LParam & (1 << 31)) == 0;
 
     if(WasDown == IsDown)
     {
@@ -29,7 +29,7 @@ Flag!"Processed" Win32ProcessInputMessage(HWND WindowHandle, MSG Message,
       return Yes.Processed;
     }
 
-    auto KeyName = Win32VirtualKeyToInputId(VKCode, Message.lParam);
+    auto KeyName = Win32VirtualKeyToInputId(VKCode, LParam);
 
     if(KeyName is null)
     {
@@ -39,7 +39,60 @@ Flag!"Processed" Win32ProcessInputMessage(HWND WindowHandle, MSG Message,
 
     InputButton Key;
     Key.IsDown = IsDown;
-    Queue ~= InputSource(KeyName, Key);
+    InputQueue ~= InputSource(KeyName, Key);
+
+    return Yes.Processed;
+  }
+
+  //
+  // Mouse messages
+  //
+  if(Message >= WM_MOUSEFIRST && Message <= WM_MOUSELAST)
+  {
+    InputId ButtonName;
+    InputButton ButtonState;
+
+    switch(Message)
+    {
+      case WM_LBUTTONUP:
+      case WM_LBUTTONDOWN:
+      {
+        ButtonName = Mouse.LeftButton;
+        ButtonState.IsDown = Message == WM_LBUTTONDOWN;
+      } break;
+
+      case WM_RBUTTONUP:
+      case WM_RBUTTONDOWN:
+      {
+        ButtonName = Mouse.RightButton;
+        ButtonState.IsDown = Message == WM_RBUTTONDOWN;
+      } break;
+
+      case WM_MBUTTONUP:
+      case WM_MBUTTONDOWN:
+      {
+        ButtonName = Mouse.MiddleButton;
+        ButtonState.IsDown = Message == WM_MBUTTONDOWN;
+      } break;
+
+      case WM_XBUTTONUP:
+      case WM_XBUTTONDOWN:
+      {
+        // TODO(Manu): Check which one it is.
+        ButtonName = Mouse.ExtraButton1;
+        ButtonName = Mouse.ExtraButton2;
+        ButtonState.IsDown = Message == WM_XBUTTONDOWN;
+      } break;
+
+      // TODO(Manu): Mouse wheel, etc.
+
+      default: break;
+    }
+
+    if(ButtonName)
+    {
+      InputQueue ~= InputSource(ButtonName, ButtonState);
+    }
 
     return Yes.Processed;
   }
@@ -47,9 +100,9 @@ Flag!"Processed" Win32ProcessInputMessage(HWND WindowHandle, MSG Message,
   //
   // Raw input messages
   //
-  if(Message.message == WM_INPUT)
+  if(Message == WM_INPUT)
   {
-    Log.Info("Raw input message: %s", Win32MessageIdToString(Message.message));
+    Log.Info("Raw input message: %s", Win32MessageIdToString(Message));
 
     return Yes.Processed;
   }
