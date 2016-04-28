@@ -7,6 +7,11 @@ interface IShader
 
 }
 
+interface IRenderMesh
+{
+  uint GetIndexCount();
+}
+
 interface IRenderDeviceBuffer
 {
 

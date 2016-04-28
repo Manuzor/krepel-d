@@ -13,6 +13,7 @@ import krepel.win32.directx.uuidof;
 
 import krepel.d3d11_render_device;
 import krepel.render_device;
+import krepel.resources;
 
 version(Windows):
 import std.string : toStringz, fromStringz;
@@ -154,39 +155,20 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
           Device.ReleasePixelShader(PixelShader);
         }
       }
-      static struct SimpleVertex
+
+      ResourceManager Manager = MainAllocator.New!ResourceManager(MainAllocator);
+      auto WaveFrontLoader = MainAllocator.New!WavefrontResourceLoader();
+      Manager.RegisterLoader(WaveFrontLoader, WString(".obj", MainAllocator));
+      MeshResource Mesh = Manager.LoadMesh(WString("../data/mesh/Cube.obj", MainAllocator));
+
+      IRenderMesh RenderMesh = Device.CreateRenderMesh(Mesh.Meshes[0]);
+      scope(exit)
       {
-        Vector3 Position;
+        Device.ReleaseRenderMesh(RenderMesh);
+        Manager.DestroyResource(Mesh);
+        MainAllocator.Delete(WaveFrontLoader);
+        MainAllocator.Delete(Manager);
       }
-
-      SimpleVertex[3] Vertices =
-      [
-        SimpleVertex(Vector3( 0.0f,  0.5f,  0.5f)),
-        SimpleVertex(Vector3( 0.5f, -0.5f,  0.5f)),
-        SimpleVertex(Vector3(-0.5f, -0.5f,  0.5f)),
-      ];
-
-      D3D11_BUFFER_DESC VertexBufferDesc;
-      with(VertexBufferDesc)
-      {
-        Usage = D3D11_USAGE_DEFAULT;
-        ByteWidth = cast(UINT)Vertices.ByteCount;
-        BindFlags = D3D11_BIND_VERTEX_BUFFER;
-        CPUAccessFlags = 0;
-      }
-      D3D11_SUBRESOURCE_DATA InitData;
-      InitData.pSysMem = Vertices.ptr;
-
-      ID3D11Buffer VertexBuffer;
-      if(FAILED(Device.DeviceState.Device.CreateBuffer(&VertexBufferDesc, &InitData, &VertexBuffer)))
-      {
-        Log.Failure("Failed to create vertex buffer.");
-      }
-
-      UINT Stride = SimpleVertex.sizeof;
-      UINT Offset = 0;
-      Device.DeviceState.ImmediateContext.IASetVertexBuffers(0, 1, &VertexBuffer, &Stride, &Offset);
-      Device.DeviceState.ImmediateContext.IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
       version(XInput_RuntimeLinking) LoadXInput();
 
@@ -206,7 +188,8 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
         Device.ClearRenderTarget(CornflowerBlue);
         Device.SetVertexShader(VertexShader);
         Device.SetPixelShader(PixelShader);
-        Device.Draw(3);
+        Device.SetMesh(RenderMesh);
+        Device.DrawIndexed(RenderMesh.GetIndexCount());
         Device.Present();
       }
     }

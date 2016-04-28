@@ -10,6 +10,7 @@ import krepel.container;
 import krepel.render_device;
 import krepel.log;
 import krepel.math;
+import krepel.resources;
 
 version(D3D11_RuntimeLinking):
 
@@ -64,7 +65,28 @@ class DxShaderCode
 class DxShader : IShader
 {
   ARC!DxShaderCode Code;
+}
 
+class DxRenderMesh : IRenderMesh
+{
+  ID3D11Buffer VertexBuffer;
+  ID3D11Buffer IndexBuffer;
+  uint Stride;
+  uint Offset;
+  uint IndexCount;
+  uint IndexOffset;
+  DXGI_FORMAT IndexFormat;
+
+  override uint GetIndexCount()
+  {
+    return IndexCount;
+  }
+
+  ~this()
+  {
+    ReleaseAndNullify(VertexBuffer);
+    ReleaseAndNullify(IndexBuffer);
+  }
 }
 
 class DxVertexShader : DxShader
@@ -257,6 +279,63 @@ class D3D11RenderDevice : IRenderDevice
     return Shader;
   }
 
+  IRenderMesh CreateRenderMesh(SubMesh Mesh)
+  {
+    DxRenderMesh RenderMesh = Allocator.New!DxRenderMesh();
+
+    D3D11_BUFFER_DESC BufferDesc;
+    with(BufferDesc)
+    {
+      Usage = D3D11_USAGE_DEFAULT;
+      ByteWidth = cast(UINT)Mesh.Vertices[].ByteCount;
+      BindFlags = D3D11_BIND_VERTEX_BUFFER;
+      CPUAccessFlags = 0;
+    }
+    D3D11_SUBRESOURCE_DATA InitData;
+    InitData.pSysMem = Mesh.Vertices.Data.ptr;
+
+
+    if(FAILED(DeviceState.Device.CreateBuffer(&BufferDesc, &InitData, &RenderMesh.VertexBuffer)))
+    {
+      Log.Failure("Failed to create vertex buffer.");
+    }
+
+    BufferDesc.ByteWidth = cast(UINT)Mesh.Indices[].ByteCount;
+    BufferDesc.BindFlags = D3D11_BIND_INDEX_BUFFER;
+
+    InitData.pSysMem = Mesh.Indices.Data.ptr;
+
+    if(FAILED(DeviceState.Device.CreateBuffer(&BufferDesc, &InitData, &RenderMesh.IndexBuffer)))
+    {
+      Log.Failure("Failed to create vertex buffer.");
+    }
+
+    RenderMesh.Stride = Vertex.sizeof;
+    RenderMesh.Offset = 0;
+    RenderMesh.IndexCount = cast(uint)Mesh.Indices.Count;
+    RenderMesh.IndexOffset = 0;
+    RenderMesh.IndexFormat = DXGI_FORMAT_R32_UINT;
+
+    return RenderMesh;
+  }
+
+  void ReleaseRenderMesh(IRenderMesh Mesh)
+  {
+    DxRenderMesh DxMesh = cast(DxRenderMesh)Mesh;
+    Allocator.Delete(DxMesh);
+  }
+
+  void SetMesh(IRenderMesh Mesh)
+  {
+    DxRenderMesh DxMesh = cast(DxRenderMesh)Mesh;
+
+    assert(DxMesh);
+
+    DeviceState.ImmediateContext.IASetVertexBuffers(0, 1, &DxMesh.VertexBuffer, &DxMesh.Stride, &DxMesh.Offset);
+    DeviceState.ImmediateContext.IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    DeviceState.ImmediateContext.IASetIndexBuffer(DxMesh.IndexBuffer, DxMesh.IndexFormat, DxMesh.IndexOffset);
+  }
+
   void ReleaseVertexShader(IShader Shader)
   {
     if (Shader)
@@ -296,6 +375,11 @@ class D3D11RenderDevice : IRenderDevice
   void Draw(uint VertexCount, uint Offset = 0)
   {
     DeviceState.ImmediateContext.Draw(VertexCount, Offset);
+  }
+
+  void DrawIndexed(uint VertexCount, uint IndexOffset = 0, uint VertexOffset = 0)
+  {
+    DeviceState.ImmediateContext.DrawIndexed(VertexCount, IndexOffset, VertexOffset);
   }
 
   void Present()
