@@ -94,6 +94,19 @@ struct Dictionary(K, V)
     return Keys.CountUntil(Key) >= 0;
   }
 
+  ValueType* GetOrCreate(InKeyType)(auto ref InKeyType Key)
+  {
+    static assert(is(typeof(KeyArray[0] == Key)), InvalidKeyMessage!(InKeyType));
+
+    auto Index = Keys.CountUntil(Key);
+    if(Index < 0)
+    {
+      KeyArray.PushBack(Key);
+      return &ValueArray.Expand();
+    }
+    return &ValueArray[Index];
+  }
+
   void Remove(InKeyType)(auto ref InKeyType Key)
   {
     auto Index = Keys.CountUntil(Key);

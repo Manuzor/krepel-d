@@ -4,144 +4,215 @@ import krepel;
 import krepel.math;
 import krepel.container;
 import krepel.string;
+import krepel.event;
 
 alias InputId = string;
 
 enum InputType
 {
-  Button,
-  Axis,
+  INVALID,
+
+  Action, // Has no data attached to and is a one-time thing.
+  Button, // Has a persistent state on/off state.
+  Axis,   // Has a floating point value state.
 }
 
-struct InputButton
-{
-  bool IsDown;
-}
-
-struct InputAxis
-{
-  float Value;
-}
-
-struct InputSource
+struct InputValueData
 {
   InputType Type;
-  InputId Id;
-  union
-  {
-    InputButton _Button;
-    InputAxis _Axis;
-  }
+  float Value = 0.0f; // You should not use this value directly. Use the properties below.
 
-  this(InputType Type, InputId Id)
+  @property
   {
-    this.Type = Type;
-    this.Id = Id;
-  }
+    bool ButtonIsDown()
+    {
+      assert(this.Type == InputType.Button);
+      return cast(bool)this.Value;
+    }
 
-  this(InputId Id, InputButton Button)
-  {
-    this.Id = Id;
-    this.Type = InputType.Button;
-    this._Button = Button;
-  }
+    void ButtonIsDown(bool Value)
+    {
+      assert(this.Type == InputType.Button);
+      this.Value = Value ? 1.0f : 0.0f;
+    }
 
-  this(InputId Id, InputAxis Axis)
-  {
-    this.Id = Id;
-    this.Type = InputType.Axis;
-    this._Axis = Axis;
-  }
+    float AxisValue()
+    {
+      assert(this.Type == InputType.Axis);
+      return this.Value;
+    }
 
-  @property ref auto Button() inout
-  {
-    assert(Type == InputType.Button);
-    return _Button;
-  }
-
-  @property ref auto Axis() inout
-  {
-    assert(Type == InputType.Axis);
-    return _Axis;
+    void AxisValue(float NewValue)
+    {
+      assert(this.Type == InputType.Axis);
+      this.Value = NewValue;
+    }
   }
 }
 
-alias InputQueueData = Array!InputSource;
-
-class InputContext
+struct InputQueueData
 {
-  // Maps Trigger-source => Target, e.g. Keyboard_Escape => Quit
-  Dictionary!(InputId, InputSource) InputMap;
-  InputContext Parent;
+  static struct QueueItem
+  {
+    InputId Id;
+    InputValueData Value;
+  }
+
+  Array!QueueItem Items;
+
 
   this(IAllocator Allocator)
   {
-    InputMap.Allocator = Allocator;
+    this.Allocator = Allocator;
   }
 
-  auto opIndex(InputId Id)
+  @property void Allocator(IAllocator NewAllocator)
   {
-    foreach(ref Input; InputMap.Values)
+    this.Items.Allocator = NewAllocator;
+  }
+
+  void Clear()
+  {
+    this.Items.Clear();
+  }
+
+  void Enqueue(InputId Id, InputValueData Value)
+  {
+    this.Items ~= QueueItem(Id, Value);
+  }
+
+  int opApply(int delegate(InputId, InputValueData) Loop)
+  {
+    int Result;
+
+    foreach(ref Item; Items[])
     {
-      if(Input.Id == Id)
-      {
-        return &Input;
-      }
+      Result = Loop(Item.Id, Item.Value);
+      if(Result) break;
     }
 
-    if(Parent)
-    {
-      return Parent[Id];
-    }
+    return Result;
+  }
+}
 
+//                               SlotId,       OldValue,       NewValue
+alias InputActionEvent = Event!(InputId, InputValueData, InputValueData);
+
+// TODO(Manu): Implement ChangeEvent
+class InputContext
+{
+  static struct TriggerPair
+  {
+    InputId SlotId;    // This is the slot that is triggered by TriggerId.
+    InputId TriggerId; // This is the slot that will trigger SlotId.
+  }
+
+  InputContext Parent;
+  string Name; // Mostly for debugging.
+
+  Dictionary!(InputId, InputValueData) Slots;
+  Array!TriggerPair Triggers;
+  InputActionEvent ChangeEvent;
+
+
+  this(IAllocator Allocator)
+  {
+    this.Allocator = Allocator;
+  }
+
+  @property void Allocator(IAllocator NewAllocator)
+  {
+    this.Slots.Allocator = NewAllocator;
+    this.Triggers.Allocator = NewAllocator;
+    this.ChangeEvent.Allocator = NewAllocator;
+  }
+
+  InputValueData* opIndex(InputId SlotId)
+  {
+    auto Slot = this.Slots.Get(SlotId);
+    if(Slot) return Slot;
+    if(Parent) return Parent[SlotId];
     return null;
   }
 
-  void RegisterInput(ArgTypes...)(InputSource Input, ArgTypes TriggerIds)
-    if(ArgTypes.length && is(ArgTypes[0] : InputId))
+  void RegisterInputSlot(InputId SlotId, InputType Type)
   {
-    foreach(TriggerId; TriggerIds)
-    {
-      // TODO(Manu): We are potentially overwriting existing input slots. Is that ok?
-      InputMap[TriggerId] = Input;
-    }
+    auto Slot = this.Slots.GetOrCreate(SlotId);
+    assert(Slot);
+
+    Slot.Type = Type;
   }
 
-  bool MapInput(ref InputSource Source)
+  void RegisterButton(InputId NewButtonId)
   {
-    auto Target = InputMap.Get(Source.Id);
-    if(Target is null) return false;
-    final switch(Target.Type)
-    {
-      case InputType.Button:
-      {
-        final switch(Source.Type)
-        {
-          case InputType.Button:
-          {
-            Target.Button = Source.Button;
-          } break;
-          case InputType.Axis:
-          {
-            Target.Button.IsDown = !Source.Axis.Value.NearlyEquals(0);
-          } break;
-        }
-      } break;
-      case InputType.Axis:
-      {
-        final switch(Source.Type)
-        {
-          case InputType.Button:
-          {
-            Target.Axis.Value = Source.Button.IsDown ? 1.0f : 0.0f;
-          } break;
-          case InputType.Axis:
-          {
-            Target.Axis = Source.Axis;
-          } break;
-        }
-      } break;
-    }
+    RegisterInputSlot(NewButtonId, InputType.Button);
+  }
+
+  void RegisterAxis(InputId NewAxisId)
+  {
+    RegisterInputSlot(NewAxisId, InputType.Axis);
+  }
+
+  void RegisterAction(InputId NewActionId)
+  {
+    RegisterInputSlot(NewActionId, InputType.Action);
+  }
+
+  bool AddTrigger(InputId SlotId, InputId TriggerId)
+  {
+    // TODO(Manu): Eliminate duplicates.
+    this.Triggers ~= TriggerPair(SlotId, TriggerId);
     return true;
+  }
+
+  bool RemoveTrigger(InputId SlotId, InputId TriggerId)
+  {
+    // TODO(Manu): Implement this.
+    return false;
+  }
+
+  bool MapInput(InputId TriggeringSlotId, InputValueData NewValue)
+  {
+    auto TriggeringSlot = Slots.Get(TriggeringSlotId);
+    if(TriggeringSlot is null) return false;
+
+    UpdateSlotValue(TriggeringSlotId, TriggeringSlot, NewValue);
+
+    foreach(Trigger; this.Triggers)
+    {
+      if(Trigger.TriggerId == TriggeringSlotId)
+      {
+        auto Slot = this.Slots.Get(Trigger.SlotId);
+        if(Slot)
+        {
+          UpdateSlotValue(Trigger.SlotId, Slot, NewValue);
+        }
+      }
+    }
+
+    return true;
+  }
+
+  bool AddListener(InputId SlotId, InputActionEvent.ListenerType Listener)
+  {
+    this.ChangeEvent.Add(Listener);
+    // TODO(Manu): Avoid duplicates?
+    return true;
+  }
+
+  bool RemoveListener(InputId SlotId, InputActionEvent.ListenerType Listener)
+  {
+    return this.ChangeEvent.Remove(Listener);
+  }
+
+  void UpdateSlotValue(InputId SlotId, InputValueData* Slot, InputValueData NewValue)
+  {
+    auto OldValue = *Slot;
+
+    // Note(Manu): The actual type of the input doesn't matter. We just map
+    // the float values. I just hope that's fine...
+    Slot.Value = NewValue.Value;
+
+    this.ChangeEvent(SlotId, OldValue, NewValue);
   }
 }

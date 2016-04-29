@@ -25,11 +25,32 @@ enum Mouse
   WheelDelta = "Mouse_WheelDelta",
 
   //
-  // Events
+  // Actions
   //
   LeftButton_DoubleClick   = "Mouse_LeftButton_DoubleClick",
   MiddleButton_DoubleClick = "Mouse_MiddleButton_DoubleClick",
   RightButton_DoubleClick  = "Mouse_RightButton_DoubleClick",
   ExtraButton1_DoubleClick = "Mouse_ExtraButton1_DoubleClick",
   ExtraButton2_DoubleClick = "Mouse_ExtraButton2_DoubleClick",
+}
+
+void RegisterAllMouseSlots(InputContext Context)
+{
+  Context.RegisterButton(Mouse.LeftButton);
+  Context.RegisterButton(Mouse.MiddleButton);
+  Context.RegisterButton(Mouse.RightButton);
+  Context.RegisterButton(Mouse.ExtraButton1);
+  Context.RegisterButton(Mouse.ExtraButton2);
+
+  Context.RegisterAxis(Mouse.XPosition);
+  Context.RegisterAxis(Mouse.YPosition);
+  Context.RegisterAxis(Mouse.XDelta);
+  Context.RegisterAxis(Mouse.YDelta);
+  Context.RegisterAxis(Mouse.WheelDelta);
+
+  Context.RegisterAction(Mouse.LeftButton_DoubleClick);
+  Context.RegisterAction(Mouse.MiddleButton_DoubleClick);
+  Context.RegisterAction(Mouse.RightButton_DoubleClick);
+  Context.RegisterAction(Mouse.ExtraButton1_DoubleClick);
+  Context.RegisterAction(Mouse.ExtraButton2_DoubleClick);
 }

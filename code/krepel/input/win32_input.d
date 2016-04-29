@@ -29,17 +29,18 @@ Flag!"Processed" Win32ProcessInputMessage(HWND WindowHandle, UINT Message, WPARA
       return Yes.Processed;
     }
 
-    auto KeyName = Win32VirtualKeyToInputId(VKCode, LParam);
+    InputId KeyId = Win32VirtualKeyToInputId(VKCode, LParam);
 
-    if(KeyName is null)
+    if(KeyId is null)
     {
       Log.Warning("Unable to map virtual key code %d (Hex: 0x%x)", VKCode, VKCode);
       return Yes.Processed;
     }
 
-    InputButton Key;
-    Key.IsDown = IsDown;
-    InputQueue ~= InputSource(KeyName, Key);
+    InputValueData KeyValue;
+    KeyValue.Type = InputType.Button;
+    KeyValue.ButtonIsDown = IsDown;
+    InputQueue.Enqueue(KeyId, KeyValue);
 
     return Yes.Processed;
   }
@@ -49,39 +50,43 @@ Flag!"Processed" Win32ProcessInputMessage(HWND WindowHandle, UINT Message, WPARA
   //
   if(Message >= WM_MOUSEFIRST && Message <= WM_MOUSELAST)
   {
-    InputId ButtonName;
-    InputButton ButtonState;
+    InputId Id;
+    InputValueData Value;
 
     switch(Message)
     {
       case WM_LBUTTONUP:
       case WM_LBUTTONDOWN:
       {
-        ButtonName = Mouse.LeftButton;
-        ButtonState.IsDown = Message == WM_LBUTTONDOWN;
+        Id = Mouse.LeftButton;
+        Value.Type = InputType.Button;
+        Value.ButtonIsDown = Message == WM_LBUTTONDOWN;
       } break;
 
       case WM_RBUTTONUP:
       case WM_RBUTTONDOWN:
       {
-        ButtonName = Mouse.RightButton;
-        ButtonState.IsDown = Message == WM_RBUTTONDOWN;
+        Id = Mouse.RightButton;
+        Value.Type = InputType.Button;
+        Value.ButtonIsDown = Message == WM_RBUTTONDOWN;
       } break;
 
       case WM_MBUTTONUP:
       case WM_MBUTTONDOWN:
       {
-        ButtonName = Mouse.MiddleButton;
-        ButtonState.IsDown = Message == WM_MBUTTONDOWN;
+        Id = Mouse.MiddleButton;
+        Value.Type = InputType.Button;
+        Value.ButtonIsDown = Message == WM_MBUTTONDOWN;
       } break;
 
       case WM_XBUTTONUP:
       case WM_XBUTTONDOWN:
       {
         // TODO(Manu): Check which one it is.
-        ButtonName = Mouse.ExtraButton1;
-        ButtonName = Mouse.ExtraButton2;
-        ButtonState.IsDown = Message == WM_XBUTTONDOWN;
+        Id = Mouse.ExtraButton1;
+        Id = Mouse.ExtraButton2;
+        Value.Type = InputType.Button;
+        Value.ButtonIsDown = Message == WM_XBUTTONDOWN;
       } break;
 
       // TODO(Manu): Mouse wheel, etc.
@@ -89,9 +94,9 @@ Flag!"Processed" Win32ProcessInputMessage(HWND WindowHandle, UINT Message, WPARA
       default: break;
     }
 
-    if(ButtonName)
+    if(Id)
     {
-      InputQueue ~= InputSource(ButtonName, ButtonState);
+      InputQueue.Enqueue(Id, Value);
     }
 
     return Yes.Processed;

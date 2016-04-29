@@ -120,9 +120,15 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
       auto SystemInput = MainAllocator.New!InputContext(MainAllocator);
       scope(exit) MainAllocator.Delete(SystemInput);
 
-      SystemInput.RegisterInput(InputSource(InputType.Button, "Quit"), Keyboard.Escape);
-      SystemInput.RegisterInput(InputSource(InputType.Button, "MoveForward"), Keyboard.W);
-      SystemInput.RegisterInput(InputSource(InputType.Button, "Select"), Mouse.LeftButton);
+      SystemInput.RegisterAllKeyboardSlots();
+      SystemInput.RegisterAllMouseSlots();
+
+      SystemInput.RegisterButton("Quit");
+      SystemInput.AddTrigger("Quit", Keyboard.Escape);
+
+      //SystemInput.RegisterInput(InputSource(InputType.Button, "Quit"), Keyboard.Escape);
+      //SystemInput.RegisterInput(InputSource(InputType.Button, "MoveForward"), Keyboard.W);
+      //SystemInput.RegisterInput(InputSource(InputType.Button, "Select"), Mouse.LeftButton);
 
       auto Window = MainAllocator.New!WindowData(MainAllocator);
       scope(exit) MainAllocator.Delete(Window);
@@ -138,19 +144,19 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
 
         Win32MessagePump();
 
-        foreach(ref Input; Window.InputQueue)
+        foreach(SlotId, Value; Window.InputQueue)
         {
-          SystemInput.MapInput(Input);
+          SystemInput.MapInput(SlotId, Value);
         }
 
         auto QuitInput = SystemInput["Quit"];
-        if(QuitInput && QuitInput.Button.IsDown) .GlobalRunning = false;
+        if(QuitInput && QuitInput.ButtonIsDown) .GlobalRunning = false;
 
-        auto ForwardInput = SystemInput["MoveForward"];
-        if(ForwardInput && ForwardInput.Button.IsDown) Log.Info("Moving Forward!");
+        //auto ForwardInput = SystemInput["MoveForward"];
+        //if(ForwardInput && ForwardInput.Button.IsDown) Log.Info("Moving Forward!");
 
-        auto SelectionInput = SystemInput["Select"];
-        if(SelectionInput && SelectionInput.Button.IsDown) Log.Info("Select something.");
+        //auto SelectionInput = SystemInput["Select"];
+        //if(SelectionInput && SelectionInput.Button.IsDown) Log.Info("Select something.");
 
         XINPUT_STATE ControllerState;
         if(XInputGetState(0, &ControllerState) == ERROR_SUCCESS)
@@ -196,6 +202,9 @@ LRESULT Win32MainWindowCallback(HWND WindowHandle, UINT Message,
                                 WPARAM WParam, LPARAM LParam)
 {
   auto Window = cast(WindowData)cast(void*)GetWindowLongPtrW(WindowHandle, GWLP_USERDATA);
+
+  if(Window is null) return DefWindowProcA(WindowHandle, Message, WParam, LParam);
+
 
   LRESULT Result = 0;
 

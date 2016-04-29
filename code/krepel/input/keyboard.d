@@ -126,3 +126,15 @@ enum Keyboard
   Y = "Keyboard_Y",
   Z = "Keyboard_Z",
 }
+
+void RegisterAllKeyboardSlots(InputContext Context)
+{
+  foreach(MemberName; __traits(allMembers, Keyboard))
+  {
+    if(MemberName != Keyboard.Unknown)
+    {
+      enum Code = `Context.RegisterButton(.Keyboard.` ~ MemberName ~ `);`;
+      mixin(Code);
+    }
+  }
+}
