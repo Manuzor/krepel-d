@@ -24,7 +24,10 @@ struct InputValueData
 
   @property
   {
-    bool ButtonIsDown()
+    bool ButtonIsUp() const { return !this.ButtonIsDown; }
+    void ButtonIsUp(bool Value) { this.ButtonIsDown = !Value; }
+
+    bool ButtonIsDown() const
     {
       assert(this.Type == InputType.Button);
       return cast(bool)this.Value;
@@ -36,7 +39,7 @@ struct InputValueData
       this.Value = Value ? 1.0f : 0.0f;
     }
 
-    float AxisValue()
+    float AxisValue() const
     {
       assert(this.Type == InputType.Axis);
       return this.Value;
@@ -191,18 +194,6 @@ class InputContext
     }
 
     return true;
-  }
-
-  bool AddListener(InputId SlotId, InputActionEvent.ListenerType Listener)
-  {
-    this.ChangeEvent.Add(Listener);
-    // TODO(Manu): Avoid duplicates?
-    return true;
-  }
-
-  bool RemoveListener(InputId SlotId, InputActionEvent.ListenerType Listener)
-  {
-    return this.ChangeEvent.Remove(Listener);
   }
 
   void UpdateSlotValue(InputId SlotId, InputValueData* Slot, InputValueData NewValue)

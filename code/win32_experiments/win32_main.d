@@ -126,9 +126,11 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
       SystemInput.RegisterButton("Quit");
       SystemInput.AddTrigger("Quit", Keyboard.Escape);
 
-      //SystemInput.RegisterInput(InputSource(InputType.Button, "Quit"), Keyboard.Escape);
-      //SystemInput.RegisterInput(InputSource(InputType.Button, "MoveForward"), Keyboard.W);
-      //SystemInput.RegisterInput(InputSource(InputType.Button, "Select"), Mouse.LeftButton);
+      SystemInput.ChangeEvent.Add = (Id, OldValue, NewValue)
+      {
+        Log.Info("Input change '%s': %s %s => %s %s",
+                 Id, OldValue.Type, OldValue.Value, NewValue.Type, NewValue.Value);
+      };
 
       auto Window = MainAllocator.New!WindowData(MainAllocator);
       scope(exit) MainAllocator.Delete(Window);
