@@ -50,6 +50,23 @@ Flag!"Processed" Win32ProcessInputMessage(HWND WindowHandle, UINT Message, WPARA
   //
   if(Message >= WM_MOUSEFIRST && Message <= WM_MOUSELAST)
   {
+    //
+    // Mouse position
+    //
+    if(Message == WM_MOUSEMOVE)
+    {
+      auto XClientAreaMouse = GET_X_LPARAM(LParam);
+      InputQueue.Enqueue(Mouse.XClientPosition, InputValueData(InputType.Axis, cast(float)XClientAreaMouse));
+
+      auto YClientAreaMouse = GET_Y_LPARAM(LParam);
+      InputQueue.Enqueue(Mouse.YClientPosition, InputValueData(InputType.Axis, cast(float)YClientAreaMouse));
+
+      return Yes.Processed;
+    }
+
+    //
+    // Mouse buttons and wheels
+    //
     InputId Id;
     InputValueData Value;
 
@@ -89,7 +106,21 @@ Flag!"Processed" Win32ProcessInputMessage(HWND WindowHandle, UINT Message, WPARA
         Value.ButtonIsDown = Message == WM_XBUTTONDOWN;
       } break;
 
-      // TODO(Manu): Mouse wheel, etc.
+      case WM_MOUSEWHEEL:
+      {
+        auto AbsoluteValue = GET_WHEEL_DELTA_WPARAM(WParam);
+        Id = Mouse.VerticalWheelDelta;
+        Value.Type = InputType.Axis;
+        Value.AxisValue = cast(float)AbsoluteValue / WHEEL_DELTA;
+      } break;
+
+      case WM_MOUSEHWHEEL:
+      {
+        auto AbsoluteValue = GET_WHEEL_DELTA_WPARAM(WParam);
+        Id = Mouse.HorizontalWheelDelta;
+        Value.Type = InputType.Axis;
+        Value.AxisValue = cast(float)AbsoluteValue / WHEEL_DELTA;
+      } break;
 
       default: break;
     }
@@ -103,16 +134,66 @@ Flag!"Processed" Win32ProcessInputMessage(HWND WindowHandle, UINT Message, WPARA
   }
 
   //
-  // Raw input messages
+  // Raw input messages.
   //
   if(Message == WM_INPUT)
   {
-    Log.Info("Raw input message: %s", Win32MessageIdToString(Message));
+    UINT InputDataSize;
+    GetRawInputData(cast(HRAWINPUT)LParam, RID_INPUT, null, &InputDataSize, RAWINPUTHEADER.sizeof);
+
+    // Early out.
+    if(InputDataSize == 0) return Yes.Processed;
+
+    assert(InputDataSize <= RAWINPUT.sizeof, "We are querying only for raw mouse input data, for which RAWINPUT.sizeof should be enough.");
+
+    RAWINPUT InputData;
+    if(GetRawInputData(cast(HRAWINPUT)LParam, RID_INPUT, &InputData, &InputDataSize, RAWINPUTHEADER.sizeof) != InputDataSize)
+    {
+      return Yes.Processed;
+    }
+
+    // We only care about mouse input (at the moment).
+    if(InputData.header.dwType != RIM_TYPEMOUSE)
+    {
+      return Yes.Processed;
+    }
+
+    // Only process relative mouse movement (for now).
+    bool IsAbsoluteMouseMovement = InputData.data.mouse.usFlags & MOUSE_MOVE_ABSOLUTE;
+    if(IsAbsoluteMouseMovement)
+    {
+      return Yes.Processed;
+    }
+
+    auto XMovement = cast(float)InputData.data.mouse.lLastX;
+    InputQueue.Enqueue(Mouse.XDelta, InputValueData(InputType.Axis, XMovement));
+
+    auto YMovement = cast(float)InputData.data.mouse.lLastY;
+    InputQueue.Enqueue(Mouse.YDelta, InputValueData(InputType.Axis, YMovement));
 
     return Yes.Processed;
   }
 
   return No.Processed;
+}
+
+Flag!"Success" Win32EnableRawInputForMouse(LogData* Log = null)
+{
+  RAWINPUTDEVICE Device;
+  with(Device)
+  {
+    usUsagePage = 0x01;
+    usUsage = 0x02;
+  }
+
+  if(RegisterRawInputDevices(&Device, 1, RAWINPUTDEVICE.sizeof))
+  {
+    Log.Info("Initialized raw input for mouse.");
+    return Yes.Success;
+  }
+
+  Log.Failure("Failed to initialize raw input for mouse.");
+  return No.Success;
 }
 
 InputId Win32VirtualKeyToInputId(WPARAM VKCode, LPARAM lParam)

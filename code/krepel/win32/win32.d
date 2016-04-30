@@ -334,3 +334,11 @@ string Win32MessageIdToString(DWORD MessageId)
     default: return "<Unknown Windows Message ID>";
   }
 }
+
+// Note(Manu): DRuntime does not contain these. Below is the original macro
+// definition from the windowsx.h header file taken from Windows SDK
+// 10.0.10586.0
+//#define GET_X_LPARAM(lp)                        ((int)(short)LOWORD(lp))
+//#define GET_Y_LPARAM(lp)                        ((int)(short)HIWORD(lp))
+alias GET_X_LPARAM = (lp) => cast(int)cast(short)LOWORD(lp);
+alias GET_Y_LPARAM = (lp) => cast(int)cast(short)HIWORD(lp);

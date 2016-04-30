@@ -117,6 +117,8 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
 
       version(XInput_RuntimeLinking) LoadXInput();
 
+      Win32EnableRawInputForMouse(.Log);
+
       auto SystemInput = MainAllocator.New!InputContext(MainAllocator);
       scope(exit) MainAllocator.Delete(SystemInput);
 
