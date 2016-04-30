@@ -53,51 +53,6 @@ struct InputValueData
   }
 }
 
-struct InputQueueData
-{
-  static struct QueueItem
-  {
-    InputId Id;
-    InputValueData Value;
-  }
-
-  Array!QueueItem Items;
-
-
-  this(IAllocator Allocator)
-  {
-    this.Allocator = Allocator;
-  }
-
-  @property void Allocator(IAllocator NewAllocator)
-  {
-    this.Items.Allocator = NewAllocator;
-  }
-
-  void Clear()
-  {
-    this.Items.Clear();
-  }
-
-  void Enqueue(InputId Id, InputValueData Value)
-  {
-    this.Items ~= QueueItem(Id, Value);
-  }
-
-  int opApply(int delegate(InputId, InputValueData) Loop)
-  {
-    int Result;
-
-    foreach(ref Item; Items[])
-    {
-      Result = Loop(Item.Id, Item.Value);
-      if(Result) break;
-    }
-
-    return Result;
-  }
-}
-
 //                               SlotId,       OldValue,       NewValue
 alias InputActionEvent = Event!(InputId, InputValueData, InputValueData);
 
@@ -198,6 +153,8 @@ class InputContext
 
   void UpdateSlotValue(InputId SlotId, InputValueData* Slot, InputValueData NewValue)
   {
+    assert(Slot);
+
     auto OldValue = *Slot;
 
     // Note(Manu): The actual type of the input doesn't matter. We just map

@@ -134,7 +134,7 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
                  Id, OldValue.Type, OldValue.Value, NewValue.Type, NewValue.Value);
       };
 
-      auto Window = MainAllocator.New!WindowData(MainAllocator);
+      auto Window = MainAllocator.New!WindowData(SystemInput);
       scope(exit) MainAllocator.Delete(Window);
 
       SetWindowLongPtrA(State.WindowHandle, GWLP_USERDATA, *cast(LONG_PTR*)&Window);
@@ -144,14 +144,7 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
 
       while(GlobalRunning)
       {
-        scope(exit) Window.InputQueue.Clear();
-
         Win32MessagePump();
-
-        foreach(SlotId, Value; Window.InputQueue)
-        {
-          SystemInput.MapInput(SlotId, Value);
-        }
 
         auto QuitInput = SystemInput["Quit"];
         if(QuitInput && QuitInput.ButtonIsDown) .GlobalRunning = false;
@@ -232,7 +225,7 @@ LRESULT Win32MainWindowCallback(HWND WindowHandle, UINT Message,
     {
       // TODO(Manu): Deal with the return value?
       Win32ProcessInputMessage(WindowHandle, Message, WParam, LParam,
-                               Window.InputQueue,
+                               Window.Input,
                                .Log);
     } break;
 
@@ -264,11 +257,11 @@ LRESULT Win32MainWindowCallback(HWND WindowHandle, UINT Message,
 
 class WindowData
 {
-  InputQueueData InputQueue;
+  InputContext Input;
 
-  this(IAllocator Allocator)
+  this(InputContext Input)
   {
-    this.InputQueue.Allocator = Allocator;
+    this.Input = Input;
   }
 }
 

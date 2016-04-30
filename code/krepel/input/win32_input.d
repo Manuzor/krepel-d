@@ -9,7 +9,7 @@ import krepel.input.mouse;
 
 
 Flag!"Processed" Win32ProcessInputMessage(HWND WindowHandle, UINT Message, WPARAM WParam, LPARAM LParam,
-                                          ref InputQueueData InputQueue,
+                                          InputContext Input,
                                           LogData* Log = null)
 {
   //
@@ -40,7 +40,7 @@ Flag!"Processed" Win32ProcessInputMessage(HWND WindowHandle, UINT Message, WPARA
     InputValueData KeyValue;
     KeyValue.Type = InputType.Button;
     KeyValue.ButtonIsDown = IsDown;
-    InputQueue.Enqueue(KeyId, KeyValue);
+    Input.MapInput(KeyId, KeyValue);
 
     return Yes.Processed;
   }
@@ -56,10 +56,10 @@ Flag!"Processed" Win32ProcessInputMessage(HWND WindowHandle, UINT Message, WPARA
     if(Message == WM_MOUSEMOVE)
     {
       auto XClientAreaMouse = GET_X_LPARAM(LParam);
-      InputQueue.Enqueue(Mouse.XClientPosition, InputValueData(InputType.Axis, cast(float)XClientAreaMouse));
+      Input.MapInput(Mouse.XClientPosition, InputValueData(InputType.Axis, cast(float)XClientAreaMouse));
 
       auto YClientAreaMouse = GET_Y_LPARAM(LParam);
-      InputQueue.Enqueue(Mouse.YClientPosition, InputValueData(InputType.Axis, cast(float)YClientAreaMouse));
+      Input.MapInput(Mouse.YClientPosition, InputValueData(InputType.Axis, cast(float)YClientAreaMouse));
 
       return Yes.Processed;
     }
@@ -127,7 +127,7 @@ Flag!"Processed" Win32ProcessInputMessage(HWND WindowHandle, UINT Message, WPARA
 
     if(Id)
     {
-      InputQueue.Enqueue(Id, Value);
+      Input.MapInput(Id, Value);
     }
 
     return Yes.Processed;
@@ -166,10 +166,10 @@ Flag!"Processed" Win32ProcessInputMessage(HWND WindowHandle, UINT Message, WPARA
     }
 
     auto XMovement = cast(float)InputData.data.mouse.lLastX;
-    InputQueue.Enqueue(Mouse.XDelta, InputValueData(InputType.Axis, XMovement));
+    Input.MapInput(Mouse.XDelta, InputValueData(InputType.Axis, XMovement));
 
     auto YMovement = cast(float)InputData.data.mouse.lLastY;
-    InputQueue.Enqueue(Mouse.YDelta, InputValueData(InputType.Axis, YMovement));
+    Input.MapInput(Mouse.YDelta, InputValueData(InputType.Axis, YMovement));
 
     return Yes.Processed;
   }
