@@ -101,6 +101,8 @@ class InputContext
 
   ulong CurrentFrame;
 
+  Array!dchar CharacterBuffer;
+
 
   this(IAllocator Allocator)
   {
@@ -112,6 +114,7 @@ class InputContext
     this.Slots.Allocator = NewAllocator;
     this.Triggers.Allocator = NewAllocator;
     this.ChangeEvent.Allocator = NewAllocator;
+    this.CharacterBuffer.Allocator = NewAllocator;
   }
 
   InputSlotData* opIndex(InputId SlotId)
@@ -199,5 +202,7 @@ class InputContext
     // This will never happen...
     assert(this.CurrentFrame < typeof(this.CurrentFrame).max);
     this.CurrentFrame++;
+
+    this.CharacterBuffer.Clear();
   }
 }

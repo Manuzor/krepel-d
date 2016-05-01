@@ -166,6 +166,11 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
         auto CornflowerBlue = Vector4(100 / 255.0f, 149 / 255.0f, 237 / 255.0f, 1.0f);
         State.ImmediateContext.ClearRenderTargetView(State.RenderTargetView, CornflowerBlue.Data);
         State.SwapChain.Present(0, 0);
+
+        if(SystemInput.CharacterBuffer.Count)
+        {
+          Log.Info("User typed: %s", SystemInput.CharacterBuffer[]);
+        }
       }
     }
   }
@@ -178,7 +183,7 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
 void Win32MessagePump()
 {
   MSG Message;
-  if(PeekMessageA(&Message, null, 0, 0, PM_REMOVE))
+  while(PeekMessageA(&Message, null, 0, 0, PM_REMOVE))
   {
     switch(Message.message)
     {

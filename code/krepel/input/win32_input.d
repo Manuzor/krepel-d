@@ -15,7 +15,13 @@ Flag!"Processed" Win32ProcessInputMessage(HWND WindowHandle, UINT Message, WPARA
   //
   // Keyboard messages
   //
-  if(Message >= WM_KEYFIRST && Message <= WM_KEYLAST)
+  if(Message == WM_CHAR || Message == WM_UNICHAR)
+  {
+    if(WParam == UNICODE_NOCHAR) return Yes.Processed;
+    Input.CharacterBuffer ~= cast(dchar)WParam;
+    return Yes.Processed;
+  }
+  else if(Message >= WM_KEYFIRST && Message <= WM_KEYLAST)
   {
     //Log.Info("Keyboard message: %s", Win32MessageIdToString(Message));
 
