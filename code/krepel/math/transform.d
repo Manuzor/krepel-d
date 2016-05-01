@@ -70,7 +70,7 @@ struct Transform
     return CreateMatrixFromScaleRotateTranslate(Translation, Rotation, Scale);
   }
 
-  void SetRelativeTo(in ref Transform ParentTransform)
+  void SetRelativeTo(in Transform ParentTransform)
   {
     const Vector3 ReciprocalScale = (ParentTransform.Scale.Reciprocal(0.0f));
     const Quaternion InverseRotation = krepel.math.quaternion.InversedCopy(ParentTransform.Rotation);
