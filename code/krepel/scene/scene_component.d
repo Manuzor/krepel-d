@@ -38,6 +38,15 @@ class SceneComponent : GameComponent
     Transformation = NewTransform;
   }
 
+  void SetWorldTransform(Transform NewTransform)
+  {
+    if(Parent !is null)
+    {
+      NewTransform.SetRelativeTo(Parent.GetWorldTransform());
+    }
+    Transformation = NewTransform;
+  }
+
 
 
 private:
