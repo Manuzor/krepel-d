@@ -94,9 +94,9 @@ Flag!"Processed" Win32ProcessInputMessage(HWND WindowHandle, UINT Message, WPARA
       case WM_XBUTTONUP:
       case WM_XBUTTONDOWN:
       {
-        // TODO(Manu): Check which one it is.
-        Id = Mouse.ExtraButton1;
-        Id = Mouse.ExtraButton2;
+        auto XButtonId = GET_XBUTTON_WPARAM(WParam);
+        if(XButtonId == 1) Id = Mouse.ExtraButton1;
+        if(XButtonId == 2) Id = Mouse.ExtraButton2;
         Value = Message == WM_XBUTTONDOWN ? 1.0f : 0.0f;
       } break;
 
