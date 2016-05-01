@@ -123,6 +123,39 @@ void VisualStudioLogSink(LogLevel Level, char[] Message)
   OutputDebugStringA("\n");
 }
 
+void Win32LogErrorCode(LogData* Log, DWORD ErrorCode)
+{
+  if(Log is null || ErrorCode == 0)
+  {
+    return;
+  }
+
+  LPSTR Message = null;
+  // NOTE(Manu): Free the message when leaving this function.
+  scope(exit) if(Message) LocalFree(Message);
+
+  auto FormatMessageFlags = FORMAT_MESSAGE_ALLOCATE_BUFFER |
+                            FORMAT_MESSAGE_FROM_SYSTEM |
+                            FORMAT_MESSAGE_IGNORE_INSERTS;
+  auto LanguageIdentifier = MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT);
+  auto MessageSize = FormatMessageA(
+        FormatMessageFlags,  // _In_     DWORD   dwFlags
+        null,                // _In_opt_ LPCVOID lpSource
+        ErrorCode,           // _In_     DWORD   dwMessageId
+        LanguageIdentifier,  // _In_     DWORD   dwLanguageId
+        cast(LPSTR)&Message, // _Out_    LPTSTR  lpBuffer
+        0,                   // _In_     DWORD   nSize
+        null);               // _In_opt_ va_list *Argument
+  if(MessageSize == 0)
+  {
+    Log.Failure("Failed to format the last error.");
+  }
+  else
+  {
+    Log.Info("Last Win32 Error: %s", Message[0 .. MessageSize]);
+  }
+}
+
 string Win32MessageIdToString(DWORD MessageId)
 {
   switch(MessageId)
