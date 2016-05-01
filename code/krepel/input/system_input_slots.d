@@ -1,6 +1,70 @@
-module krepel.input.keyboard;
+module krepel.input.system_input_slots;
 
-import krepel.input.input;
+enum XInput
+{
+  Unknown = "XInput_Unknown",
+
+  //
+  // Buttons
+  //
+  DPadUp =       "XInput_DPadUp",
+  DPadDown =     "XInput_DPadDown",
+  DPadLeft =     "XInput_DPadLeft",
+  DPadRight =    "XInput_DPadRight",
+  Start =        "XInput_Start",
+  Back =         "XInput_Back",
+  LeftThumb =    "XInput_LeftThumb",
+  RightThumb =   "XInput_RightThumb",
+  LeftBumper =   "XInput_LeftBumper",
+  RightBumper =  "XInput_RightBumper",
+  A =            "XInput_A",
+  B =            "XInput_B",
+  X =            "XInput_X",
+  Y =            "XInput_Y",
+
+  //
+  // Axes
+  //
+  LeftTrigger =  "XInput_LeftTrigger",
+  RightTrigger = "XInput_RightTrigger",
+  XLeftStick =   "XInput_XLeftStick",
+  YLeftStick =   "XInput_YLeftStick",
+  XRightStick =  "XInput_XRightStick",
+  YRightStick =  "XInput_YRightStick",
+}
+
+enum Mouse
+{
+  Unknown = "Mouse_Unknown",
+
+  //
+  // Buttons
+  //
+  LeftButton              = "Mouse_LeftButton",
+  MiddleButton            = "Mouse_MiddleButton",
+  RightButton             = "Mouse_RightButton",
+  ExtraButton1            = "Mouse_ExtraButton1",
+  ExtraButton2            = "Mouse_ExtraButton2",
+
+  //
+  // Axes
+  //
+  XPosition = "Mouse_XPosition",
+  YPosition = "Mouse_YPosition",
+
+  //
+  // Actions
+  //
+  XDelta                   = "Mouse_XDelta",
+  YDelta                   = "Mouse_YDelta",
+  VerticalWheelDelta       = "Mouse_VerticalWheelDelta",
+  HorizontalWheelDelta     = "Mouse_HorizontalWheelDelta",
+  LeftButton_DoubleClick   = "Mouse_LeftButton_DoubleClick",
+  MiddleButton_DoubleClick = "Mouse_MiddleButton_DoubleClick",
+  RightButton_DoubleClick  = "Mouse_RightButton_DoubleClick",
+  ExtraButton1_DoubleClick = "Mouse_ExtraButton1_DoubleClick",
+  ExtraButton2_DoubleClick = "Mouse_ExtraButton2_DoubleClick",
+}
 
 enum Keyboard
 {
@@ -125,16 +189,4 @@ enum Keyboard
   X = "Keyboard_X",
   Y = "Keyboard_Y",
   Z = "Keyboard_Z",
-}
-
-void RegisterAllKeyboardSlots(InputContext Context)
-{
-  foreach(MemberName; __traits(allMembers, Keyboard))
-  {
-    if(MemberName != Keyboard.Unknown)
-    {
-      enum Code = `Context.RegisterInputSlot(InputType.Button, Keyboard.` ~ MemberName ~ `);`;
-      mixin(Code);
-    }
-  }
 }

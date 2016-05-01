@@ -117,14 +117,12 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
 
       version(XInput_RuntimeLinking) LoadXInput();
 
-      Win32EnableRawInputForMouse(.Log);
-
       auto SystemInput = MainAllocator.New!InputContext(MainAllocator);
       scope(exit) MainAllocator.Delete(SystemInput);
 
-      SystemInput.RegisterAllKeyboardSlots();
-      SystemInput.RegisterAllMouseSlots();
-      SystemInput.RegisterAllXInputSlots();
+      Win32RegisterAllKeyboardSlots(SystemInput);
+      Win32RegisterAllMouseSlots(SystemInput);
+      Win32RegisterAllXInputSlots(SystemInput);
 
       SystemInput.RegisterInputSlot(InputType.Button, "Quit");
       SystemInput.AddTrigger("Quit", Keyboard.Escape);

@@ -1,11 +1,9 @@
 module krepel.input;
 
 public import krepel.input.input;
-public import krepel.input.keyboard;
-public import krepel.input.mouse;
+public import krepel.input.system_input_slots;
 
 version(Windows)
 {
-  public import krepel.input.xinput; // Note(Manu): Is there XInput on Posix?!
-  public import krepel.input.win32_vkmap;
+  public import krepel.input.win32_input;
 }

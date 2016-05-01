@@ -80,14 +80,14 @@ struct InputSlotData
   }
 }
 
-struct InputAxisProperties
+struct InputValueProperties
 {
   float DeadZone = 0.0f;
   float Sensitivity = 1.0f;
   float Exponent = 1.0f;
 }
 
-//                         SlotId,      SlotData
+// Sample signature: $(D void Listener(InputId SlotId, InputSlotData Slot))
 alias InputEvent = Event!(InputId, InputSlotData);
 
 // TODO(Manu): Implement ActionEvent so that user's can listen to a specific action.
@@ -103,7 +103,7 @@ class InputContext
   string Name; // Mostly for debugging.
 
   Dictionary!(InputId, InputSlotData) Slots;
-  Dictionary!(InputId, InputAxisProperties) AxisProperties;
+  Dictionary!(InputId, InputValueProperties) ValueProperties;
   Array!TriggerPair Triggers;
   InputEvent ChangeEvent;
 
@@ -120,7 +120,7 @@ class InputContext
   @property void Allocator(IAllocator NewAllocator)
   {
     this.Slots.Allocator = NewAllocator;
-    this.AxisProperties.Allocator = NewAllocator;
+    this.ValueProperties.Allocator = NewAllocator;
     this.Triggers.Allocator = NewAllocator;
     this.ChangeEvent.Allocator = NewAllocator;
     this.CharacterBuffer.Allocator = NewAllocator;
@@ -143,7 +143,7 @@ class InputContext
 
     if(Type == InputType.Axis)
     {
-      this.AxisProperties.GetOrCreate(SlotId);
+      this.ValueProperties.GetOrCreate(SlotId);
     }
   }
 
@@ -189,8 +189,8 @@ class InputContext
   /// returns an adjusted value.
   float AttuneInputValue(InputId SlotId, float RawValue)
   {
-    auto AxisProps = this.AxisProperties.Get(SlotId);
-    if(AxisProps)
+    auto Properties = this.ValueProperties.Get(SlotId);
+    if(Properties)
     {
       // TODO(Manu): Implement this.
     }

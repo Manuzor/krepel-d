@@ -1,12 +1,10 @@
-module krepel.input.win32_vkmap;
+module krepel.input.win32_input;
 
 import krepel;
 import krepel.win32;
 
 import krepel.input.input;
-import krepel.input.keyboard;
-import krepel.input.mouse;
-import krepel.input.xinput;
+import krepel.input.system_input_slots;
 
 
 Flag!"Processed" Win32ProcessInputMessage(HWND WindowHandle, UINT Message, WPARAM WParam, LPARAM LParam,
@@ -174,25 +172,6 @@ Flag!"Processed" Win32ProcessInputMessage(HWND WindowHandle, UINT Message, WPARA
   }
 
   return No.Processed;
-}
-
-Flag!"Success" Win32EnableRawInputForMouse(LogData* Log = null)
-{
-  RAWINPUTDEVICE Device;
-  with(Device)
-  {
-    usUsagePage = 0x01;
-    usUsage = 0x02;
-  }
-
-  if(RegisterRawInputDevices(&Device, 1, RAWINPUTDEVICE.sizeof))
-  {
-    Log.Info("Initialized raw input for mouse.");
-    return Yes.Success;
-  }
-
-  Log.Failure("Failed to initialize raw input for mouse.");
-  return No.Success;
 }
 
 InputId Win32VirtualKeyToInputId(WPARAM VKCode, LPARAM lParam)
@@ -443,4 +422,87 @@ void Win32PollXInput(InputContext Input)
       }
     }
   }
+}
+
+void Win32RegisterAllMouseSlots(InputContext Context,
+                                LogData* Log = null)
+{
+  Context.RegisterInputSlot(InputType.Button, Mouse.LeftButton);
+  Context.RegisterInputSlot(InputType.Button, Mouse.MiddleButton);
+  Context.RegisterInputSlot(InputType.Button, Mouse.RightButton);
+  Context.RegisterInputSlot(InputType.Button, Mouse.ExtraButton1);
+  Context.RegisterInputSlot(InputType.Button, Mouse.ExtraButton2);
+
+  Context.RegisterInputSlot(InputType.Axis, Mouse.XPosition);
+  Context.RegisterInputSlot(InputType.Axis, Mouse.YPosition);
+
+  Context.RegisterInputSlot(InputType.Action, Mouse.XDelta);
+  Context.RegisterInputSlot(InputType.Action, Mouse.YDelta);
+  Context.RegisterInputSlot(InputType.Action, Mouse.VerticalWheelDelta);
+  Context.RegisterInputSlot(InputType.Action, Mouse.HorizontalWheelDelta);
+  Context.RegisterInputSlot(InputType.Action, Mouse.LeftButton_DoubleClick);
+  Context.RegisterInputSlot(InputType.Action, Mouse.MiddleButton_DoubleClick);
+  Context.RegisterInputSlot(InputType.Action, Mouse.RightButton_DoubleClick);
+  Context.RegisterInputSlot(InputType.Action, Mouse.ExtraButton1_DoubleClick);
+  Context.RegisterInputSlot(InputType.Action, Mouse.ExtraButton2_DoubleClick);
+
+  //
+  // Register Mouse Raw Input
+  //
+  {
+    RAWINPUTDEVICE Device;
+    with(Device)
+    {
+      usUsagePage = 0x01;
+      usUsage = 0x02;
+    }
+
+    if(RegisterRawInputDevices(&Device, 1, RAWINPUTDEVICE.sizeof))
+    {
+      Log.Info("Initialized raw input for mouse.");
+    }
+    else
+    {
+      Log.Failure("Failed to initialize raw input for mouse.");
+    }
+  }
+}
+
+void Win32RegisterAllKeyboardSlots(InputContext Context,
+                                   LogData* Log = null)
+{
+  foreach(MemberName; __traits(allMembers, Keyboard))
+  {
+    if(MemberName != Keyboard.Unknown)
+    {
+      enum Code = `Context.RegisterInputSlot(InputType.Button, Keyboard.` ~ MemberName ~ `);`;
+      mixin(Code);
+    }
+  }
+}
+
+void Win32RegisterAllXInputSlots(InputContext Context,
+                                 LogData* Log = null)
+{
+  Context.RegisterInputSlot(InputType.Button, XInput.DPadUp);
+  Context.RegisterInputSlot(InputType.Button, XInput.DPadDown);
+  Context.RegisterInputSlot(InputType.Button, XInput.DPadLeft);
+  Context.RegisterInputSlot(InputType.Button, XInput.DPadRight);
+  Context.RegisterInputSlot(InputType.Button, XInput.Start);
+  Context.RegisterInputSlot(InputType.Button, XInput.Back);
+  Context.RegisterInputSlot(InputType.Button, XInput.LeftThumb);
+  Context.RegisterInputSlot(InputType.Button, XInput.RightThumb);
+  Context.RegisterInputSlot(InputType.Button, XInput.LeftBumper);
+  Context.RegisterInputSlot(InputType.Button, XInput.RightBumper);
+  Context.RegisterInputSlot(InputType.Button, XInput.A);
+  Context.RegisterInputSlot(InputType.Button, XInput.B);
+  Context.RegisterInputSlot(InputType.Button, XInput.X);
+  Context.RegisterInputSlot(InputType.Button, XInput.Y);
+
+  Context.RegisterInputSlot(InputType.Axis, XInput.LeftTrigger);
+  Context.RegisterInputSlot(InputType.Axis, XInput.RightTrigger);
+  Context.RegisterInputSlot(InputType.Axis, XInput.XLeftStick);
+  Context.RegisterInputSlot(InputType.Axis, XInput.YLeftStick);
+  Context.RegisterInputSlot(InputType.Axis, XInput.XRightStick);
+  Context.RegisterInputSlot(InputType.Axis, XInput.YRightStick);
 }
