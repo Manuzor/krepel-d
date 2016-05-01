@@ -2,13 +2,24 @@ module krepel.input.win32_input;
 
 import krepel;
 import krepel.win32;
+import krepel.win32.directx.xinput;
 
 import krepel.input.input;
 import krepel.input.system_input_slots;
 
 
+class Win32InputContext : InputContext
+{
+  XINPUT_STATE[XUSER_MAX_COUNT] XInputPreviousState;
+
+  this(IAllocator Allocator)
+  {
+    super(Allocator);
+  }
+}
+
 Flag!"Processed" Win32ProcessInputMessage(HWND WindowHandle, UINT Message, WPARAM WParam, LPARAM LParam,
-                                          InputContext Input,
+                                          Win32InputContext Input,
                                           LogData* Log = null)
 {
   //
@@ -42,8 +53,7 @@ Flag!"Processed" Win32ProcessInputMessage(HWND WindowHandle, UINT Message, WPARA
       return Yes.Processed;
     }
 
-    float KeyValue = IsDown ? 1.0f : 0.0f;
-    Input.UpdateSlotValue(KeyId, KeyValue);
+    Input.UpdateSlotValue(KeyId, IsDown);
 
     return Yes.Processed;
   }
@@ -70,61 +80,57 @@ Flag!"Processed" Win32ProcessInputMessage(HWND WindowHandle, UINT Message, WPARA
     //
     // Mouse buttons and wheels
     //
-    InputId Id;
-    float Value;
-
     switch(Message)
     {
       case WM_LBUTTONUP:
       case WM_LBUTTONDOWN:
       {
-        Id = Mouse.LeftButton;
-        Value = Message == WM_LBUTTONDOWN ? 1.0f : 0.0f;
+        bool IsDown = Message == WM_LBUTTONDOWN;
+        Input.UpdateSlotValue(Mouse.LeftButton, IsDown);
       } break;
 
       case WM_RBUTTONUP:
       case WM_RBUTTONDOWN:
       {
-        Id = Mouse.RightButton;
-        Value = Message == WM_RBUTTONDOWN ? 1.0f : 0.0f;
+        bool IsDown = Message == WM_RBUTTONDOWN;
+        Input.UpdateSlotValue(Mouse.RightButton, IsDown);
       } break;
 
       case WM_MBUTTONUP:
       case WM_MBUTTONDOWN:
       {
-        Id = Mouse.MiddleButton;
-        Value = Message == WM_MBUTTONDOWN ? 1.0f : 0.0f;
+        bool IsDown = Message == WM_MBUTTONDOWN;
+        Input.UpdateSlotValue(Mouse.MiddleButton, IsDown);
       } break;
 
       case WM_XBUTTONUP:
       case WM_XBUTTONDOWN:
       {
-        auto XButtonId = GET_XBUTTON_WPARAM(WParam);
-        if(XButtonId == 1) Id = Mouse.ExtraButton1;
-        if(XButtonId == 2) Id = Mouse.ExtraButton2;
-        Value = Message == WM_XBUTTONDOWN ? 1.0f : 0.0f;
+        bool IsDown = Message == WM_XBUTTONDOWN;
+        auto XButtonNumber = GET_XBUTTON_WPARAM(WParam);
+        switch(XButtonNumber)
+        {
+          case 1: Input.UpdateSlotValue(Mouse.ExtraButton1, IsDown); break;
+          case 2: Input.UpdateSlotValue(Mouse.ExtraButton2, IsDown); break;
+          default: break;
+        }
       } break;
 
       case WM_MOUSEWHEEL:
       {
-        Id = Mouse.VerticalWheelDelta;
         auto RawValue = GET_WHEEL_DELTA_WPARAM(WParam);
-        Value = cast(float)RawValue;
+        auto Value = cast(float)RawValue / WHEEL_DELTA;
+        Input.UpdateSlotValue(Mouse.VerticalWheelDelta, Value);
       } break;
 
       case WM_MOUSEHWHEEL:
       {
-        Id = Mouse.HorizontalWheelDelta;
         auto RawValue = GET_WHEEL_DELTA_WPARAM(WParam);
-        Value = cast(float)RawValue;
+        auto Value = cast(float)RawValue / WHEEL_DELTA;
+        Input.UpdateSlotValue(Mouse.HorizontalWheelDelta, Value);
       } break;
 
       default: break;
-    }
-
-    if(Id)
-    {
-      Input.UpdateSlotValue(Id, Value);
     }
 
     return Yes.Processed;
@@ -143,9 +149,12 @@ Flag!"Processed" Win32ProcessInputMessage(HWND WindowHandle, UINT Message, WPARA
 
     assert(InputDataSize <= RAWINPUT.sizeof, "We are querying only for raw mouse input data, for which RAWINPUT.sizeof should be enough.");
 
-    RAWINPUT InputData;
-    if(GetRawInputData(cast(HRAWINPUT)LParam, RID_INPUT, &InputData, &InputDataSize, RAWINPUTHEADER.sizeof) != InputDataSize)
+    RAWINPUT InputData = void;
+    const BytesWritten = GetRawInputData(cast(HRAWINPUT)LParam, RID_INPUT, &InputData, &InputDataSize, RAWINPUTHEADER.sizeof);
+    if(BytesWritten != InputDataSize)
     {
+      Log.Failure("Failed to get raw input data.");
+      Win32LogErrorCode(Log, GetLastError());
       return Yes.Processed;
     }
 
@@ -340,85 +349,105 @@ InputId Win32VirtualKeyToInputId(WPARAM VKCode, LPARAM lParam)
   }
 }
 
-void Win32PollXInput(InputContext Input)
+void Win32PollXInput(Win32InputContext Input)
 {
-  import krepel.win32.directx.xinput;
-
-  // TODO(Manu): Deal with multiple gamepads
-  //foreach(UserIndex; 0 .. 1/*XUSER_MAX_COUNT*/)
-  DWORD UserIndex = 0;
+  if(Input.UserIndex < 0)
   {
-    XINPUT_STATE ControllerState;
-    if(XInputGetState(UserIndex, &ControllerState) == ERROR_SUCCESS)
+    // Need a user index to poll for gamepad state.
+    return;
+  }
+
+  auto UserIndex = cast(DWORD)Input.UserIndex;
+
+  XINPUT_STATE NewControllerState;
+  if(XInputGetState(UserIndex, &NewControllerState) != ERROR_SUCCESS)
+  {
+    // The gamepad seems to be disconnected.
+    return;
+  }
+
+  if(Input.XInputPreviousState[UserIndex].dwPacketNumber == NewControllerState.dwPacketNumber)
+  {
+    // There are no updates for us.
+    return;
+  }
+
+  scope(success) Input.XInputPreviousState[UserIndex] = NewControllerState;
+
+  auto OldGamepad = &Input.XInputPreviousState[UserIndex].Gamepad;
+  auto NewGamepad = &NewControllerState.Gamepad;
+
+  //
+  // Buttons
+  //
+  {
+    void UpdateButton(Win32InputContext Input, InputId Id, WORD OldButtons, WORD NewButtons, WORD ButtonMask)
     {
-      // TODO(Manu): Deal with unchanged state?
-      //ControllerState.dwPacketNumber
+      bool WasDown = cast(bool)(OldButtons & ButtonMask);
+      bool IsDown = cast(bool)(NewButtons & ButtonMask);
 
-      auto Gamepad = &ControllerState.Gamepad;
-
-      //
-      // Buttons
-      //
+      if(WasDown != IsDown)
       {
-        // Helper function for easier debugging.
-        void UpdateButton(InputContext Input, InputId Id, bool IsDown)
-        {
-          Input.UpdateSlotValue(Id, IsDown ? 1.0f : 0.0f);
-        }
-        UpdateButton(Input, XInput.DPadUp,      cast(bool)(Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_UP));
-        UpdateButton(Input, XInput.DPadDown,    cast(bool)(Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_DOWN));
-        UpdateButton(Input, XInput.DPadLeft,    cast(bool)(Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_LEFT));
-        UpdateButton(Input, XInput.DPadRight,   cast(bool)(Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_RIGHT));
-        UpdateButton(Input, XInput.Start,       cast(bool)(Gamepad.wButtons & XINPUT_GAMEPAD_START));
-        UpdateButton(Input, XInput.Back,        cast(bool)(Gamepad.wButtons & XINPUT_GAMEPAD_BACK));
-        UpdateButton(Input, XInput.LeftThumb,   cast(bool)(Gamepad.wButtons & XINPUT_GAMEPAD_LEFT_THUMB));
-        UpdateButton(Input, XInput.RightThumb,  cast(bool)(Gamepad.wButtons & XINPUT_GAMEPAD_RIGHT_THUMB));
-        UpdateButton(Input, XInput.LeftBumper,  cast(bool)(Gamepad.wButtons & XINPUT_GAMEPAD_LEFT_SHOULDER));
-        UpdateButton(Input, XInput.RightBumper, cast(bool)(Gamepad.wButtons & XINPUT_GAMEPAD_RIGHT_SHOULDER));
-        UpdateButton(Input, XInput.A,           cast(bool)(Gamepad.wButtons & XINPUT_GAMEPAD_A));
-        UpdateButton(Input, XInput.B,           cast(bool)(Gamepad.wButtons & XINPUT_GAMEPAD_B));
-        UpdateButton(Input, XInput.X,           cast(bool)(Gamepad.wButtons & XINPUT_GAMEPAD_X));
-        UpdateButton(Input, XInput.Y,           cast(bool)(Gamepad.wButtons & XINPUT_GAMEPAD_Y));
-      }
-
-      //
-      // Triggers
-      //
-      {
-        float LeftValue = Gamepad.bLeftTrigger / 255.0f;
-        Input.UpdateSlotValue(XInput.LeftTrigger, LeftValue);
-
-        float RightValue = Gamepad.bRightTrigger / 255.0f;
-        Input.UpdateSlotValue(XInput.RightTrigger, RightValue);
-      }
-
-      //
-      // Thumbsticks
-      //
-      {
-        alias NormalizedThumbstickValue = (SHORT Value)
-        {
-          if(Value > 0) return Value / 32767.0f;
-          else          return Value / 32768.0f;
-        };
-
-        float XLeft = NormalizedThumbstickValue(Gamepad.sThumbLX);
-        Input.UpdateSlotValue(XInput.XLeftStick, XLeft);
-
-        float YLeft = NormalizedThumbstickValue(Gamepad.sThumbLY);
-        Input.UpdateSlotValue(XInput.YLeftStick, YLeft);
-
-        float XRight = NormalizedThumbstickValue(Gamepad.sThumbRX);
-        Input.UpdateSlotValue(XInput.XRightStick, XRight);
-
-        float YRight = NormalizedThumbstickValue(Gamepad.sThumbRY);
-        Input.UpdateSlotValue(XInput.YRightStick, YRight);
+        Input.UpdateSlotValue(Id, IsDown);
       }
     }
+
+    UpdateButton(Input, XInput.DPadUp,      OldGamepad.wButtons, NewGamepad.wButtons, XINPUT_GAMEPAD_DPAD_UP);
+    UpdateButton(Input, XInput.DPadDown,    OldGamepad.wButtons, NewGamepad.wButtons, XINPUT_GAMEPAD_DPAD_DOWN);
+    UpdateButton(Input, XInput.DPadLeft,    OldGamepad.wButtons, NewGamepad.wButtons, XINPUT_GAMEPAD_DPAD_LEFT);
+    UpdateButton(Input, XInput.DPadRight,   OldGamepad.wButtons, NewGamepad.wButtons, XINPUT_GAMEPAD_DPAD_RIGHT);
+    UpdateButton(Input, XInput.Start,       OldGamepad.wButtons, NewGamepad.wButtons, XINPUT_GAMEPAD_START);
+    UpdateButton(Input, XInput.Back,        OldGamepad.wButtons, NewGamepad.wButtons, XINPUT_GAMEPAD_BACK);
+    UpdateButton(Input, XInput.LeftThumb,   OldGamepad.wButtons, NewGamepad.wButtons, XINPUT_GAMEPAD_LEFT_THUMB);
+    UpdateButton(Input, XInput.RightThumb,  OldGamepad.wButtons, NewGamepad.wButtons, XINPUT_GAMEPAD_RIGHT_THUMB);
+    UpdateButton(Input, XInput.LeftBumper,  OldGamepad.wButtons, NewGamepad.wButtons, XINPUT_GAMEPAD_LEFT_SHOULDER);
+    UpdateButton(Input, XInput.RightBumper, OldGamepad.wButtons, NewGamepad.wButtons, XINPUT_GAMEPAD_RIGHT_SHOULDER);
+    UpdateButton(Input, XInput.A,           OldGamepad.wButtons, NewGamepad.wButtons, XINPUT_GAMEPAD_A);
+    UpdateButton(Input, XInput.B,           OldGamepad.wButtons, NewGamepad.wButtons, XINPUT_GAMEPAD_B);
+    UpdateButton(Input, XInput.X,           OldGamepad.wButtons, NewGamepad.wButtons, XINPUT_GAMEPAD_X);
+    UpdateButton(Input, XInput.Y,           OldGamepad.wButtons, NewGamepad.wButtons, XINPUT_GAMEPAD_Y);
+  }
+
+  //
+  // Triggers
+  //
+  {
+    void UpdateTrigger(Win32InputContext Input, InputId Id, BYTE OldValue, BYTE NewValue)
+    {
+      if(OldValue != NewValue)
+      {
+        float NormalizedValue = NewValue / 255.0f;
+        Input.UpdateSlotValue(Id, NormalizedValue);
+      }
+    }
+
+    UpdateTrigger(Input, XInput.LeftTrigger, OldGamepad.bLeftTrigger, NewGamepad.bLeftTrigger);
+    UpdateTrigger(Input, XInput.RightTrigger, OldGamepad.bRightTrigger, NewGamepad.bRightTrigger);
+  }
+
+  //
+  // Thumbsticks
+  //
+  {
+    void UpdateThumbStick(Win32InputContext Input, InputId Id, SHORT OldValue, SHORT NewValue)
+    {
+      if(OldValue != NewValue)
+      {
+        float NormalizedValue = void;
+        if(NewValue > 0) NormalizedValue = NewValue / 32767.0f;
+        else             NormalizedValue = NewValue / 32768.0f;
+        Input.UpdateSlotValue(Id, NormalizedValue);
+      }
+    }
+
+    UpdateThumbStick(Input, XInput.XLeftStick, OldGamepad.sThumbLX, NewGamepad.sThumbLX);
+    UpdateThumbStick(Input, XInput.YLeftStick, OldGamepad.sThumbLY, NewGamepad.sThumbLY);
+    UpdateThumbStick(Input, XInput.XRightStick, OldGamepad.sThumbRX, NewGamepad.sThumbRX);
+    UpdateThumbStick(Input, XInput.YRightStick, OldGamepad.sThumbRY, NewGamepad.sThumbRY);
   }
 }
 
-void Win32RegisterAllMouseSlots(InputContext Context,
+void Win32RegisterAllMouseSlots(Win32InputContext Context,
                                 LogData* Log = null)
 {
   Context.RegisterInputSlot(InputType.Button, Mouse.LeftButton);
@@ -439,16 +468,6 @@ void Win32RegisterAllMouseSlots(InputContext Context,
   Context.RegisterInputSlot(InputType.Action, Mouse.RightButton_DoubleClick);
   Context.RegisterInputSlot(InputType.Action, Mouse.ExtraButton1_DoubleClick);
   Context.RegisterInputSlot(InputType.Action, Mouse.ExtraButton2_DoubleClick);
-
-  with(Context.ValueProperties.GetOrCreate(Mouse.VerticalWheelDelta))
-  {
-    Sensitivity = 1.0f / WHEEL_DELTA;
-  }
-
-  with(Context.ValueProperties.GetOrCreate(Mouse.HorizontalWheelDelta))
-  {
-    Sensitivity = 1.0f / WHEEL_DELTA;
-  }
 
   //
   // Register Mouse Raw Input
@@ -472,7 +491,7 @@ void Win32RegisterAllMouseSlots(InputContext Context,
   }
 }
 
-void Win32RegisterAllKeyboardSlots(InputContext Context,
+void Win32RegisterAllKeyboardSlots(Win32InputContext Context,
                                    LogData* Log = null)
 {
   foreach(MemberName; __traits(allMembers, Keyboard))
@@ -485,7 +504,7 @@ void Win32RegisterAllKeyboardSlots(InputContext Context,
   }
 }
 
-void Win32RegisterAllXInputSlots(InputContext Context,
+void Win32RegisterAllXInputSlots(Win32InputContext Context,
                                  LogData* Log = null)
 {
   Context.RegisterInputSlot(InputType.Button, XInput.DPadUp);

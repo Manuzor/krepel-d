@@ -97,7 +97,7 @@ struct InputValueProperties
 // Sample signature: $(D void Listener(InputId SlotId, InputSlotData Slot))
 alias InputEvent = Event!(InputId, InputSlotData);
 
-// TODO(Manu): Implement ActionEvent so that user's can listen to a specific action.
+// TODO(Manu): Implement ActionEvent so that users can listen to a specific action.
 class InputContext
 {
   static struct TriggerPair
@@ -107,6 +107,7 @@ class InputContext
   }
 
   InputContext Parent;
+  int UserIndex = -1; // -1 for no associated user, >= 0 for a specific user.
   string Name; // Mostly for debugging.
 
   Dictionary!(InputId, InputSlotData) Slots;
@@ -118,13 +119,7 @@ class InputContext
 
   Array!dchar CharacterBuffer;
 
-
-  this(IAllocator Allocator)
-  {
-    this.Allocator = Allocator;
-  }
-
-  @property void Allocator(IAllocator NewAllocator)
+  this(IAllocator NewAllocator)
   {
     this.Slots.Allocator = NewAllocator;
     this.ValueProperties.Allocator = NewAllocator;
@@ -147,11 +142,6 @@ class InputContext
     assert(Slot);
 
     Slot.Type = Type;
-
-    if(Type == InputType.Axis)
-    {
-      this.ValueProperties.GetOrCreate(SlotId);
-    }
   }
 
   bool AddTrigger(InputId SlotId, InputId TriggerId)
@@ -167,14 +157,25 @@ class InputContext
     return false;
   }
 
+  /// Overload for booleans.
+  ///
+  /// A boolean value is treated as $(D 0.0f) for $(D false) and $(D 1.0f) for
+  /// $(D true) values.
+  bool UpdateSlotValue(InputId TriggeringSlotId, bool NewValue)
+  {
+    return UpdateSlotValue(TriggeringSlotId, NewValue ? 1.0f : 0.0f);
+  }
+
   /// Return: Will return $(D false) if the slot does not exist.
   bool UpdateSlotValue(InputId TriggeringSlotId, float NewValue)
   {
     auto TriggeringSlot = Slots.Get(TriggeringSlotId);
     if(TriggeringSlot is null) return false;
 
+    NewValue = AttuneInputValue(TriggeringSlotId, NewValue);
+
     TriggeringSlot.Frame = this.CurrentFrame;
-    TriggeringSlot.Value = AttuneInputValue(TriggeringSlotId, NewValue);
+    TriggeringSlot.Value = NewValue;
 
     foreach(Trigger; this.Triggers)
     {
@@ -225,6 +226,15 @@ class InputContext
 
   void BeginInputFrame()
   {
+    // This will never happen...
+    assert(this.CurrentFrame < typeof(this.CurrentFrame).max);
+    this.CurrentFrame++;
+
+    this.CharacterBuffer.Clear();
+  }
+
+  void EndInputFrame()
+  {
     foreach(Id, ref Slot; this.Slots)
     {
       if(Slot.Frame < this.CurrentFrame)
@@ -232,14 +242,5 @@ class InputContext
 
       this.ChangeEvent(Id, Slot);
     }
-  }
-
-  void EndInputFrame()
-  {
-    // This will never happen...
-    assert(this.CurrentFrame < typeof(this.CurrentFrame).max);
-    this.CurrentFrame++;
-
-    this.CharacterBuffer.Clear();
   }
 }

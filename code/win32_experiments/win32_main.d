@@ -117,21 +117,25 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
 
       version(XInput_RuntimeLinking) LoadXInput();
 
-      auto SystemInput = MainAllocator.New!InputContext(MainAllocator);
+      auto SystemInput = MainAllocator.New!Win32InputContext(MainAllocator);
       scope(exit) MainAllocator.Delete(SystemInput);
+
+      // Note(Manu): Let's pretend the system is user 0 for now.
+      SystemInput.UserIndex = 0;
 
       Win32RegisterAllKeyboardSlots(SystemInput);
       Win32RegisterAllMouseSlots(SystemInput);
       Win32RegisterAllXInputSlots(SystemInput);
 
+
       SystemInput.RegisterInputSlot(InputType.Button, "Quit");
       SystemInput.AddTrigger("Quit", Keyboard.Escape);
       SystemInput.AddTrigger("Quit", XInput.Start);
 
-      //SystemInput.ChangeEvent.Add = (Id, Slot)
-      //{
-      //  Log.Info("Input change '%s': %s %s", Id, Slot.Type, Slot.Value);
-      //};
+      SystemInput.ChangeEvent.Add = (Id, Slot)
+      {
+        Log.Info("Input change '%s': %s %s", Id, Slot.Type, Slot.Value);
+      };
 
       auto Window = MainAllocator.New!WindowData(SystemInput);
       scope(exit) MainAllocator.Delete(Window);
@@ -143,17 +147,18 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
 
       while(GlobalRunning)
       {
-        Win32MessagePump();
-
-        Win32PollXInput(SystemInput);
-
         SystemInput.BeginInputFrame();
-        scope(success) SystemInput.EndInputFrame();
+        {
+          Win32MessagePump();
+          Win32PollXInput(SystemInput);
+        }
+        SystemInput.EndInputFrame();
 
         auto QuitInput = SystemInput["Quit"];
         if(QuitInput && QuitInput.ButtonIsDown) .GlobalRunning = false;
 
-        Log.Info("Left Stick: %f", SystemInput[XInput.XLeftStick].AxisValue);
+        auto LeftStickValue = SystemInput[XInput.XLeftStick].AxisValue;
+        if(LeftStickValue) Log.Info("Left Stick: %f", LeftStickValue);
 
         auto CornflowerBlue = Vector4(100 / 255.0f, 149 / 255.0f, 237 / 255.0f, 1.0f);
         State.ImmediateContext.ClearRenderTargetView(State.RenderTargetView, CornflowerBlue.Data);
@@ -256,9 +261,9 @@ LRESULT Win32MainWindowCallback(HWND WindowHandle, UINT Message,
 
 class WindowData
 {
-  InputContext Input;
+  Win32InputContext Input;
 
-  this(InputContext Input)
+  this(Win32InputContext Input)
   {
     this.Input = Input;
   }
