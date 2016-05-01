@@ -83,7 +83,7 @@ struct InputSlotData
 //                         SlotId,      SlotData
 alias InputEvent = Event!(InputId, InputSlotData);
 
-// TODO(Manu): Implement ChangeEvent
+// TODO(Manu): Implement ActionEvent so that user's can listen to a specific action.
 class InputContext
 {
   static struct TriggerPair
@@ -98,7 +98,6 @@ class InputContext
   Dictionary!(InputId, InputSlotData) Slots;
   Array!TriggerPair Triggers;
   InputEvent ChangeEvent;
-  InputEvent ActionEvent;
 
   ulong CurrentFrame;
 
