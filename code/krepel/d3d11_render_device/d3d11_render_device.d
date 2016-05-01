@@ -62,6 +62,16 @@ class DxShaderCode
   }
 }
 
+class DxConstantBuffer : IConstantBuffer
+{
+  ID3D11Buffer ConstantBuffer;
+
+  ~this()
+  {
+    ReleaseAndNullify(ConstantBuffer);
+  }
+}
+
 class DxShader : IShader
 {
   ARC!DxShaderCode Code;
@@ -317,6 +327,45 @@ class D3D11RenderDevice : IRenderDevice
     }
 
     return Shader;
+  }
+
+  IConstantBuffer CreateConstantBuffer(void[] Data)
+  {
+    auto ConstantBuffer = Allocator.New!DxConstantBuffer();
+    D3D11_BUFFER_DESC Description;
+    with(Description)
+    {
+      ByteWidth = cast(uint)Data.length;
+      Usage = D3D11_USAGE_DYNAMIC;
+      BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+      CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+      MiscFlags = 0;
+      StructureByteStride = 0;
+    }
+
+    D3D11_SUBRESOURCE_DATA InitData;
+    InitData.pSysMem = Data.ptr;
+
+    if(FAILED(DeviceState.Device.CreateBuffer(&Description, &InitData, &ConstantBuffer.ConstantBuffer)))
+    {
+      Log.Failure("Could not create constant buffer!");
+      Allocator.Delete(ConstantBuffer);
+      return null;
+    }
+
+    return ConstantBuffer;
+  }
+
+  void SetVertexShaderConstantBuffer(IConstantBuffer Buffer, uint Index)
+  {
+    DxConstantBuffer ConstantBuffer = cast(DxConstantBuffer)Buffer;
+    DeviceState.ImmediateContext.VSSetConstantBuffers(Index, 1, &ConstantBuffer.ConstantBuffer);
+  }
+
+  void ReleaseConstantBuffer(IConstantBuffer Buffer)
+  {
+    DxConstantBuffer ConstantBuffer = cast(DxConstantBuffer)Buffer;
+    Allocator.Delete(ConstantBuffer);
   }
 
   IRenderMesh CreateRenderMesh(SubMesh Mesh)

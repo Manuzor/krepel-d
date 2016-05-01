@@ -42,6 +42,11 @@ interface IRenderInputLayout
 
 }
 
+interface IConstantBuffer
+{
+  
+}
+
 interface IRenderDevice
 {
 
