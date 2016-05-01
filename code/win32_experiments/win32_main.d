@@ -14,6 +14,7 @@ import krepel.win32.directx.uuidof;
 import krepel.d3d11_render_device;
 import krepel.render_device;
 import krepel.resources;
+import krepel.scene;
 
 version(Windows):
 import std.string : toStringz, fromStringz;
@@ -163,7 +164,7 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
       ResourceManager Manager = MainAllocator.New!ResourceManager(MainAllocator);
       auto WaveFrontLoader = MainAllocator.New!WavefrontResourceLoader();
       Manager.RegisterLoader(WaveFrontLoader, WString(".obj", MainAllocator));
-      MeshResource Mesh = Manager.LoadMesh(WString("../data/mesh/Cube.obj", MainAllocator));
+      MeshResource Mesh = Manager.LoadMesh(WString("../data/mesh/Suzanne.obj", MainAllocator));
 
       IRenderMesh RenderMesh = Device.CreateRenderMesh(Mesh.Meshes[0]);
       scope(exit)
@@ -173,6 +174,19 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
         MainAllocator.Delete(WaveFrontLoader);
         MainAllocator.Delete(Manager);
       }
+
+      SceneGraph Graph = MainAllocator.New!(SceneGraph)(MainAllocator);
+      auto CameraObject= Graph.CreateDefaultGameObject(UString("Camera", MainAllocator));
+      auto CameraComponent = CameraObject.ConstructChild!CameraComponent(UString("CameraComponent", MainAllocator), CameraObject.RootComponent);
+      CameraComponent.FieldOfView = PI/2;
+      CameraComponent.Width = 1280;
+      CameraComponent.Height = 720;
+      CameraComponent.NearPlane = 0.1f;
+      CameraComponent.FarPlane = 10.0f;
+      CameraComponent.SetWorldTransform(Transform(Vector3(0,0,2), Quaternion.Identity, Vector3.UnitScaleVector));
+      Matrix4 Mat = CameraComponent.GetViewProjectionMatrix().GetTransposed;
+      auto ConstantBuffer = Device.CreateConstantBuffer((cast(void*)&Mat)[0..Matrix4.sizeof]);
+      scope(exit) Device.ReleaseConstantBuffer(ConstantBuffer);
 
       version(XInput_RuntimeLinking) LoadXInput();
 
@@ -185,13 +199,25 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
         XINPUT_STATE ControllerState;
         if(XInputGetState(0, &ControllerState) == ERROR_SUCCESS)
         {
-          Log.Info("Marvin!! XINPUT FUNKTIONIERT!!");
+          Log.Info("%d",ControllerState.Gamepad.sThumbLX);
+          Device.ReleaseConstantBuffer(ConstantBuffer);
+          float DeltaX = cast(float)ControllerState.Gamepad.sThumbLX / 32767.0f;
+          float DeltaY = cast(float)ControllerState.Gamepad.sThumbLY / 32767.0f;
+          float DeltaZ = cast(float)ControllerState.Gamepad.sThumbRY / 32767.0f;
+          Transform WorldTransform = CameraComponent.GetWorldTransform();
+          WorldTransform.Translation.X += DeltaX * (1/3000.0f);
+          WorldTransform.Translation.Y += DeltaY * (1/3000.0f);
+          WorldTransform.Translation.Z += DeltaZ * (1/3000.0f);
+          CameraComponent.SetWorldTransform(WorldTransform);
+          Mat = CameraComponent.GetViewProjectionMatrix().GetTransposed;
+          ConstantBuffer = Device.CreateConstantBuffer((cast(void*)&Mat)[0..Matrix4.sizeof]);
         }
 
         auto CornflowerBlue = Vector4(100 / 255.0f, 149 / 255.0f, 237 / 255.0f, 1.0f);
         Device.ClearRenderTarget(CornflowerBlue);
         Device.SetVertexShader(VertexShader);
         Device.SetPixelShader(PixelShader);
+        Device.SetVertexShaderConstantBuffer(ConstantBuffer, 0);
         Device.SetMesh(RenderMesh);
         Device.DrawIndexed(RenderMesh.GetIndexCount());
         Device.Present();

@@ -1,9 +1,15 @@
+cbuffer Camera
+{
+  matrix MVP;
+};
+
+
 //--------------------------------------------------------------------------------------
 // Vertex Shader
 //--------------------------------------------------------------------------------------
-float4 VSMain( float4 Pos : POSITION ) : SV_POSITION
+float4 VSMain( float3 Pos : POSITION ) : SV_POSITION
 {
-    return Pos;
+    return mul(float4(Pos, 1.0f), MVP);
 }
 
 
