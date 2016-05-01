@@ -37,10 +37,8 @@ Flag!"Processed" Win32ProcessInputMessage(HWND WindowHandle, UINT Message, WPARA
       return Yes.Processed;
     }
 
-    InputValueData KeyValue;
-    KeyValue.Type = InputType.Button;
-    KeyValue.ButtonIsDown = IsDown;
-    Input.MapInput(KeyId, KeyValue);
+    float KeyValue = IsDown ? 1.0f : 0.0f;
+    Input.UpdateSlotValue(KeyId, KeyValue);
 
     return Yes.Processed;
   }
@@ -56,10 +54,10 @@ Flag!"Processed" Win32ProcessInputMessage(HWND WindowHandle, UINT Message, WPARA
     if(Message == WM_MOUSEMOVE)
     {
       auto XClientAreaMouse = GET_X_LPARAM(LParam);
-      Input.MapInput(Mouse.XClientPosition, InputValueData(InputType.Axis, cast(float)XClientAreaMouse));
+      Input.UpdateSlotValue(Mouse.XPosition, cast(float)XClientAreaMouse);
 
       auto YClientAreaMouse = GET_Y_LPARAM(LParam);
-      Input.MapInput(Mouse.YClientPosition, InputValueData(InputType.Axis, cast(float)YClientAreaMouse));
+      Input.UpdateSlotValue(Mouse.YPosition, cast(float)YClientAreaMouse);
 
       return Yes.Processed;
     }
@@ -68,7 +66,7 @@ Flag!"Processed" Win32ProcessInputMessage(HWND WindowHandle, UINT Message, WPARA
     // Mouse buttons and wheels
     //
     InputId Id;
-    InputValueData Value;
+    float Value;
 
     switch(Message)
     {
@@ -76,24 +74,21 @@ Flag!"Processed" Win32ProcessInputMessage(HWND WindowHandle, UINT Message, WPARA
       case WM_LBUTTONDOWN:
       {
         Id = Mouse.LeftButton;
-        Value.Type = InputType.Button;
-        Value.ButtonIsDown = Message == WM_LBUTTONDOWN;
+        Value = Message == WM_LBUTTONDOWN ? 1.0f : 0.0f;
       } break;
 
       case WM_RBUTTONUP:
       case WM_RBUTTONDOWN:
       {
         Id = Mouse.RightButton;
-        Value.Type = InputType.Button;
-        Value.ButtonIsDown = Message == WM_RBUTTONDOWN;
+        Value = Message == WM_RBUTTONDOWN ? 1.0f : 0.0f;
       } break;
 
       case WM_MBUTTONUP:
       case WM_MBUTTONDOWN:
       {
         Id = Mouse.MiddleButton;
-        Value.Type = InputType.Button;
-        Value.ButtonIsDown = Message == WM_MBUTTONDOWN;
+        Value = Message == WM_MBUTTONDOWN ? 1.0f : 0.0f;
       } break;
 
       case WM_XBUTTONUP:
@@ -102,24 +97,21 @@ Flag!"Processed" Win32ProcessInputMessage(HWND WindowHandle, UINT Message, WPARA
         // TODO(Manu): Check which one it is.
         Id = Mouse.ExtraButton1;
         Id = Mouse.ExtraButton2;
-        Value.Type = InputType.Button;
-        Value.ButtonIsDown = Message == WM_XBUTTONDOWN;
+        Value = Message == WM_XBUTTONDOWN ? 1.0f : 0.0f;
       } break;
 
       case WM_MOUSEWHEEL:
       {
-        auto AbsoluteValue = GET_WHEEL_DELTA_WPARAM(WParam);
+        auto RawValue = GET_WHEEL_DELTA_WPARAM(WParam);
         Id = Mouse.VerticalWheelDelta;
-        Value.Type = InputType.Axis;
-        Value.AxisValue = cast(float)AbsoluteValue / WHEEL_DELTA;
+        Value = cast(float)RawValue / WHEEL_DELTA;
       } break;
 
       case WM_MOUSEHWHEEL:
       {
-        auto AbsoluteValue = GET_WHEEL_DELTA_WPARAM(WParam);
+        auto RawValue = GET_WHEEL_DELTA_WPARAM(WParam);
         Id = Mouse.HorizontalWheelDelta;
-        Value.Type = InputType.Axis;
-        Value.AxisValue = cast(float)AbsoluteValue / WHEEL_DELTA;
+        Value = cast(float)RawValue / WHEEL_DELTA;
       } break;
 
       default: break;
@@ -127,7 +119,7 @@ Flag!"Processed" Win32ProcessInputMessage(HWND WindowHandle, UINT Message, WPARA
 
     if(Id)
     {
-      Input.MapInput(Id, Value);
+      Input.UpdateSlotValue(Id, Value);
     }
 
     return Yes.Processed;
@@ -166,10 +158,10 @@ Flag!"Processed" Win32ProcessInputMessage(HWND WindowHandle, UINT Message, WPARA
     }
 
     auto XMovement = cast(float)InputData.data.mouse.lLastX;
-    Input.MapInput(Mouse.XDelta, InputValueData(InputType.Axis, XMovement));
+    Input.UpdateSlotValue(Mouse.XDelta, XMovement);
 
     auto YMovement = cast(float)InputData.data.mouse.lLastY;
-    Input.MapInput(Mouse.YDelta, InputValueData(InputType.Axis, YMovement));
+    Input.UpdateSlotValue(Mouse.YDelta, YMovement);
 
     return Yes.Processed;
   }

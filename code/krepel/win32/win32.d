@@ -335,10 +335,15 @@ string Win32MessageIdToString(DWORD MessageId)
   }
 }
 
-// Note(Manu): DRuntime does not contain these. Below is the original macro
-// definition from the windowsx.h header file taken from Windows SDK
-// 10.0.10586.0
-//#define GET_X_LPARAM(lp)                        ((int)(short)LOWORD(lp))
-//#define GET_Y_LPARAM(lp)                        ((int)(short)HIWORD(lp))
+//
+// Note(Manu): The stuff below does not exist in the D Runtime but is part of the Windows API.
+//
+
+//#define GET_X_LPARAM(lp) ((int)(short)LOWORD(lp))
 alias GET_X_LPARAM = (lp) => cast(int)cast(short)LOWORD(lp);
+
+//#define GET_Y_LPARAM(lp) ((int)(short)HIWORD(lp))
 alias GET_Y_LPARAM = (lp) => cast(int)cast(short)HIWORD(lp);
+
+//#define GET_XBUTTON_WPARAM(wParam) (HIWORD(wParam))
+alias GET_XBUTTON_WPARAM = (wParam) => HIWORD(wParam);

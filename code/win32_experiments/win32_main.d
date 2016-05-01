@@ -128,10 +128,9 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
       SystemInput.RegisterButton("Quit");
       SystemInput.AddTrigger("Quit", Keyboard.Escape);
 
-      SystemInput.ChangeEvent.Add = (Id, OldValue, NewValue)
+      SystemInput.ChangeEvent.Add = (Id, Slot)
       {
-        Log.Info("Input change '%s': %s %s => %s %s",
-                 Id, OldValue.Type, OldValue.Value, NewValue.Type, NewValue.Value);
+        Log.Info("Input change '%s': %s %s", Id, Slot.Type, Slot.Value);
       };
 
       auto Window = MainAllocator.New!WindowData(SystemInput);
@@ -145,6 +144,9 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
       while(GlobalRunning)
       {
         Win32MessagePump();
+
+        SystemInput.BeginInputFrame();
+        scope(success) SystemInput.EndInputFrame();
 
         auto QuitInput = SystemInput["Quit"];
         if(QuitInput && QuitInput.ButtonIsDown) .GlobalRunning = false;

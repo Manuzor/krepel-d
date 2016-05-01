@@ -12,15 +12,30 @@ enum InputType
 {
   INVALID,
 
-  Action, // Has no data attached to and is a one-time thing.
-  Button, // Has a persistent state on/off state.
-  Axis,   // Has a floating point value state.
+  /// Only valid for a single frame.
+  Action,
+
+  /// Has a persistent on/off state.
+  Button,
+
+  /// Has a persistent floating point state.
+  Axis,
 }
 
-struct InputValueData
+struct InputSlotData
 {
+  /// The type of this slot.
   InputType Type;
-  float Value = 0.0f; // You should not use this value directly. Use the properties below.
+
+  /// The value of the slot.
+  ///
+  /// Interpretation depends on the $(D Type) of this slot.
+  /// Note(Manu): Consider using the property functions below as they do type
+  /// checking for you and express the purpose more clearly.
+  float Value = 0.0f;
+
+  /// The frame in which this value was updated.
+  ulong Frame;
 
   @property
   {
@@ -50,11 +65,23 @@ struct InputValueData
       assert(this.Type == InputType.Axis);
       this.Value = NewValue;
     }
+
+    float ActionValue() const
+    {
+      assert(this.Type == InputType.Action);
+      return this.Value;
+    }
+
+    void ActionValue(float NewValue)
+    {
+      assert(this.Type == InputType.Action);
+      this.Value = NewValue;
+    }
   }
 }
 
-//                               SlotId,       OldValue,       NewValue
-alias InputActionEvent = Event!(InputId, InputValueData, InputValueData);
+//                         SlotId,      SlotData
+alias InputEvent = Event!(InputId, InputSlotData);
 
 // TODO(Manu): Implement ChangeEvent
 class InputContext
@@ -68,9 +95,12 @@ class InputContext
   InputContext Parent;
   string Name; // Mostly for debugging.
 
-  Dictionary!(InputId, InputValueData) Slots;
+  Dictionary!(InputId, InputSlotData) Slots;
   Array!TriggerPair Triggers;
-  InputActionEvent ChangeEvent;
+  InputEvent ChangeEvent;
+  InputEvent ActionEvent;
+
+  ulong CurrentFrame;
 
 
   this(IAllocator Allocator)
@@ -85,20 +115,12 @@ class InputContext
     this.ChangeEvent.Allocator = NewAllocator;
   }
 
-  InputValueData* opIndex(InputId SlotId)
+  InputSlotData* opIndex(InputId SlotId)
   {
     auto Slot = this.Slots.Get(SlotId);
     if(Slot) return Slot;
     if(Parent) return Parent[SlotId];
     return null;
-  }
-
-  void RegisterInputSlot(InputId SlotId, InputType Type)
-  {
-    auto Slot = this.Slots.GetOrCreate(SlotId);
-    assert(Slot);
-
-    Slot.Type = Type;
   }
 
   void RegisterButton(InputId NewButtonId)
@@ -116,6 +138,14 @@ class InputContext
     RegisterInputSlot(NewActionId, InputType.Action);
   }
 
+  void RegisterInputSlot(InputId SlotId, InputType Type)
+  {
+    auto Slot = this.Slots.GetOrCreate(SlotId);
+    assert(Slot);
+
+    Slot.Type = Type;
+  }
+
   bool AddTrigger(InputId SlotId, InputId TriggerId)
   {
     // TODO(Manu): Eliminate duplicates.
@@ -129,12 +159,14 @@ class InputContext
     return false;
   }
 
-  bool MapInput(InputId TriggeringSlotId, InputValueData NewValue)
+  /// Return: Will return $(D false) if the slot does not exist.
+  bool UpdateSlotValue(InputId TriggeringSlotId, float NewValue)
   {
     auto TriggeringSlot = Slots.Get(TriggeringSlotId);
     if(TriggeringSlot is null) return false;
 
-    UpdateSlotValue(TriggeringSlotId, TriggeringSlot, NewValue);
+    TriggeringSlot.Value = NewValue;
+    TriggeringSlot.Frame = this.CurrentFrame;
 
     foreach(Trigger; this.Triggers)
     {
@@ -143,7 +175,8 @@ class InputContext
         auto Slot = this.Slots.Get(Trigger.SlotId);
         if(Slot)
         {
-          UpdateSlotValue(Trigger.SlotId, Slot, NewValue);
+          Slot.Value = NewValue;
+          Slot.Frame = this.CurrentFrame;
         }
       }
     }
@@ -151,16 +184,21 @@ class InputContext
     return true;
   }
 
-  void UpdateSlotValue(InputId SlotId, InputValueData* Slot, InputValueData NewValue)
+  void BeginInputFrame()
   {
-    assert(Slot);
+    foreach(Id, ref Slot; this.Slots)
+    {
+      if(Slot.Frame < this.CurrentFrame)
+        continue;
 
-    auto OldValue = *Slot;
+      this.ChangeEvent(Id, Slot);
+    }
+  }
 
-    // Note(Manu): The actual type of the input doesn't matter. We just map
-    // the float values. I just hope that's fine...
-    Slot.Value = NewValue.Value;
-
-    this.ChangeEvent(SlotId, OldValue, NewValue);
+  void EndInputFrame()
+  {
+    // This will never happen...
+    assert(this.CurrentFrame < typeof(this.CurrentFrame).max);
+    this.CurrentFrame++;
   }
 }

@@ -18,16 +18,16 @@ enum Mouse
   //
   // Axes
   //
-  XClientPosition      = "Mouse_XClientPosition",
-  YClientPosition      = "Mouse_YClientPosition",
-  XDelta               = "Mouse_XDelta",
-  YDelta               = "Mouse_YDelta",
-  VerticalWheelDelta   = "Mouse_VerticalWheelDelta",
-  HorizontalWheelDelta = "Mouse_HorizontalWheelDelta",
+  XPosition = "Mouse_XPosition",
+  YPosition = "Mouse_YPosition",
 
   //
   // Actions
   //
+  XDelta                   = "Mouse_XDelta",
+  YDelta                   = "Mouse_YDelta",
+  VerticalWheelDelta       = "Mouse_VerticalWheelDelta",
+  HorizontalWheelDelta     = "Mouse_HorizontalWheelDelta",
   LeftButton_DoubleClick   = "Mouse_LeftButton_DoubleClick",
   MiddleButton_DoubleClick = "Mouse_MiddleButton_DoubleClick",
   RightButton_DoubleClick  = "Mouse_RightButton_DoubleClick",
@@ -43,12 +43,13 @@ void RegisterAllMouseSlots(InputContext Context)
   Context.RegisterButton(Mouse.ExtraButton1);
   Context.RegisterButton(Mouse.ExtraButton2);
 
-  Context.RegisterAxis(Mouse.XClientPosition);
-  Context.RegisterAxis(Mouse.YClientPosition);
-  Context.RegisterAxis(Mouse.XDelta);
-  Context.RegisterAxis(Mouse.YDelta);
-  Context.RegisterAxis(Mouse.VerticalWheelDelta);
-  Context.RegisterAxis(Mouse.HorizontalWheelDelta);
+  Context.RegisterAxis(Mouse.XPosition);
+  Context.RegisterAxis(Mouse.YPosition);
+
+  Context.RegisterAction(Mouse.XDelta);
+  Context.RegisterAction(Mouse.YDelta);
+  Context.RegisterAction(Mouse.VerticalWheelDelta);
+  Context.RegisterAction(Mouse.HorizontalWheelDelta);
 
   Context.RegisterAction(Mouse.LeftButton_DoubleClick);
   Context.RegisterAction(Mouse.MiddleButton_DoubleClick);
