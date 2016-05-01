@@ -133,7 +133,7 @@ void RegisterAllKeyboardSlots(InputContext Context)
   {
     if(MemberName != Keyboard.Unknown)
     {
-      enum Code = `Context.RegisterButton(.Keyboard.` ~ MemberName ~ `);`;
+      enum Code = `Context.RegisterInputSlot(InputType.Button, Keyboard.` ~ MemberName ~ `);`;
       mixin(Code);
     }
   }

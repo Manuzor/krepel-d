@@ -124,14 +124,16 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
 
       SystemInput.RegisterAllKeyboardSlots();
       SystemInput.RegisterAllMouseSlots();
+      SystemInput.RegisterAllXInputSlots();
 
-      SystemInput.RegisterButton("Quit");
+      SystemInput.RegisterInputSlot(InputType.Button, "Quit");
       SystemInput.AddTrigger("Quit", Keyboard.Escape);
+      SystemInput.AddTrigger("Quit", XInput.Start);
 
-      SystemInput.ChangeEvent.Add = (Id, Slot)
-      {
-        Log.Info("Input change '%s': %s %s", Id, Slot.Type, Slot.Value);
-      };
+      //SystemInput.ChangeEvent.Add = (Id, Slot)
+      //{
+      //  Log.Info("Input change '%s': %s %s", Id, Slot.Type, Slot.Value);
+      //};
 
       auto Window = MainAllocator.New!WindowData(SystemInput);
       scope(exit) MainAllocator.Delete(Window);
@@ -145,23 +147,15 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
       {
         Win32MessagePump();
 
+        Win32PollXInput(SystemInput);
+
         SystemInput.BeginInputFrame();
         scope(success) SystemInput.EndInputFrame();
 
         auto QuitInput = SystemInput["Quit"];
         if(QuitInput && QuitInput.ButtonIsDown) .GlobalRunning = false;
 
-        //auto ForwardInput = SystemInput["MoveForward"];
-        //if(ForwardInput && ForwardInput.Button.IsDown) Log.Info("Moving Forward!");
-
-        //auto SelectionInput = SystemInput["Select"];
-        //if(SelectionInput && SelectionInput.Button.IsDown) Log.Info("Select something.");
-
-        XINPUT_STATE ControllerState;
-        if(XInputGetState(0, &ControllerState) == ERROR_SUCCESS)
-        {
-          Log.Info("Marvin!! XINPUT FUNKTIONIERT!!");
-        }
+        Log.Info("Left Stick: %f", SystemInput[XInput.XLeftStick].AxisValue);
 
         auto CornflowerBlue = Vector4(100 / 255.0f, 149 / 255.0f, 237 / 255.0f, 1.0f);
         State.ImmediateContext.ClearRenderTargetView(State.RenderTargetView, CornflowerBlue.Data);

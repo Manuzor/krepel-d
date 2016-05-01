@@ -80,6 +80,13 @@ struct InputSlotData
   }
 }
 
+struct InputAxisProperties
+{
+  float DeadZone = 0.0f;
+  float Sensitivity = 1.0f;
+  float Exponent = 1.0f;
+}
+
 //                         SlotId,      SlotData
 alias InputEvent = Event!(InputId, InputSlotData);
 
@@ -96,6 +103,7 @@ class InputContext
   string Name; // Mostly for debugging.
 
   Dictionary!(InputId, InputSlotData) Slots;
+  Dictionary!(InputId, InputAxisProperties) AxisProperties;
   Array!TriggerPair Triggers;
   InputEvent ChangeEvent;
 
@@ -112,6 +120,7 @@ class InputContext
   @property void Allocator(IAllocator NewAllocator)
   {
     this.Slots.Allocator = NewAllocator;
+    this.AxisProperties.Allocator = NewAllocator;
     this.Triggers.Allocator = NewAllocator;
     this.ChangeEvent.Allocator = NewAllocator;
     this.CharacterBuffer.Allocator = NewAllocator;
@@ -125,27 +134,17 @@ class InputContext
     return null;
   }
 
-  void RegisterButton(InputId NewButtonId)
-  {
-    RegisterInputSlot(NewButtonId, InputType.Button);
-  }
-
-  void RegisterAxis(InputId NewAxisId)
-  {
-    RegisterInputSlot(NewAxisId, InputType.Axis);
-  }
-
-  void RegisterAction(InputId NewActionId)
-  {
-    RegisterInputSlot(NewActionId, InputType.Action);
-  }
-
-  void RegisterInputSlot(InputId SlotId, InputType Type)
+  void RegisterInputSlot(InputType Type, InputId SlotId)
   {
     auto Slot = this.Slots.GetOrCreate(SlotId);
     assert(Slot);
 
     Slot.Type = Type;
+
+    if(Type == InputType.Axis)
+    {
+      this.AxisProperties.GetOrCreate(SlotId);
+    }
   }
 
   bool AddTrigger(InputId SlotId, InputId TriggerId)
@@ -167,8 +166,8 @@ class InputContext
     auto TriggeringSlot = Slots.Get(TriggeringSlotId);
     if(TriggeringSlot is null) return false;
 
-    TriggeringSlot.Value = NewValue;
     TriggeringSlot.Frame = this.CurrentFrame;
+    TriggeringSlot.Value = AttuneInputValue(TriggeringSlotId, NewValue);
 
     foreach(Trigger; this.Triggers)
     {
@@ -177,13 +176,26 @@ class InputContext
         auto Slot = this.Slots.Get(Trigger.SlotId);
         if(Slot)
         {
-          Slot.Value = NewValue;
           Slot.Frame = this.CurrentFrame;
+          Slot.Value = AttuneInputValue(Trigger.SlotId, NewValue);
         }
       }
     }
 
     return true;
+  }
+
+  /// Applies special settings for the given input slot, if there are any, and
+  /// returns an adjusted value.
+  float AttuneInputValue(InputId SlotId, float RawValue)
+  {
+    auto AxisProps = this.AxisProperties.Get(SlotId);
+    if(AxisProps)
+    {
+      // TODO(Manu): Implement this.
+    }
+
+    return RawValue;
   }
 
   void BeginInputFrame()

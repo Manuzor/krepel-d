@@ -6,6 +6,7 @@ import krepel.win32;
 import krepel.input.input;
 import krepel.input.keyboard;
 import krepel.input.mouse;
+import krepel.input.xinput;
 
 
 Flag!"Processed" Win32ProcessInputMessage(HWND WindowHandle, UINT Message, WPARAM WParam, LPARAM LParam,
@@ -357,5 +358,89 @@ InputId Win32VirtualKeyToInputId(WPARAM VKCode, LPARAM lParam)
     case VK_XBUTTON2: return Mouse.ExtraButton2;
 
     default: return null;
+  }
+}
+
+struct Win32XInputContext
+{
+  DWORD Index;
+  DWORD LastPacketNumber;
+}
+
+void Win32PollXInput(InputContext Input)
+{
+  import krepel.win32.directx.xinput;
+
+  // TODO(Manu): Deal with multiple gamepads
+  //foreach(UserIndex; 0 .. 1/*XUSER_MAX_COUNT*/)
+  DWORD UserIndex = 0;
+  {
+    XINPUT_STATE ControllerState;
+    if(XInputGetState(UserIndex, &ControllerState) == ERROR_SUCCESS)
+    {
+      // TODO(Manu): Deal with unchanged state?
+      //ControllerState.dwPacketNumber
+
+      auto Gamepad = &ControllerState.Gamepad;
+
+      //
+      // Buttons
+      //
+      {
+        // Helper function for easier debugging.
+        void UpdateButton(InputContext Input, InputId Id, bool IsDown)
+        {
+          Input.UpdateSlotValue(Id, IsDown ? 1.0f : 0.0f);
+        }
+        UpdateButton(Input, XInput.DPadUp,      cast(bool)(Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_UP));
+        UpdateButton(Input, XInput.DPadDown,    cast(bool)(Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_DOWN));
+        UpdateButton(Input, XInput.DPadLeft,    cast(bool)(Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_LEFT));
+        UpdateButton(Input, XInput.DPadRight,   cast(bool)(Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_RIGHT));
+        UpdateButton(Input, XInput.Start,       cast(bool)(Gamepad.wButtons & XINPUT_GAMEPAD_START));
+        UpdateButton(Input, XInput.Back,        cast(bool)(Gamepad.wButtons & XINPUT_GAMEPAD_BACK));
+        UpdateButton(Input, XInput.LeftThumb,   cast(bool)(Gamepad.wButtons & XINPUT_GAMEPAD_LEFT_THUMB));
+        UpdateButton(Input, XInput.RightThumb,  cast(bool)(Gamepad.wButtons & XINPUT_GAMEPAD_RIGHT_THUMB));
+        UpdateButton(Input, XInput.LeftBumper,  cast(bool)(Gamepad.wButtons & XINPUT_GAMEPAD_LEFT_SHOULDER));
+        UpdateButton(Input, XInput.RightBumper, cast(bool)(Gamepad.wButtons & XINPUT_GAMEPAD_RIGHT_SHOULDER));
+        UpdateButton(Input, XInput.A,           cast(bool)(Gamepad.wButtons & XINPUT_GAMEPAD_A));
+        UpdateButton(Input, XInput.B,           cast(bool)(Gamepad.wButtons & XINPUT_GAMEPAD_B));
+        UpdateButton(Input, XInput.X,           cast(bool)(Gamepad.wButtons & XINPUT_GAMEPAD_X));
+        UpdateButton(Input, XInput.Y,           cast(bool)(Gamepad.wButtons & XINPUT_GAMEPAD_Y));
+      }
+
+      //
+      // Triggers
+      //
+      {
+        float LeftValue = Gamepad.bLeftTrigger / 255.0f;
+        Input.UpdateSlotValue(XInput.LeftTrigger, LeftValue);
+
+        float RightValue = Gamepad.bRightTrigger / 255.0f;
+        Input.UpdateSlotValue(XInput.RightTrigger, RightValue);
+      }
+
+      //
+      // Thumbsticks
+      //
+      {
+        alias NormalizedThumbstickValue = (SHORT Value)
+        {
+          if(Value > 0) return Value / 32767.0f;
+          else          return Value / 32768.0f;
+        };
+
+        float XLeft = NormalizedThumbstickValue(Gamepad.sThumbLX);
+        Input.UpdateSlotValue(XInput.XLeftStick, XLeft);
+
+        float YLeft = NormalizedThumbstickValue(Gamepad.sThumbLY);
+        Input.UpdateSlotValue(XInput.YLeftStick, YLeft);
+
+        float XRight = NormalizedThumbstickValue(Gamepad.sThumbRX);
+        Input.UpdateSlotValue(XInput.XRightStick, XRight);
+
+        float YRight = NormalizedThumbstickValue(Gamepad.sThumbRY);
+        Input.UpdateSlotValue(XInput.YRightStick, YRight);
+      }
+    }
   }
 }

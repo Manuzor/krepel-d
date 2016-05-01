@@ -37,23 +37,22 @@ enum Mouse
 
 void RegisterAllMouseSlots(InputContext Context)
 {
-  Context.RegisterButton(Mouse.LeftButton);
-  Context.RegisterButton(Mouse.MiddleButton);
-  Context.RegisterButton(Mouse.RightButton);
-  Context.RegisterButton(Mouse.ExtraButton1);
-  Context.RegisterButton(Mouse.ExtraButton2);
+  Context.RegisterInputSlot(InputType.Button, Mouse.LeftButton);
+  Context.RegisterInputSlot(InputType.Button, Mouse.MiddleButton);
+  Context.RegisterInputSlot(InputType.Button, Mouse.RightButton);
+  Context.RegisterInputSlot(InputType.Button, Mouse.ExtraButton1);
+  Context.RegisterInputSlot(InputType.Button, Mouse.ExtraButton2);
 
-  Context.RegisterAxis(Mouse.XPosition);
-  Context.RegisterAxis(Mouse.YPosition);
+  Context.RegisterInputSlot(InputType.Axis, Mouse.XPosition);
+  Context.RegisterInputSlot(InputType.Axis, Mouse.YPosition);
 
-  Context.RegisterAction(Mouse.XDelta);
-  Context.RegisterAction(Mouse.YDelta);
-  Context.RegisterAction(Mouse.VerticalWheelDelta);
-  Context.RegisterAction(Mouse.HorizontalWheelDelta);
-
-  Context.RegisterAction(Mouse.LeftButton_DoubleClick);
-  Context.RegisterAction(Mouse.MiddleButton_DoubleClick);
-  Context.RegisterAction(Mouse.RightButton_DoubleClick);
-  Context.RegisterAction(Mouse.ExtraButton1_DoubleClick);
-  Context.RegisterAction(Mouse.ExtraButton2_DoubleClick);
+  Context.RegisterInputSlot(InputType.Action, Mouse.XDelta);
+  Context.RegisterInputSlot(InputType.Action, Mouse.YDelta);
+  Context.RegisterInputSlot(InputType.Action, Mouse.VerticalWheelDelta);
+  Context.RegisterInputSlot(InputType.Action, Mouse.HorizontalWheelDelta);
+  Context.RegisterInputSlot(InputType.Action, Mouse.LeftButton_DoubleClick);
+  Context.RegisterInputSlot(InputType.Action, Mouse.MiddleButton_DoubleClick);
+  Context.RegisterInputSlot(InputType.Action, Mouse.RightButton_DoubleClick);
+  Context.RegisterInputSlot(InputType.Action, Mouse.ExtraButton1_DoubleClick);
+  Context.RegisterInputSlot(InputType.Action, Mouse.ExtraButton2_DoubleClick);
 }
