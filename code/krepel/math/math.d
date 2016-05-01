@@ -95,6 +95,13 @@ bool IsPowerOfTwo(NumberType)(NumberType Number)
   return (Number & (~Number + 1)) == Number;
 }
 
+NumberType Sign(NumberType)(NumberType Number)
+// TODO(Manu): Once Meta.IsNumber is in from another branch, fix below.
+  //if(Meta.IsNumber!NumberType)
+{
+  return Number > 0 ? 1 : Number < 0 ? -1 : 0;
+}
+
 //
 // Unit Tests
 //

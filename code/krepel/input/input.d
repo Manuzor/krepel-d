@@ -82,9 +82,16 @@ struct InputSlotData
 
 struct InputValueProperties
 {
-  float DeadZone = 0.0f;
+  float PositiveDeadZone = 0.0f; // [0 .. 1]
+  float NegativeDeadZone = 0.0f; // [0 .. 1]
   float Sensitivity = 1.0f;
   float Exponent = 1.0f;
+
+  @property void DeadZone(float BothValues)
+  {
+    this.PositiveDeadZone = BothValues;
+    this.NegativeDeadZone = BothValues;
+  }
 }
 
 // Sample signature: $(D void Listener(InputId SlotId, InputSlotData Slot))
@@ -189,13 +196,31 @@ class InputContext
   /// returns an adjusted value.
   float AttuneInputValue(InputId SlotId, float RawValue)
   {
+    float NewValue = RawValue;
+
     auto Properties = this.ValueProperties.Get(SlotId);
     if(Properties)
     {
-      // TODO(Manu): Implement this.
+      if(NewValue > 0 && Properties.PositiveDeadZone > 0.0f)
+      {
+        NewValue = Max(0, NewValue - Properties.PositiveDeadZone) / (1.0f - Properties.PositiveDeadZone);
+      }
+      else if(NewValue < 0 && Properties.NegativeDeadZone > 0.0f)
+      {
+        NewValue = -Max(0, -NewValue - Properties.NegativeDeadZone) / (1.0f - Properties.NegativeDeadZone);
+      }
+
+      // Apply the exponent setting, if any.
+      if(Properties.Exponent != 1.0f)
+      {
+        NewValue = Sign(NewValue) * (Abs(NewValue) ^^ Properties.Exponent);
+      }
+
+      // Scale the value.
+      NewValue *= Properties.Sensitivity;
     }
 
-    return RawValue;
+    return NewValue;
   }
 
   void BeginInputFrame()

@@ -107,16 +107,16 @@ Flag!"Processed" Win32ProcessInputMessage(HWND WindowHandle, UINT Message, WPARA
 
       case WM_MOUSEWHEEL:
       {
-        auto RawValue = GET_WHEEL_DELTA_WPARAM(WParam);
         Id = Mouse.VerticalWheelDelta;
-        Value = cast(float)RawValue / WHEEL_DELTA;
+        auto RawValue = GET_WHEEL_DELTA_WPARAM(WParam);
+        Value = cast(float)RawValue;
       } break;
 
       case WM_MOUSEHWHEEL:
       {
-        auto RawValue = GET_WHEEL_DELTA_WPARAM(WParam);
         Id = Mouse.HorizontalWheelDelta;
-        Value = cast(float)RawValue / WHEEL_DELTA;
+        auto RawValue = GET_WHEEL_DELTA_WPARAM(WParam);
+        Value = cast(float)RawValue;
       } break;
 
       default: break;
@@ -340,12 +340,6 @@ InputId Win32VirtualKeyToInputId(WPARAM VKCode, LPARAM lParam)
   }
 }
 
-struct Win32XInputContext
-{
-  DWORD Index;
-  DWORD LastPacketNumber;
-}
-
 void Win32PollXInput(InputContext Input)
 {
   import krepel.win32.directx.xinput;
@@ -446,6 +440,16 @@ void Win32RegisterAllMouseSlots(InputContext Context,
   Context.RegisterInputSlot(InputType.Action, Mouse.ExtraButton1_DoubleClick);
   Context.RegisterInputSlot(InputType.Action, Mouse.ExtraButton2_DoubleClick);
 
+  with(Context.ValueProperties.GetOrCreate(Mouse.VerticalWheelDelta))
+  {
+    Sensitivity = 1.0f / WHEEL_DELTA;
+  }
+
+  with(Context.ValueProperties.GetOrCreate(Mouse.HorizontalWheelDelta))
+  {
+    Sensitivity = 1.0f / WHEEL_DELTA;
+  }
+
   //
   // Register Mouse Raw Input
   //
@@ -499,10 +503,45 @@ void Win32RegisterAllXInputSlots(InputContext Context,
   Context.RegisterInputSlot(InputType.Button, XInput.X);
   Context.RegisterInputSlot(InputType.Button, XInput.Y);
 
+  import krepel.win32.directx.xinput;
+
   Context.RegisterInputSlot(InputType.Axis, XInput.LeftTrigger);
+  with(Context.ValueProperties.GetOrCreate(XInput.LeftTrigger))
+  {
+    DeadZone = XINPUT_GAMEPAD_TRIGGER_THRESHOLD / 255.0f;
+  }
+
   Context.RegisterInputSlot(InputType.Axis, XInput.RightTrigger);
+  with(Context.ValueProperties.GetOrCreate(XInput.RightTrigger))
+  {
+    DeadZone = XINPUT_GAMEPAD_TRIGGER_THRESHOLD / 255.0f;
+  }
+
   Context.RegisterInputSlot(InputType.Axis, XInput.XLeftStick);
+  with(Context.ValueProperties.GetOrCreate(XInput.XLeftStick))
+  {
+    PositiveDeadZone = XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE / 32767.0f;
+    NegativeDeadZone = XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE / 32768.0f;
+  }
+
   Context.RegisterInputSlot(InputType.Axis, XInput.YLeftStick);
+  with(Context.ValueProperties.GetOrCreate(XInput.YLeftStick))
+  {
+    PositiveDeadZone = XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE / 32767.0f;
+    NegativeDeadZone = XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE / 32768.0f;
+  }
+
   Context.RegisterInputSlot(InputType.Axis, XInput.XRightStick);
+  with(Context.ValueProperties.GetOrCreate(XInput.XRightStick))
+  {
+    PositiveDeadZone = XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE / 32767.0f;
+    NegativeDeadZone = XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE / 32768.0f;
+  }
+
   Context.RegisterInputSlot(InputType.Axis, XInput.YRightStick);
+  with(Context.ValueProperties.GetOrCreate(XInput.YRightStick))
+  {
+    PositiveDeadZone = XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE / 32767.0f;
+    NegativeDeadZone = XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE / 32768.0f;
+  }
 }
