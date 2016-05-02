@@ -330,7 +330,7 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
     }
 
     SystemInput.RegisterInputSlot(InputType.Axis, "CameraX");
-    SystemInput.AddSlotMapping(XInput.XLeftStick, "CameraX");
+    SystemInput.AddSlotMapping(XInput.XLeftStick, "CameraX", -1);
     SystemInput.AddSlotMapping(Keyboard.A, "CameraX", -1);
     SystemInput.AddSlotMapping(Keyboard.D, "CameraX",  1);
 
@@ -383,11 +383,12 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
         auto Camera = CameraObject.ConstructChild!CameraComponent(UString("CameraComponent", .Allocator), CameraObject.RootComponent);
         with(Camera)
         {
-          FieldOfView = PI/2;
+          FieldOfView = PI / 2;
           Width = 1280;
           Height = 720;
           NearPlane = 0.1f;
           FarPlane = 10.0f;
+          SetWorldTransform(Transform(Vector3(0, 0, 2), Quaternion.Identity, Vector3.UnitScaleVector));
         }
 
         //
@@ -415,11 +416,29 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
           Transform CameraWorldTransform = Camera.GetWorldTransform();
           with(CameraWorldTransform)
           {
-            Translation.X += SystemInput["CameraX"].AxisValue * (1 / 3000.0f);
-            Translation.Y += SystemInput["CameraY"].AxisValue * (1 / 3000.0f);
-            Translation.Z += SystemInput["CameraZ"].AxisValue * (1 / 3000.0f);
+            Translation.X += SystemInput["CameraX"].AxisValue * (1 / 30.0f);
+            Translation.Y += SystemInput["CameraY"].AxisValue * (1 / 30.0f);
+            Translation.Z += SystemInput["CameraZ"].AxisValue * (1 / 30.0f);
           }
           Camera.SetWorldTransform(CameraWorldTransform);
+
+          const ViewProjectionMatrix = Camera.GetViewProjectionMatrix();
+
+          //
+          // Upload shader globals
+          //
+          {
+            void* RawData;
+            vkMapMemory(Vulkan.Device.Handle,
+                        Vulkan.GlobalUBO_MemoryHandle,
+                        0, // offset
+                        VK_WHOLE_SIZE,
+                        0, // flags
+                        &RawData).Verify;
+            scope(exit) vkUnmapMemory(Vulkan.Device.Handle, Vulkan.GlobalUBO_MemoryHandle);
+
+            RawData[0 .. ViewProjectionMatrix.sizeof] = (cast(void*)&ViewProjectionMatrix)[0 .. ViewProjectionMatrix.sizeof];
+          }
 
           //Log.Info("Camera world transform: %s", CameraWorldTransform);
 
@@ -636,6 +655,9 @@ class VulkanData
     VkDescriptorSet DescriptorSet;
 
     Array!VkFramebuffer Framebuffers;
+
+    VkBuffer GlobalUBO_BufferHandle;
+    VkDeviceMemory GlobalUBO_MemoryHandle;
 
     float DepthStencilValue = 1.0f;
   }
@@ -1727,29 +1749,39 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
     }
 
     //
-    // Prepare Descriptor Layout
+    // Prepare Descriptor Set Layout
     //
     {
-      Log.BeginScope("Preparing descriptor layout.");
-      scope(exit) Log.EndScope("Finished preparing descriptor layout.");
+      Log.BeginScope("Preparing descriptor set layout.");
+      scope(exit) Log.EndScope("Finished preparing descriptor set layout.");
 
-      VkDescriptorSetLayoutBinding LayoutBinding;
-      with(LayoutBinding)
+      auto LayoutBindings = Array!VkDescriptorSetLayoutBinding(.Allocator);
+
+      with(LayoutBindings.Expand())
       {
-        binding = Vertices.BindID; // TODO: Should I do that?
+        binding = 1;
         descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         descriptorCount = TextureCount;
         stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
       }
 
-      VkDescriptorSetLayoutCreateInfo DescriptorLayoutCreateInfo;
-      with(DescriptorLayoutCreateInfo)
+      // Model View Projection matrix
+      with(LayoutBindings.Expand())
       {
-        bindingCount = 1;
-        pBindings = &LayoutBinding;
+        binding = 0;
+        descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        descriptorCount = 1;
+        stageFlags = VK_SHADER_STAGE_ALL_GRAPHICS;
       }
 
-      vkCreateDescriptorSetLayout(Device.Handle, &DescriptorLayoutCreateInfo, null, &DescriptorSetLayout).Verify;
+      VkDescriptorSetLayoutCreateInfo DescriptorSetLayoutCreateInfo;
+      with(DescriptorSetLayoutCreateInfo)
+      {
+        bindingCount = cast(uint)LayoutBindings.Count;
+        pBindings = LayoutBindings.Data.ptr;
+      }
+
+      vkCreateDescriptorSetLayout(Device.Handle, &DescriptorSetLayoutCreateInfo, null, &DescriptorSetLayout).Verify;
 
       VkPipelineLayoutCreateInfo PipelineLayoutCreateInfo;
       with(PipelineLayoutCreateInfo)
@@ -1866,6 +1898,7 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
         }
         vkCreateShaderModule(Device.Handle, &ShaderModuleCreateInfo, null, &VertexShaderStage._module).Verify;
       }
+      // Note(Manu): Can safely destroy the shader modules on our side once the pipeline was created.
       scope(exit) vkDestroyShaderModule(Device.Handle, VertexShaderStage._module, null);
 
       //
@@ -2010,18 +2043,26 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
       Log.BeginScope("Preparing descriptor pool.");
       scope(exit) Log.EndScope("Finished preparing descriptor pool.");
 
-      VkDescriptorPoolSize TypeCount;
-      with(TypeCount)
+      auto PoolSizes = Array!VkDescriptorPoolSize(.Allocator);
+
+      with(PoolSizes.Expand())
       {
         type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         descriptorCount = TextureCount;
       }
+
+      with(PoolSizes.Expand())
+      {
+        type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        descriptorCount = 1;
+      }
+
       VkDescriptorPoolCreateInfo DescriptorPoolCreateInfo;
       with(DescriptorPoolCreateInfo)
       {
         maxSets = 1;
-        poolSizeCount = 1;
-        pPoolSizes = &TypeCount;
+        poolSizeCount = cast(uint)PoolSizes.Count;
+        pPoolSizes = PoolSizes.Data.ptr;
       }
 
       vkCreateDescriptorPool(Device.Handle, &DescriptorPoolCreateInfo, null, &DescriptorPool).Verify;
@@ -2034,6 +2075,7 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
       Log.BeginScope("Preparing descriptor set.");
       scope(exit) Log.EndScope("Finished preparing descriptor set.");
 
+
       VkDescriptorSetAllocateInfo DescriptorSetAllocateInfo;
       with(DescriptorSetAllocateInfo)
       {
@@ -2043,6 +2085,62 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
       }
       vkAllocateDescriptorSets(Device.Handle, &DescriptorSetAllocateInfo, &DescriptorSet).Verify;
 
+      auto WriteDescriptorSets = Array!VkWriteDescriptorSet(.Allocator);
+
+      //
+      // GlobalUBO
+      //
+      {
+        VkBufferCreateInfo BufferCreateInfo;
+        with(BufferCreateInfo)
+        {
+          usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+          size = Matrix4.sizeof;
+        }
+
+        vkCreateBuffer(Vulkan.Device.Handle, &BufferCreateInfo, null, &GlobalUBO_BufferHandle).Verify;
+
+        VkMemoryRequirements Temp_MemoryRequirements;
+        vkGetBufferMemoryRequirements(Vulkan.Device.Handle, GlobalUBO_BufferHandle, &Temp_MemoryRequirements);
+
+        VkMemoryAllocateInfo Temp_MemoryAllocationInfo;
+        with(Temp_MemoryAllocationInfo)
+        {
+          allocationSize = Temp_MemoryRequirements.size;
+          memoryTypeIndex = DetermineMemoryTypeIndex(Vulkan.Device.OwnerGpu.MemoryProperties,
+                                                     Temp_MemoryRequirements.memoryTypeBits,
+                                                     VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+          assert(memoryTypeIndex != cast(uint)-1);
+        }
+
+        vkAllocateMemory(Vulkan.Device.Handle, &Temp_MemoryAllocationInfo, null, &GlobalUBO_MemoryHandle).Verify;
+
+        vkBindBufferMemory(Vulkan.Device.Handle, GlobalUBO_BufferHandle, GlobalUBO_MemoryHandle, 0).Verify;
+      }
+
+      //
+      // Associate the buffer with the descriptor set.
+      //
+      VkDescriptorBufferInfo DescriptorBufferInfo;
+      with(DescriptorBufferInfo)
+      {
+        buffer = GlobalUBO_BufferHandle;
+        offset = 0;
+        range = VK_WHOLE_SIZE;
+      }
+
+      with(WriteDescriptorSets.Expand())
+      {
+        dstSet = Vulkan.DescriptorSet;
+        dstBinding = 0;
+        descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        descriptorCount = 1;
+        pBufferInfo = &DescriptorBufferInfo;
+      }
+
+      //
+      // Combined Sampler
+      //
       VkDescriptorImageInfo[TextureCount] TextureDescriptors;
       foreach(Index; 0 .. TextureCount)
       {
@@ -2051,16 +2149,17 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
         TextureDescriptors[Index].imageLayout = VK_IMAGE_LAYOUT_GENERAL;
       }
 
-      VkWriteDescriptorSet WriteDescriptorSet;
-      with(WriteDescriptorSet)
+      with(WriteDescriptorSets.Expand())
       {
         dstSet = DescriptorSet;
+        dstBinding = 1;
         descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         descriptorCount = TextureDescriptors.length;
         pImageInfo = TextureDescriptors.ptr;
       }
-      vkUpdateDescriptorSets(Device.Handle,
-                             1, &WriteDescriptorSet,
+
+      vkUpdateDescriptorSets(Vulkan.Device.Handle,
+                             cast(uint)WriteDescriptorSets.Count, WriteDescriptorSets.Data.ptr,
                              0, null);
     }
 
@@ -2354,6 +2453,7 @@ void CreateDrawCommand(VulkanData Vulkan)
         VkClearValue[2] ClearValues;
         with(ClearValues[0])
         {
+          // TODO(Manu): Appears way too dark. backbuffer format has to be adjusted for it?
           color.float32[] = Colors.CornflowerBlue.Data;
         }
         with(ClearValues[1])
@@ -2540,6 +2640,8 @@ void Cleanup(VulkanData Vulkan)
   {
     Vulkan.DestroySwapchainData();
   }
+
+
 
   vkDestroySwapchainKHR(Vulkan.Device.Handle, Vulkan.Swapchain, null);
   vkDestroyDevice(Vulkan.Device.Handle, null);
