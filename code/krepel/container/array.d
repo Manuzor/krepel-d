@@ -46,10 +46,13 @@ struct Array(T)
 
   this(this)
   {
-    auto NewMemory = Allocator.NewUnconstructedArray!ElementType(Count);
-    NewMemory[] = Data[];
-    Data = NewMemory;
-    AvailableMemory = Data;
+    if(Allocator && Count)
+    {
+      auto NewMemory = Allocator.NewUnconstructedArray!ElementType(Count);
+      NewMemory[] = Data[];
+      Data = NewMemory;
+      AvailableMemory = Data;
+    }
   }
 
   ~this()
@@ -329,7 +332,7 @@ struct Array(T)
 
   /// ForwardRange interface
   // TODO(Manu): Implement proper copying.
-  //auto save() const { return this; }
+  auto save() const { return this; }
 
   /// BidirectionalRange interface
   alias back = Back;

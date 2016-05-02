@@ -4,6 +4,7 @@ version(Windows):
 import krepel;
 import krepel.win32;
 import krepel.math;
+import krepel.input;
 
 import krepel.win32.directx.dxgi;
 import krepel.win32.directx.d3d11;
@@ -86,7 +87,10 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
   with(WindowClass)
   {
     style = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;
-    lpfnWndProc = &Win32MainWindowCallback;
+    // The wrapped WinAPI of D requires a nothrow callback, which is a
+    // ridiculous requirement since there's probably not even a single C++
+    // application that passes a nothrow callback here.
+    lpfnWndProc = cast(typeof(lpfnWndProc))cast(void*)&Win32MainWindowCallback;
     hInstance = Instance;
     lpszClassName = "D_WindowClass";
   }
@@ -113,21 +117,57 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
 
       version(XInput_RuntimeLinking) LoadXInput();
 
+      auto SystemInput = MainAllocator.New!Win32InputContext(MainAllocator);
+      scope(exit) MainAllocator.Delete(SystemInput);
+
+      // Note(Manu): Let's pretend the system is user 0 for now.
+      SystemInput.UserIndex = 0;
+
+      Win32RegisterAllKeyboardSlots(SystemInput);
+      Win32RegisterAllMouseSlots(SystemInput);
+      Win32RegisterAllXInputSlots(SystemInput);
+
+
+      SystemInput.RegisterInputSlot(InputType.Button, "Quit");
+      SystemInput.AddTrigger("Quit", Keyboard.Escape);
+      SystemInput.AddTrigger("Quit", XInput.Start);
+
+      SystemInput.ChangeEvent.Add = (Id, Slot)
+      {
+        Log.Info("Input change '%s': %s %s", Id, Slot.Type, Slot.Value);
+      };
+
+      auto Window = MainAllocator.New!WindowData(SystemInput);
+      scope(exit) MainAllocator.Delete(Window);
+
+      SetWindowLongPtrA(State.WindowHandle, GWLP_USERDATA, *cast(LONG_PTR*)&Window);
+      scope(exit) SetWindowLongPtrA(State.WindowHandle, GWLP_USERDATA, cast(LONG_PTR)null);
+
       GlobalRunning = true;
 
       while(GlobalRunning)
       {
-        Win32ProcessPendingMessages();
-
-        XINPUT_STATE ControllerState;
-        if(XInputGetState(0, &ControllerState) == ERROR_SUCCESS)
+        SystemInput.BeginInputFrame();
         {
-          Log.Info("Marvin!! XINPUT FUNKTIONIERT!!");
+          Win32MessagePump();
+          Win32PollXInput(SystemInput);
         }
+        SystemInput.EndInputFrame();
+
+        auto QuitInput = SystemInput["Quit"];
+        if(QuitInput && QuitInput.ButtonIsDown) .GlobalRunning = false;
+
+        auto LeftStickValue = SystemInput[XInput.XLeftStick].AxisValue;
+        if(LeftStickValue) Log.Info("Left Stick: %f", LeftStickValue);
 
         auto CornflowerBlue = Vector4(100 / 255.0f, 149 / 255.0f, 237 / 255.0f, 1.0f);
         State.ImmediateContext.ClearRenderTargetView(State.RenderTargetView, CornflowerBlue.Data);
         State.SwapChain.Present(0, 0);
+
+        if(SystemInput.CharacterBuffer.Count)
+        {
+          Log.Info("User typed: %s", SystemInput.CharacterBuffer[]);
+        }
       }
     }
   }
@@ -135,34 +175,18 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
   return 0;
 }
 
-void Win32ProcessPendingMessages()
+/// Params:
+///   WindowHandle = Can be $(D null).
+void Win32MessagePump()
 {
   MSG Message;
-  if(PeekMessageA(&Message, null, 0, 0, PM_REMOVE))
+  while(PeekMessageA(&Message, null, 0, 0, PM_REMOVE))
   {
     switch(Message.message)
     {
       case WM_QUIT:
       {
         GlobalRunning = false;
-      } break;
-
-      case WM_SYSKEYDOWN: goto case; // fallthrough
-      case WM_SYSKEYUP:   goto case; // fallthrough
-      case WM_KEYDOWN:    goto case; // fallthrough
-      case WM_KEYUP:
-      {
-        auto VKCode = Message.wParam;
-
-        if(VKCode == VK_SPACE)
-        {
-          Log.Info("Space");
-        }
-        else if(VKCode == VK_ESCAPE)
-        {
-          GlobalRunning = false;
-        }
-
       } break;
 
       default:
@@ -175,9 +199,14 @@ void Win32ProcessPendingMessages()
 }
 
 extern(Windows)
-LRESULT Win32MainWindowCallback(HWND Window, UINT Message,
-                                WPARAM WParam, LPARAM LParam) nothrow
+LRESULT Win32MainWindowCallback(HWND WindowHandle, UINT Message,
+                                WPARAM WParam, LPARAM LParam)
 {
+  auto Window = cast(WindowData)cast(void*)GetWindowLongPtrW(WindowHandle, GWLP_USERDATA);
+
+  if(Window is null) return DefWindowProcA(WindowHandle, Message, WParam, LParam);
+
+
   LRESULT Result = 0;
 
   switch(Message)
@@ -194,10 +223,15 @@ LRESULT Win32MainWindowCallback(HWND Window, UINT Message,
       GlobalRunning = false;
     } break;
 
-    case WM_SYSKEYDOWN: goto case; // fallthrough
-    case WM_SYSKEYUP:   goto case; // fallthrough
-    case WM_KEYDOWN:    goto case; // fallthrough
-    case WM_KEYUP: assert(0, "Keyboard messages are handled in the main loop.");
+    case WM_KEYFIRST:   .. case WM_KEYLAST:   goto case; // fallthrough
+    case WM_MOUSEFIRST: .. case WM_MOUSELAST: goto case; // fallthrough
+    case WM_INPUT:
+    {
+      // TODO(Manu): Deal with the return value?
+      Win32ProcessInputMessage(WindowHandle, Message, WParam, LParam,
+                               Window.Input,
+                               .Log);
+    } break;
 
     case WM_ACTIVATEAPP:
     {
@@ -207,22 +241,32 @@ LRESULT Win32MainWindowCallback(HWND Window, UINT Message,
     case WM_PAINT:
     {
       PAINTSTRUCT Paint;
-      HDC DeviceContext = BeginPaint(Window, &Paint);
-      //win32_main_dimension WindowDim = Win32GetWindowDimension(Window);
+      HDC DeviceContext = BeginPaint(WindowHandle, &Paint);
+      //win32_main_dimension WindowDim = Win32GetWindowDimension(WindowHandle);
       //Win32DisplayBufferInWindow(&GlobalBackbuffer, DeviceContext,
       //                           WindowDim.Width, WindowDim.Height);
 
-      EndPaint(Window, &Paint);
+      EndPaint(WindowHandle, &Paint);
     } break;
 
     default:
     {
       // OutputDebugStringA("Default\n");
-      Result = DefWindowProcA(Window, Message, WParam, LParam);
+      Result = DefWindowProcA(WindowHandle, Message, WParam, LParam);
     } break;
   }
 
   return Result;
+}
+
+class WindowData
+{
+  Win32InputContext Input;
+
+  this(Win32InputContext Input)
+  {
+    this.Input = Input;
+  }
 }
 
 struct StateData
@@ -386,6 +430,8 @@ bool InitDevice(StateData* State)
   D3D11_VIEWPORT ViewPort;
   with(ViewPort)
   {
+    TopLeftX = 0.0f;
+    TopLeftY = 0.0f;
     Width = cast(FLOAT)WindowWidth;
     Height = cast(FLOAT)WindowHeight;
     MinDepth = 0.0f;

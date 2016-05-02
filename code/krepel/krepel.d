@@ -14,7 +14,8 @@ private static import std.utf;
 private static import std.typecons;
 
 
-alias Find = std.algorithm.find;
+alias Find    = std.algorithm.find;
+alias CanFind = std.algorithm.canFind;
 
 alias StartsWith = std.algorithm.startsWith;
 alias CountUntil = std.algorithm.countUntil;

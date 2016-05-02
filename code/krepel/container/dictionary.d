@@ -52,6 +52,7 @@ struct Dictionary(K, V)
     return Zip(Keys, Values);
   }
 
+  /// Note: The key MUST exist.
   auto ref opIndex(InKeyType)(auto ref InKeyType Key)
   {
     static assert(is(typeof(KeyArray[0] == Key)), InvalidKeyMessage!(InKeyType));
@@ -78,6 +79,18 @@ struct Dictionary(K, V)
     }
   }
 
+  /// Gets the value corresponding to Key.
+  ///
+  /// Returns: A pointer to the value or null if it can't be found.
+  ValueType* Get(InKeyType)(auto ref InKeyType Key, ValueType* FallbackValue = null)
+  {
+    static assert(is(typeof(KeyArray[0] == Key)), InvalidKeyMessage!(InKeyType));
+
+    auto Index = Keys.CountUntil(Key);
+    if(Index < 0) return FallbackValue;
+    return &ValueArray[Index];
+  }
+
   bool TryGet(InKeyType, OutValueType)(auto ref InKeyType Key, out OutValueType Value)
   {
     if(Contains(Key))
@@ -91,6 +104,19 @@ struct Dictionary(K, V)
   bool Contains(InKeyType)(auto ref InKeyType Key) const
   {
     return Keys.CountUntil(Key) >= 0;
+  }
+
+  ValueType* GetOrCreate(InKeyType)(auto ref InKeyType Key)
+  {
+    static assert(is(typeof(KeyArray[0] == Key)), InvalidKeyMessage!(InKeyType));
+
+    auto Index = Keys.CountUntil(Key);
+    if(Index < 0)
+    {
+      KeyArray.PushBack(Key);
+      return &ValueArray.Expand();
+    }
+    return &ValueArray[Index];
   }
 
   void Remove(InKeyType)(auto ref InKeyType Key)
@@ -182,6 +208,9 @@ unittest
 
   TestFunc(Dict[]);
   TestFunc((cast(const)Dict)[]);
+
+  assert(Dict.Get(42) is null);
+  assert(Dict.Get(4) is &Dict[4]);
 }
 
 unittest
