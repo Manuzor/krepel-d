@@ -11,7 +11,7 @@ import krepel.math;
 import krepel.image;
 import krepel.input;
 import krepel.color;
-
+import krepel.scene;
 
 import std.string : toStringz, fromStringz;
 
@@ -376,6 +376,21 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
       if(Vulkan.IsPrepared)
       {
         //
+        // Build a scene
+        //
+        auto Scene = .Allocator.New!SceneGraph(.Allocator);
+        auto CameraObject = Scene.CreateDefaultGameObject(UString("Camera", .Allocator));
+        auto Camera = CameraObject.ConstructChild!CameraComponent(UString("CameraComponent", .Allocator), CameraObject.RootComponent);
+        with(Camera)
+        {
+          FieldOfView = PI/2;
+          Width = 1280;
+          Height = 720;
+          NearPlane = 0.1f;
+          FarPlane = 10.0f;
+        }
+
+        //
         // Main Loop
         //
         Vulkan.DepthStencilValue = 1.0f;
@@ -397,7 +412,16 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
 
           Vulkan.DepthStencilValue = Clamp(Vulkan.DepthStencilValue + SystemInput["Depth"].AxisValue, 0.8f, 1.0f);
 
-          //Log.Info("Depth Stencil Value Sample: %f", Vulkan.DepthStencilValue);
+          Transform CameraWorldTransform = Camera.GetWorldTransform();
+          with(CameraWorldTransform)
+          {
+            Translation.X += SystemInput["CameraX"].AxisValue * (1 / 3000.0f);
+            Translation.Y += SystemInput["CameraY"].AxisValue * (1 / 3000.0f);
+            Translation.Z += SystemInput["CameraZ"].AxisValue * (1 / 3000.0f);
+          }
+          Camera.SetWorldTransform(CameraWorldTransform);
+
+          //Log.Info("Camera world transform: %s", CameraWorldTransform);
 
           if(.IsResizeRequested)
           {
