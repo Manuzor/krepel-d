@@ -27,7 +27,7 @@ struct ColorLinear
     return Result;
   }
 
-  Vector4 opCast(To : ColorGammaUB)() const
+  ColorGammaUB opCast(To : ColorGammaUB)() const
   {
     const GammaR = ConvertFromLinearToGamma(this.R);
     const GammaG = ConvertFromLinearToGamma(this.G);
