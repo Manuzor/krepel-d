@@ -21,6 +21,13 @@ void Tests(ref BuildContext Context)
                .array;                                                 // Convert the range to a proper array.
     }
 
+    //
+    // Set runtime linking versions of DirectX
+    //
+    BuildArgs ~= "-version=DXGI_RuntimeLinking";
+    BuildArgs ~= "-version=D3D11_RuntimeLinking";
+    BuildArgs ~= "-version=XInput_RuntimeLinking";
+
     BuildArgs ~= "-unittest";
     BuildArgs ~= "-main";
   }

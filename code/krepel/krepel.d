@@ -10,6 +10,7 @@ public import std.range : empty, popFront, popBack, front, back, save, put;
 private static import std.algorithm;
 private static import std.format;
 private static import std.range;
+private static import std.uni;
 private static import std.utf;
 private static import std.typecons;
 
