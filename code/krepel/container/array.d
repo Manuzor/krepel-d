@@ -198,7 +198,7 @@ struct Array(T)
     }
   }
 
-  void opOpAssign(string Op : "~", ArgType)(in auto ref ArgType Arg)
+  void opOpAssign(string Op : "~", ArgType)(auto ref ArgType Arg)
   {
     PushBack(Arg);
   }
@@ -237,6 +237,17 @@ struct Array(T)
 
     Data[EndIndex .. $].CopyTo(Data[Index .. $ - CountToRemove]);
     Data = Data[0 .. $ - CountToRemove];
+  }
+
+  bool RemoveFirst(ArgumentType)(ArgumentType ToRemove)
+  {
+    auto Index = this[].CountUntil(ToRemove);
+    if (Index >= 0)
+    {
+      this.RemoveAt(Index);
+      return true;
+    }
+    return false;
   }
 
   void Insert(IndexType)(IndexType Where, const(ElementType[]) ToInsert)
@@ -470,6 +481,13 @@ unittest
 
   Arr.RemoveAt(1, 2);
   assert(Arr.Count == 1);
+
+  Arr.Clear();
+  Arr.PushBack(1, 2, 3);
+  assert(Arr.RemoveFirst(3));
+  assert(Arr.Count == 2);
+  assert(Arr[0] == 1);
+  assert(Arr[1] == 2);
 }
 
 unittest

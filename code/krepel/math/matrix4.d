@@ -289,12 +289,13 @@ Vector3 GetUnitAxis(Matrix4 Mat, EAxisType Type)
   return GetScaledAxis(Mat, Type).SafeNormalizedCopy();
 }
 
+/// Create a Right-Hand-Side Perspective Matrix
 Matrix4 CreatePerspectiveMatrix(float HalfFOVY, float Width, float Height, float NearPlane, float FarPlane)
 {
   return Matrix4([
     [1.0f/ Tan(HalfFOVY), 0.0f, 0.0f, 0.0f],
     [0.0f, Width/ Tan(HalfFOVY)/Height, 0.0f, 0.0f],
-    [0.0f, 0.0f, ((NearPlane == FarPlane) ? 1.0f : FarPlane / (FarPlane - NearPlane)), 1.0f],
+    [0.0f, 0.0f, -1 * ((NearPlane == FarPlane) ? 1.0f : FarPlane / (FarPlane - NearPlane)), -1.0f],
     [0.0f, 0.0f, -NearPlane * ((NearPlane == FarPlane) ? 1.0f : FarPlane / (FarPlane - NearPlane)), 0.0f],
     ]);
 }

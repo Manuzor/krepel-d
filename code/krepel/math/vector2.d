@@ -112,7 +112,8 @@ struct Vector2
   {
     struct
     {
-      float X, Y;
+      float X = 0;
+      float Y = 0;
     }
     float[2] Data;
   }

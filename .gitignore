@@ -16,7 +16,7 @@
 # The generated solution file and associates
 Krepel.sln
 Krepel.sdf
-Krepel.VC.opendb
+*.vc.*
 .vs/
 
 # FastBuild Database

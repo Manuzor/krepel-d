@@ -5,11 +5,17 @@ import krepel;
 import krepel.win32;
 import krepel.math;
 import krepel.input;
+import krepel.string;
 
 import krepel.win32.directx.dxgi;
 import krepel.win32.directx.d3d11;
 import krepel.win32.directx.xinput;
 import krepel.win32.directx.uuidof;
+
+import krepel.d3d11_render_device;
+import krepel.render_device;
+import krepel.resources;
+import krepel.scene;
 
 version(Windows):
 import std.string : toStringz, fromStringz;
@@ -47,6 +53,26 @@ int WinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
 
 __gshared bool GlobalRunning;
 
+class WindowData
+{
+  Win32InputContext Input;
+
+  this(Win32InputContext Input)
+  {
+    this.Input = Input;
+  }
+}
+
+void Win32SetupConsole(in char* Title)
+{
+  static import core.stdc.stdio;
+
+  AllocConsole();
+  AttachConsole(GetCurrentProcessId());
+  core.stdc.stdio.freopen("CON", "w", core.stdc.stdio.stdout);
+  SetConsoleTitleA(Title);
+}
+
 int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
               LPSTR CommandLine, int ShowCode)
 {
@@ -72,24 +98,20 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
     Log = null;
   }
 
-  // Note(Manu): There's no point to add the stdout log sink since stdout
-  // isn't attached to anything in a windows application. We add the VS log
-  // sink instead.
+  debug Win32SetupConsole("Krepel Console - Win32 Experiments".ptr);
+
+  Log.Sinks ~= ToDelegate(&StdoutLogSink);
   Log.Sinks ~= ToDelegate(&VisualStudioLogSink);
 
   Log.Info("=== Beginning of Log");
   scope(exit) Log.Info("=== End of Log");
-
-  StateData State;
-  State.ProcessInstance = Instance;
+  D3D11RenderDevice Device = MainAllocator.New!D3D11RenderDevice(MainAllocator);
+  Device.DeviceState.ProcessInstance = Instance;
 
   WNDCLASSA WindowClass;
   with(WindowClass)
   {
     style = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;
-    // The wrapped WinAPI of D requires a nothrow callback, which is a
-    // ridiculous requirement since there's probably not even a single C++
-    // application that passes a nothrow callback here.
     lpfnWndProc = cast(typeof(lpfnWndProc))cast(void*)&Win32MainWindowCallback;
     hInstance = Instance;
     lpszClassName = "D_WindowClass";
@@ -97,23 +119,87 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
 
   if(RegisterClassA(&WindowClass))
   {
-    State.WindowHandle = CreateWindowExA(0,
-                                         WindowClass.lpszClassName,
-                                         "The Title Text".ptr,
-                                         WS_OVERLAPPEDWINDOW | WS_VISIBLE,
-                                         CW_USEDEFAULT, CW_USEDEFAULT,
-                                         CW_USEDEFAULT, CW_USEDEFAULT,
-                                         null,
-                                         null,
-                                         Instance,
-                                         null);
+    auto WindowHandle = CreateWindowExA(0,
+                                        WindowClass.lpszClassName,
+                                        "The Title Text".ptr,
+                                        WS_OVERLAPPEDWINDOW | WS_VISIBLE,
+                                        CW_USEDEFAULT, CW_USEDEFAULT,
+                                        CW_USEDEFAULT, CW_USEDEFAULT,
+                                        null,
+                                        null,
+                                        Instance,
+                                        null);
 
-    if(State.WindowHandle)
+    Device.DeviceState.WindowHandle = WindowHandle;
+
+    if(Device.DeviceState.WindowHandle)
     {
-      version(DXGI_RuntimeLinking)  LoadDXGI();
-      version(D3D11_RuntimeLinking) LoadD3D11();
 
-      InitDevice(&State);
+      Device.InitDevice();
+
+      auto VertexShader = Device.LoadVertexShader(WString("../data/shader/first.hlsl", Device.DeviceState.Allocator),
+                                                      UString("VSMain", Device.DeviceState.Allocator),
+                                                      UString("vs_5_0", Device.DeviceState.Allocator));
+      scope(exit)
+      {
+        if (VertexShader)
+        {
+          Device.ReleaseVertexShader(VertexShader);
+        }
+      }
+
+      RenderInputLayoutDescription[5] Layout =
+      [
+        RenderInputLayoutDescription(UString("POSITION", MainAllocator), 0, InputDescriptionDataType.Float, 3, true),
+        RenderInputLayoutDescription(UString("UV", MainAllocator), 0, InputDescriptionDataType.Float, 2, true),
+        RenderInputLayoutDescription(UString("NORMAL", MainAllocator), 0, InputDescriptionDataType.Float, 3, true),
+        RenderInputLayoutDescription(UString("TANGENT", MainAllocator), 0, InputDescriptionDataType.Float, 4, true),
+        RenderInputLayoutDescription(UString("BINORMAL", MainAllocator), 0, InputDescriptionDataType.Float, 3, true),
+      ];
+      auto InputLayoutDescription = Device.CreateInputLayoutDescription(Layout);
+      scope(exit) Device.DestroyInputLayoutDescription(InputLayoutDescription);
+      auto InputLayout = Device.CreateVertexShaderInputLayoutFromDescription(VertexShader, InputLayoutDescription);
+      scope(exit) Device.DestroyInputLayout(InputLayout);
+      Device.SetInputLayout(InputLayout);
+
+
+      auto PixelShader = Device.LoadPixelShader(WString("../data/shader/first.hlsl", Device.DeviceState.Allocator),
+                                                UString("PSMain", Device.DeviceState.Allocator),
+                                                UString("ps_5_0", Device.DeviceState.Allocator));
+      scope(exit)
+      {
+        if (PixelShader)
+        {
+          Device.ReleasePixelShader(PixelShader);
+        }
+      }
+
+      ResourceManager Manager = MainAllocator.New!ResourceManager(MainAllocator);
+      auto WaveFrontLoader = MainAllocator.New!WavefrontResourceLoader();
+      Manager.RegisterLoader(WaveFrontLoader, WString(".obj", MainAllocator));
+      MeshResource Mesh = Manager.LoadMesh(WString("../data/mesh/Suzanne.obj", MainAllocator));
+
+      IRenderMesh RenderMesh = Device.CreateRenderMesh(Mesh.Meshes[0]);
+      scope(exit)
+      {
+        Device.ReleaseRenderMesh(RenderMesh);
+        Manager.DestroyResource(Mesh);
+        MainAllocator.Delete(WaveFrontLoader);
+        MainAllocator.Delete(Manager);
+      }
+
+      SceneGraph Graph = MainAllocator.New!(SceneGraph)(MainAllocator);
+      auto CameraObject= Graph.CreateDefaultGameObject(UString("Camera", MainAllocator));
+      auto CameraComponent = CameraObject.ConstructChild!CameraComponent(UString("CameraComponent", MainAllocator), CameraObject.RootComponent);
+      CameraComponent.FieldOfView = PI/2;
+      CameraComponent.Width = 1280;
+      CameraComponent.Height = 720;
+      CameraComponent.NearPlane = 0.1f;
+      CameraComponent.FarPlane = 10.0f;
+      CameraComponent.SetWorldTransform(Transform(Vector3(0,0,2), Quaternion.Identity, Vector3.UnitScaleVector));
+      Matrix4 Mat = CameraComponent.GetViewProjectionMatrix().GetTransposed;
+      auto ConstantBuffer = Device.CreateConstantBuffer((cast(void*)&Mat)[0..Matrix4.sizeof]);
+      scope(exit) Device.ReleaseConstantBuffer(ConstantBuffer);
 
       version(XInput_RuntimeLinking) LoadXInput();
 
@@ -127,21 +213,33 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
       Win32RegisterAllMouseSlots(SystemInput);
       Win32RegisterAllXInputSlots(SystemInput);
 
-
       SystemInput.RegisterInputSlot(InputType.Button, "Quit");
       SystemInput.AddTrigger("Quit", Keyboard.Escape);
       SystemInput.AddTrigger("Quit", XInput.Start);
 
-      SystemInput.ChangeEvent.Add = (Id, Slot)
-      {
-        Log.Info("Input change '%s': %s %s", Id, Slot.Type, Slot.Value);
-      };
+      SystemInput.RegisterInputSlot(InputType.Axis, "CameraX");
+      //SystemInput.AddTrigger("CameraX", XInput.XLeftStick);
+      SystemInput.AddTrigger("CameraX", Keyboard.A);
+
+      SystemInput.RegisterInputSlot(InputType.Axis, "CameraY");
+      //SystemInput.AddTrigger("CameraY", XInput.YLeftStick);
+      SystemInput.AddTrigger("CameraY", Keyboard.W);
+
+      SystemInput.RegisterInputSlot(InputType.Axis, "CameraZ");
+      //SystemInput.AddTrigger("CameraZ", XInput.YRightStick);
+      SystemInput.AddTrigger("CameraZ", Keyboard.Space);
+
+
+      //SystemInput.ChangeEvent.Add = (Id, Slot)
+      //{
+      //  Log.Info("Input change '%s': %s %s", Id, Slot.Type, Slot.Value);
+      //};
 
       auto Window = MainAllocator.New!WindowData(SystemInput);
       scope(exit) MainAllocator.Delete(Window);
 
-      SetWindowLongPtrA(State.WindowHandle, GWLP_USERDATA, *cast(LONG_PTR*)&Window);
-      scope(exit) SetWindowLongPtrA(State.WindowHandle, GWLP_USERDATA, cast(LONG_PTR)null);
+      SetWindowLongPtrA(WindowHandle, GWLP_USERDATA, *cast(LONG_PTR*)&Window);
+      scope(exit) SetWindowLongPtrA(WindowHandle, GWLP_USERDATA, cast(LONG_PTR)null);
 
       GlobalRunning = true;
 
@@ -154,20 +252,35 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
         }
         SystemInput.EndInputFrame();
 
-        auto QuitInput = SystemInput["Quit"];
-        if(QuitInput && QuitInput.ButtonIsDown) .GlobalRunning = false;
-
-        auto LeftStickValue = SystemInput[XInput.XLeftStick].AxisValue;
-        if(LeftStickValue) Log.Info("Left Stick: %f", LeftStickValue);
-
-        auto CornflowerBlue = Vector4(100 / 255.0f, 149 / 255.0f, 237 / 255.0f, 1.0f);
-        State.ImmediateContext.ClearRenderTargetView(State.RenderTargetView, CornflowerBlue.Data);
-        State.SwapChain.Present(0, 0);
-
-        if(SystemInput.CharacterBuffer.Count)
+        if(SystemInput["Quit"].ButtonIsDown)
         {
-          Log.Info("User typed: %s", SystemInput.CharacterBuffer[]);
+          .GlobalRunning = false;
+          break;
         }
+
+        //
+        // Apply Input
+        //
+        Device.ReleaseConstantBuffer(ConstantBuffer);
+        Transform WorldTransform = CameraComponent.GetWorldTransform();
+        WorldTransform.Translation.X += SystemInput["CameraX"].AxisValue * (1 / 3000.0f);
+        WorldTransform.Translation.Y += SystemInput["CameraY"].AxisValue * (1 / 3000.0f);
+        WorldTransform.Translation.Z += SystemInput["CameraZ"].AxisValue * (1 / 3000.0f);
+        CameraComponent.SetWorldTransform(WorldTransform);
+        Mat = CameraComponent.GetViewProjectionMatrix().GetTransposed;
+        ConstantBuffer = Device.CreateConstantBuffer((cast(void*)&Mat)[0..Matrix4.sizeof]);
+
+        //
+        // Do the rendering
+        //
+        auto CornflowerBlue = Vector4(100 / 255.0f, 149 / 255.0f, 237 / 255.0f, 1.0f);
+        Device.ClearRenderTarget(CornflowerBlue);
+        Device.SetVertexShader(VertexShader);
+        Device.SetPixelShader(PixelShader);
+        Device.SetVertexShaderConstantBuffer(ConstantBuffer, 0);
+        Device.SetMesh(RenderMesh);
+        Device.DrawIndexed(RenderMesh.GetIndexCount());
+        Device.Present();
       }
     }
   }
@@ -175,8 +288,6 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
   return 0;
 }
 
-/// Params:
-///   WindowHandle = Can be $(D null).
 void Win32MessagePump()
 {
   MSG Message;
@@ -257,188 +368,4 @@ LRESULT Win32MainWindowCallback(HWND WindowHandle, UINT Message,
   }
 
   return Result;
-}
-
-class WindowData
-{
-  Win32InputContext Input;
-
-  this(Win32InputContext Input)
-  {
-    this.Input = Input;
-  }
-}
-
-struct StateData
-{
-  HINSTANCE ProcessInstance;
-  HWND WindowHandle;
-  D3D_DRIVER_TYPE DriverType;
-  D3D_FEATURE_LEVEL FeatureLevel;
-  ID3D11Device D3DDevice;
-  ID3D11Device1 D3DDevice1;
-  ID3D11DeviceContext ImmediateContext;
-  ID3D11DeviceContext1 ImmediateContext1;
-  IDXGISwapChain SwapChain;
-  IDXGISwapChain1 SwapChain1;
-  ID3D11RenderTargetView RenderTargetView;
-}
-
-bool InitDevice(StateData* State)
-{
-  HRESULT Result;
-
-  RECT ClientRect;
-  GetClientRect(State.WindowHandle, &ClientRect);
-  auto WindowWidth = ClientRect.right - ClientRect.left;
-  auto WindowHeight = ClientRect.bottom - ClientRect.top;
-
-  UINT CreateDeviceFlags = 0;
-  debug CreateDeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
-
-  D3D_DRIVER_TYPE[3] DriverTypes =
-  [
-    D3D_DRIVER_TYPE_HARDWARE,
-    D3D_DRIVER_TYPE_WARP,
-    D3D_DRIVER_TYPE_REFERENCE,
-  ];
-
-  D3D_FEATURE_LEVEL[4] FeatureLevels =
-  [
-    D3D_FEATURE_LEVEL_11_1,
-    D3D_FEATURE_LEVEL_11_0,
-    D3D_FEATURE_LEVEL_10_1,
-    D3D_FEATURE_LEVEL_10_0,
-  ];
-
-  foreach(DriverType; DriverTypes)
-  {
-    Result = D3D11CreateDevice(null, DriverType, null, CreateDeviceFlags,
-                               FeatureLevels.ptr, cast(UINT)FeatureLevels.length,
-                               D3D11_SDK_VERSION,
-                               &State.D3DDevice, &State.FeatureLevel, &State.ImmediateContext);
-    if(Result == E_INVALIDARG)
-    {
-      // DirectX 11.0 platforms will not recognize D3D_FEATURE_LEVEL_11_1 so
-      // we need to retry without it.
-      auto TrimmedFeatureLevels = FeatureLevels[1 .. $];
-      Result = D3D11CreateDevice(null, DriverType, null, CreateDeviceFlags,
-                                 TrimmedFeatureLevels.ptr, cast(UINT)TrimmedFeatureLevels.length,
-                                 D3D11_SDK_VERSION,
-                                 &State.D3DDevice, &State.FeatureLevel, &State.ImmediateContext);
-    }
-
-    if(SUCCEEDED(Result))
-      break;
-  }
-
-  if(FAILED(Result))
-    return false;
-
-  // Obtain DXGI factory from device.
-  IDXGIFactory1 DXGIFactory;
-  {
-    IDXGIDevice DXGIDevice;
-    Result = State.D3DDevice.QueryInterface(uuidof!IDXGIDevice, cast(void**)&DXGIDevice);
-    if(SUCCEEDED(Result))
-    {
-      scope(exit) DXGIDevice.Release();
-
-      IDXGIAdapter Adapter;
-      DXGIDevice.GetAdapter(&Adapter);
-      if(SUCCEEDED(Result))
-      {
-        scope(exit) Adapter.Release();
-
-        Result = Adapter.GetParent(uuidof!IDXGIFactory1, cast(void**)&DXGIFactory);
-      }
-    }
-  }
-  if(FAILED(Result))
-    return false;
-
-  scope(exit) DXGIFactory.Release();
-
-  IDXGIFactory2 DXGIFactory2;
-  Result = DXGIFactory.QueryInterface(uuidof!IDXGIFactory2, cast(void**)&DXGIFactory2);
-  if(DXGIFactory2)
-  {
-    scope(exit) DXGIFactory2.Release();
-
-    Result = State.D3DDevice.QueryInterface(uuidof!ID3D11Device1, cast(void**)&State.D3DDevice1);
-    if(SUCCEEDED(Result))
-    {
-      State.ImmediateContext.QueryInterface(uuidof!ID3D11DeviceContext1, cast(void**)&State.ImmediateContext1);
-    }
-
-    DXGI_SWAP_CHAIN_DESC1 SwapChainDesc;
-    with(SwapChainDesc)
-    {
-      Width = WindowWidth;
-      Height = WindowHeight;
-      Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-      SampleDesc.Count = 1;
-      SampleDesc.Quality = 0;
-      BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-      BufferCount = 1;
-
-      Result = DXGIFactory2.CreateSwapChainForHwnd(State.D3DDevice, State.WindowHandle, &SwapChainDesc, null, null, &State.SwapChain1);
-      if(SUCCEEDED(Result))
-      {
-        Result = State.SwapChain1.QueryInterface(uuidof!IDXGISwapChain, cast(void**)&State.SwapChain);
-      }
-    }
-  }
-  else
-  {
-    // DirectX 11.0 systems
-    DXGI_SWAP_CHAIN_DESC SwapChainDesc;
-    with(SwapChainDesc)
-    {
-      BufferCount = 1;
-      BufferDesc.Width = WindowWidth;
-      BufferDesc.Height = WindowHeight;
-      BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-      BufferDesc.RefreshRate.Numerator = 60;
-      BufferDesc.RefreshRate.Denominator = 1;
-      BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-      OutputWindow = State.WindowHandle;
-      SampleDesc.Count = 1;
-      SampleDesc.Quality = 0;
-      Windowed = TRUE;
-    }
-
-    Result = DXGIFactory.CreateSwapChain(State.D3DDevice, &SwapChainDesc, &State.SwapChain);
-  }
-
-  DXGIFactory.MakeWindowAssociation(State.WindowHandle, DXGI_MWA_NO_ALT_ENTER);
-
-  if(FAILED(Result)) return false;
-
-  ID3D11Texture2D BackBuffer;
-  Result = State.SwapChain.GetBuffer(0, uuidof!ID3D11Texture2D, cast(void**)&BackBuffer);
-  if(FAILED(Result)) return false;
-
-  scope(exit) BackBuffer.Release();
-
-  State.D3DDevice.CreateRenderTargetView(BackBuffer, null, &State.RenderTargetView);
-
-  if(FAILED(Result)) return false;
-
-  State.ImmediateContext.OMSetRenderTargets(1, &State.RenderTargetView, null);
-
-  D3D11_VIEWPORT ViewPort;
-  with(ViewPort)
-  {
-    TopLeftX = 0.0f;
-    TopLeftY = 0.0f;
-    Width = cast(FLOAT)WindowWidth;
-    Height = cast(FLOAT)WindowHeight;
-    MinDepth = 0.0f;
-    MaxDepth = 1.0f;
-  }
-
-  State.ImmediateContext.RSSetViewports(1, &ViewPort);
-
-  return true;
 }

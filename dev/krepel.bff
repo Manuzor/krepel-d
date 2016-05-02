@@ -15,6 +15,8 @@
     .Output="..\build\$ProjectName$.exe"
     .OutputDirectory="..\build"
     .ProjectAllowedFileExtensions = {".d"}
+    .LocalDebuggerWorkingDirectory = "$(OutDir)"
+
   }
 
   ^Projects + "krepel"

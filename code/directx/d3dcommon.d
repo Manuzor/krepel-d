@@ -354,18 +354,13 @@ enum : D3D_INCLUDE_TYPE
   D3D_INCLUDE_FORCE_DWORD = 0x7fffffff,
 }
 
-// Begin cpp_quote #15-22
-//typedef interface ID3DInclude ID3DInclude;
-//#undef INTERFACE
-//#define INTERFACE ID3DInclude
-//DECLARE_INTERFACE(ID3DInclude)
-//{
-//STDMETHOD(Open)(THIS_ D3D_INCLUDE_TYPE IncludeType, LPCSTR pFileName, LPCVOID pParentData, LPCVOID *ppData, UINT *pBytes) PURE;
-//STDMETHOD(Close)(THIS_ LPCVOID pData) PURE;
-//};
-//typedef ID3DInclude* LPD3DINCLUDE;
-//alias LPD3DINCLUDE = ID3DInclude*;
-// End cpp_quote #15-22
+interface ID3DInclude
+{
+extern(Windows):
+
+  HRESULT Open(D3D_INCLUDE_TYPE IncludeType, LPCSTR pFileName, LPCVOID pParentData, LPCVOID* ppData, UINT* pBytes);
+  HRESULT Close(LPCVOID pData);
+}
 
 alias D3D_SHADER_VARIABLE_CLASS = int;
 enum : D3D_SHADER_VARIABLE_CLASS
