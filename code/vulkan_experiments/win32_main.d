@@ -10,6 +10,7 @@ import krepel.string;
 import krepel.math;
 import krepel.image;
 import krepel.input;
+import krepel.color;
 
 
 import std.string : toStringz, fromStringz;
@@ -2329,8 +2330,7 @@ void CreateDrawCommand(VulkanData Vulkan)
         VkClearValue[2] ClearValues;
         with(ClearValues[0])
         {
-          const CornflowerBlue = Vector4(100 / 255.0f, 149 / 255.0f, 237 / 255.0f, 1.0f);
-          color.float32[] = CornflowerBlue.Data[];
+          color.float32[] = Colors.CornflowerBlue.Data;
         }
         with(ClearValues[1])
         {
