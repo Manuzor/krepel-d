@@ -2,6 +2,7 @@ module krepel.math.matrix4;
 
 import krepel.math.vector3;
 import krepel.math.vector4;
+import krepel.math.quaternion;
 import krepel.math.math;
 
 @safe:
@@ -187,7 +188,7 @@ bool IsInvertible(Matrix4 Mat)
 
 /// Homogenous transform of a 4 dimensional Vector
 /// @return Result = Vector*Mat
-Vector4 TransformVector(Matrix4 Mat, Vector4 Vector)
+Vector4 TransformDirection(Matrix4 Mat, Vector4 Vector)
 {
   Vector4 Result = void;
 
@@ -203,19 +204,19 @@ Vector4 TransformVector(Matrix4 Mat, Vector4 Vector)
 /// @return Result = Vector.XYZ1*Mat
 Vector3 TransformPosition(Matrix4 Mat, Vector3 Vector)
 {
-  return TransformVector(Mat, Vector.XYZ1).XYZ;
+  return TransformDirection(Mat, Vector.XYZ1).XYZ;
 }
 
 /// Transforms a direction, not taking the translation part of the matrix into account
 /// @return Result = Vector.XYZ0*Mat
-Vector3 TransformVector(Matrix4 Mat, Vector3 Vector)
+Vector3 TransformDirection(Matrix4 Mat, Vector3 Vector)
 {
-  return TransformVector(Mat, Vector.XYZ0).XYZ;
+  return TransformDirection(Mat, Vector.XYZ0).XYZ;
 }
 
 /// Homogenous inverse transform of a 4 dimensional Vector
 /// @return Result = Vector*Mat^-1
-Vector4 InverseTransformVector(Matrix4 Mat, Vector4 Vector)
+Vector4 InverseTransformDirection(Matrix4 Mat, Vector4 Vector)
 {
   Vector4 Result = void;
 
@@ -233,14 +234,14 @@ Vector4 InverseTransformVector(Matrix4 Mat, Vector4 Vector)
 /// @return Result = Vector.XYZ1*Mat^-1
 Vector3 InverseTransformPosition(Matrix4 Mat, Vector3 Vector)
 {
-  return InverseTransformVector(Mat, Vector.XYZ1).XYZ;
+  return InverseTransformDirection(Mat, Vector.XYZ1).XYZ;
 }
 
 /// InverseTransforms a direction, not taking the translation part of the matrix into account
 /// @return Result = Vector.XYZ1*Mat^-1
-Vector3 InverseTransformVector(Matrix4 Mat, Vector3 Vector)
+Vector3 InverseTransformDirection(Matrix4 Mat, Vector3 Vector)
 {
-  return InverseTransformVector(Mat, Vector.XYZ0).XYZ;
+  return InverseTransformDirection(Mat, Vector.XYZ0).XYZ;
 }
 
 /// Returns transposed multiplication of the two matrices
@@ -286,6 +287,79 @@ Vector3 GetScaledAxis(Matrix4 Mat, EAxisType Type)
 Vector3 GetUnitAxis(Matrix4 Mat, EAxisType Type)
 {
   return GetScaledAxis(Mat, Type).SafeNormalizedCopy();
+}
+
+Matrix4 CreatePerspectiveMatrix(float HalfFOVY, float Width, float Height, float NearPlane, float FarPlane)
+{
+  return Matrix4([
+    [1.0f/ Tan(HalfFOVY), 0.0f, 0.0f, 0.0f],
+    [0.0f, Width/ Tan(HalfFOVY)/Height, 0.0f, 0.0f],
+    [0.0f, 0.0f, ((NearPlane == FarPlane) ? 1.0f : FarPlane / (FarPlane - NearPlane)), 1.0f],
+    [0.0f, 0.0f, -NearPlane * ((NearPlane == FarPlane) ? 1.0f : FarPlane / (FarPlane - NearPlane)), 0.0f],
+    ]);
+}
+
+Matrix4 CreateOrthogonalMatrix(float Width, float Height, float ZScale, float ZOffset)
+{
+  return Matrix4([
+    [Width ? (1.0f/Width) : 1.0f, 0.0f, 0.0f, 0.0f],
+    [0.0f, Height ? (1.0f/Height) : 1.0f, 0.0f, 0.0f],
+    [0.0f, 0.0f, ZScale, 0.0f],
+    [0.0f, 0.0f, ZOffset * ZScale, 1.0f]
+    ]);
+}
+
+Matrix4 CreateLookAtMatrix(Vector3 Target, Vector3 Position, Vector3 Up = Vector3.UpVector)
+{
+  auto Direction = (Target - Position).SafeNormalizedCopy;
+  Vector3 Right = Direction ^ Up.SafeNormalizedCopy;
+  Up = Right ^ Direction;
+  return Matrix4(
+    Direction,
+    Right,
+    Up,
+    Position
+  );
+}
+
+Matrix4 CreateMatrixFromScaleRotateTranslate(Vector3 Position, Quaternion Rotation, Vector3 Scale = Vector3.UnitScaleVector)
+{
+  Matrix4 Result;
+
+  const float X2 = Rotation.X + Rotation.X;
+  const float Y2 = Rotation.Y + Rotation.Y;
+  const float Z2 = Rotation.Z + Rotation.Z;
+
+  const float XX2 = Rotation.X * X2;
+  const float YY2 = Rotation.Y * Y2;
+  const float ZZ2 = Rotation.Z * Z2;
+  const float XY2 = Rotation.X * Y2;
+  const float WZ2 = Rotation.W * Z2;
+  const float YZ2 = Rotation.Y * Z2;
+  const float WX2 = Rotation.W * X2;
+  const float XZ2 = Rotation.X * Z2;
+  const float WY2 = Rotation.W * Y2;
+
+  Result[0][0] = (1.0f - (YY2 + ZZ2)) * Scale.X;
+  Result[0][1] = (XY2 + WZ2) * Scale.X;
+  Result[0][2] = (XZ2 - WY2) * Scale.X;
+  Result[1][0] = (XY2 - WZ2) * Scale.Y;
+  Result[1][1] = (1.0f - (XX2 + ZZ2)) * Scale.Y;
+  Result[1][2] = (YZ2 + WX2) * Scale.Y;
+  Result[2][0] = (XZ2 + WY2) * Scale.Z;
+  Result[2][1] = (YZ2 - WX2) * Scale.Z;
+  Result[2][2] = (1.0f - (XX2 + YY2)) * Scale.Z;
+
+  Result.M[0][3] = 0.0f;
+  Result.M[1][3] = 0.0f;
+  Result.M[2][3] = 0.0f;
+  Result.M[3][3] = 1.0f;
+
+  Result[3][0] = Position.X;
+  Result[3][1] = Position.Y;
+  Result[3][2] = Position.Z;
+
+  return Result;
 }
 
 /// 4x4 Matrix accessed first by row, then by column
@@ -462,9 +536,9 @@ unittest
   Transformed = Mat.InverseTransformPosition(Transformed);
   assert(Pos == Transformed);
 
-  Transformed = Mat.TransformVector(Vector3.ForwardVector);
+  Transformed = Mat.TransformDirection(Vector3.ForwardVector);
   assert(Transformed == -Vector3.RightVector);
-  Transformed = Mat.InverseTransformVector(Transformed);
+  Transformed = Mat.InverseTransformDirection(Transformed);
   assert(Transformed == Vector3.ForwardVector);
 
   Mat = Matrix4(Vector3.ForwardVector, Vector3.RightVector, Vector3.UpVector, Vector3(10,20,50));
@@ -476,13 +550,13 @@ unittest
   Transformed = Mat.InverseTransformPosition(Transformed);
   assert(Pos == Transformed);
 
-  Transformed = Mat.TransformVector(Vector3.ForwardVector);
+  Transformed = Mat.TransformDirection(Vector3.ForwardVector);
   assert(Transformed == Vector3.ForwardVector);
-  Transformed = Mat.InverseTransformVector(Vector3.ForwardVector);
+  Transformed = Mat.InverseTransformDirection(Vector3.ForwardVector);
   assert(Transformed == Vector3.ForwardVector);
 
-  assert(Mat.TransformVector(Vector4(0,0,0,2)) == Vector4(20, 40, 100, 2));
-  assert(Mat.InverseTransformVector(Mat.TransformVector(Vector4(0,0,0,2))) == Vector4(0, 0, 0, 2));
+  assert(Mat.TransformDirection(Vector4(0,0,0,2)) == Vector4(20, 40, 100, 2));
+  assert(Mat.InverseTransformDirection(Mat.TransformDirection(Vector4(0,0,0,2))) == Vector4(0, 0, 0, 2));
 
 }
 /// Determinant
@@ -553,6 +627,17 @@ unittest
   assert(Matrix * Matrix.SafeInvert() == Matrix4.Identity);
 }
 
+// Transform Matrix
+unittest
+{
+  const Transform = CreateMatrixFromScaleRotateTranslate(Vector3(1,2,3), Quaternion.Identity, Vector3(2,2,2));
+  const Input = Vector3(10,20,30);
+  const ResultPosition = Transform.TransformPosition(Input);
+  const ResultVector = Transform.TransformDirection(Input);
+  assert(ResultPosition == Vector3(21,42,63));
+  assert(ResultVector == Vector3(20,40,60));
+}
+
 // opIndex
 unittest
 {
@@ -575,4 +660,14 @@ unittest
   Mat[1, 1] = 10;
   assert(Mat[1, 1] == 10);
 
+}
+
+unittest
+{
+  auto Mat = CreateLookAtMatrix(Vector3.ZeroVector, Vector3.ForwardVector, Vector3.UpVector);
+  auto Result = Mat.TransformDirection(Vector3.ForwardVector);
+  assert(Result == -Vector3.ForwardVector);
+  Result = Mat.TransformPosition(Vector3.ForwardVector);
+
+  assert(Result == Vector3.ZeroVector);
 }

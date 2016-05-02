@@ -108,6 +108,17 @@ bool ContainsNaN(Vector3 Vec)
   return IsNaN(Vec.X) || IsNaN(Vec.Y) || IsNaN(Vec.Z);
 }
 
+/// Calculates th reciprocal (1/X) of the vector components and returns it
+/// If a component is zero it will be ZeroCase instead of +inf
+Vector3 Reciprocal(Vector3 Vec, float ZeroCase = 3.4e38f)
+{
+  return Vector3(
+    Vec.X != 0.0f ? 1/Vec.X : ZeroCase,
+    Vec.Y != 0.0f ? 1/Vec.Y : ZeroCase,
+    Vec.Z != 0.0f ? 1/Vec.Z : ZeroCase,
+  );
+}
+
 /// Checks if two Vectors are nearly equal (are equal with respect to a scaled epsilon)
 /// Input Vectors will not be modified
 bool NearlyEquals(Vector3 A, Vector3 B, float Epsilon = 1e-4f)
