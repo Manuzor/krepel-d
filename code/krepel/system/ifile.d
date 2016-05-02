@@ -84,4 +84,9 @@ interface IFile
     assert(Region.length > 0);
   }
 
+  /// Get the size of the file.
+  ///
+  /// Returns: The size of this file in bytes. If the file is not opened, this
+  /// will be 0.
+  @property ulong Size() const;
 }

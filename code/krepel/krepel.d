@@ -11,6 +11,8 @@ private static import std.algorithm;
 private static import std.format;
 private static import std.range;
 private static import std.utf;
+private static import std.uni;
+private static import std.ascii;
 private static import std.typecons;
 
 
@@ -18,6 +20,7 @@ alias Find    = std.algorithm.find;
 alias CanFind = std.algorithm.canFind;
 
 alias StartsWith = std.algorithm.startsWith;
+alias Count      = std.algorithm.count;
 alias CountUntil = std.algorithm.countUntil;
 alias CopyTo     = std.algorithm.copy;
 
@@ -59,10 +62,21 @@ alias FormattedWrite = std.format.formattedWrite;
 alias ToDelegate = std.functional.toDelegate;
 
 alias ByUTF = std.utf.byUTF;
+alias IsWhite = std.uni.isWhite;
+alias IsDigit = std.ascii.isDigit;
+alias ToLower = std.uni.toLower;
+alias IsAlpha = std.uni.isAlpha;
 
 alias Yes  = std.typecons.Yes;
 alias No   = std.typecons.No;
 alias Flag = std.typecons.Flag;
+
+void Swap(TypeA, TypeB)(ref TypeA A, ref TypeB B)
+{
+  auto SavedA = A;
+  A = B;
+  B = SavedA;
+}
 
 version(none)
 void main()

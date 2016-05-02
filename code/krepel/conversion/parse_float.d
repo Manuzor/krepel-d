@@ -1,10 +1,18 @@
 module krepel.conversion.parse_float;
 
+import krepel : Flag, Yes, No;
 import krepel.string;
 import krepel.conversion.conversion;
 
+struct ParseFloatResult
+{
+  Flag!"Success" Success;
+  double Value;
 
-float ParseFloat(Source)(ref Source String, float ValueOnError = float.nan)
+  alias Value this;
+}
+
+ParseFloatResult ParseFloat(Source)(ref Source String, double ValueOnError = double.nan)
 {
   String = TrimStart(String);
 
@@ -12,7 +20,7 @@ float ParseFloat(Source)(ref Source String, float ValueOnError = float.nan)
 
   if(String.length == 0)
   {
-    return ValueOnError;
+    return ParseFloatResult(No.Success, ValueOnError);
   }
 
   switch(String[0])
@@ -28,7 +36,7 @@ float ParseFloat(Source)(ref Source String, float ValueOnError = float.nan)
     break;
   }
 
-  long NumericalPart = 0;
+  ulong NumericalPart = 0;
   bool HasNumericalPart = false;
 
   while(String.length > 0 && IsDigit(String[0]))
@@ -41,23 +49,22 @@ float ParseFloat(Source)(ref Source String, float ValueOnError = float.nan)
 
   if (!HasNumericalPart)
   {
-    return ValueOnError;
+    return ParseFloatResult(No.Success, ValueOnError);
   }
 
-  float Value = cast(float)NumericalPart;
-
+  auto Value = cast(double)NumericalPart;
 
   bool HasDecimalPoint = String.length > 0 && String[0] == '.';
 
   if(!HasDecimalPoint && String.length == 0 || (String[0] != '.' && String[0] != 'e' && String[0] != 'E'))
   {
-    return Sign ? -Value : Value;
+    return ParseFloatResult(Yes.Success, Sign ? -Value : Value);
   }
   if(HasDecimalPoint)
   {
     String = String[1..$];
-    long DecimalPart = 0;
-    long DecimalDivider = 1;
+    ulong DecimalPart = 0;
+    ulong DecimalDivider = 1;
 
     while(String.length > 0 && IsDigit(String[0]))
     {
@@ -67,12 +74,12 @@ float ParseFloat(Source)(ref Source String, float ValueOnError = float.nan)
         String = String[1..$];
     }
 
-    Value += (cast(float)DecimalPart)/(cast(float)DecimalDivider);
+    Value += (cast(double)DecimalPart)/(cast(double)DecimalDivider);
   }
 
   if(String.length == 0 || (String[0] != 'e' && String[0] != 'E'))
   {
-    return Sign ? -Value : Value;
+    return ParseFloatResult(Yes.Success, Sign ? -Value : Value);
   }
   else if(String[0] == 'e' || String[0] == 'E')
   {
@@ -91,7 +98,7 @@ float ParseFloat(Source)(ref Source String, float ValueOnError = float.nan)
     default:
       break;
     }
-    long ExponentPart = 0;
+    ulong ExponentPart = 0;
     while(String.length > 0 && IsDigit(String[0]))
     {
         ExponentPart *= 10;
@@ -108,16 +115,16 @@ float ParseFloat(Source)(ref Source String, float ValueOnError = float.nan)
     Value = (ExponentSign ? (Value / ExponentValue) : (Value * ExponentValue));
   }
 
-  return Sign ? -Value : Value;
-
+  return ParseFloatResult(Yes.Success, Sign ? -Value : Value);
 }
 
 version(unittest)
-void TestFloat(string String, float Expected, int ExpectedRangeLength)
+void TestFloat(string String, double Expected, int ExpectedRangeLength)
 {
   auto Range = String[];
-  float Value;
-  Value = ParseFloat(Range);
+  auto Result = ParseFloat(Range);
+  assert(Result.Success);
+  auto Value = cast(double)Result;
   assert(Value == Expected);
   assert(Range.length == ExpectedRangeLength);
 }
@@ -151,7 +158,8 @@ unittest
 
   auto String = "ABC";
   auto Range = String[];
-  float Value = ParseFloat(Range);
+  auto Value = ParseFloat(Range);
+  assert(!Value.Success);
   assert(IsNaN(Value));
   assert(Range.length == 3);
 }
