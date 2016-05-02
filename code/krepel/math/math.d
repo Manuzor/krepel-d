@@ -30,6 +30,24 @@ float Sin(float Value)
   return std.math.sin(Value);
 }
 
+/// Calculates the tangent of the Value
+/// Params:
+/// Value = The angle in radians for which the tangent will be calulcated.
+float Tan(float Value)
+{
+  return std.math.tan(Value);
+}
+
+
+/// Calculates the arcus tangent of the Value
+/// Params:
+/// Value = The tagent value.
+/// Returns: the Angle in radians
+float ATan(float Value)
+{
+  return std.math.atan(Value);
+}
+
 /// Calculates the arcus sinus
 /// Params:
 /// Value = The sinus value.
