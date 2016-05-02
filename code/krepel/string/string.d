@@ -159,7 +159,7 @@ struct StringBase(CharType)
 
   bool StartsWith(const CharType[] SearchString)
   {
-    if (Count < SearchString.length)
+    if (ByteCount < SearchString.length)
     {
       return false;
     }
@@ -171,7 +171,7 @@ struct StringBase(CharType)
 
   bool EndsWith(const CharType[] SearchString)
   {
-    if (Count < SearchString.length)
+    if (ByteCount < SearchString.length)
     {
       return false;
     }
@@ -184,7 +184,7 @@ struct StringBase(CharType)
   ulong Find(const(CharType[]) SearchString, ulong SearchStardIndex = 0) const
   {
     long SearchIndex = SearchStardIndex;
-    while(SearchString.length + SearchIndex <= Count)
+    while(SearchString.length + SearchIndex <= ByteCount)
     {
       if (this[SearchIndex .. SearchIndex + SearchString.length] == SearchString)
       {
@@ -197,7 +197,7 @@ struct StringBase(CharType)
 
   ulong FindLast(const(CharType[]) SearchString) const
   {
-    long SearchIndex = Count - SearchString.length;
+    long SearchIndex = ByteCount - SearchString.length;
     while(SearchIndex >= 0)
     {
       if (this[SearchIndex .. SearchIndex + SearchString.length] == SearchString)
@@ -255,7 +255,7 @@ struct StringBase(CharType)
     Data.PopBack(); // Remove \0 from End of first string.
     Data.PushBack(OtherString);
     Data.PushBack('\0');
-    return Count;
+    return ByteCount;
   }
 
   StringBase!CharType ConcatCopy(const(CharType[]) OtherString)
@@ -270,9 +270,9 @@ struct StringBase(CharType)
     return ConcatCopy(OtherString);
   }
 
-  const(CharType[]) opIndex() const
+  const(CharType)[] opIndex() const
   {
-    return Data.Data[0..Count];
+    return Data.Data[0..ByteCount];
   }
 
   CharType opIndex(int Index) const
@@ -305,15 +305,15 @@ struct StringBase(CharType)
 
   ulong opDollar() const
   {
-    return Count;
+    return ByteCount;
   }
 
-  const(CharType[]) opSlice(ulong LeftIndex, ulong RightIndex) const
+  const(CharType)[] opSlice(ulong LeftIndex, ulong RightIndex) const
   {
     return Data.Data[LeftIndex .. RightIndex];
   }
 
-  @property auto Count() const
+  @property auto ByteCount() const
   {
     return Data.Count - 1;
   }
