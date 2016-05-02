@@ -304,11 +304,48 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
     //
     // Input
     //
+    auto SystemInput = .Allocator.New!Win32InputContext(.Allocator);
+    scope(exit) .Allocator.Delete(SystemInput);
+
+    Window.Input = SystemInput;
+
+    // Note(Manu): Let's pretend the system is user 0 for now.
+    SystemInput.UserIndex = 0;
+
+    Win32RegisterAllKeyboardSlots(SystemInput);
+    Win32RegisterAllMouseSlots(SystemInput);
+    Win32RegisterAllXInputSlots(SystemInput);
+
+    SystemInput.RegisterInputSlot(InputType.Button, "Quit");
+    SystemInput.AddSlotMapping(Keyboard.Escape, "Quit");
+    SystemInput.AddSlotMapping(XInput.Start, "Quit");
+
+    SystemInput.RegisterInputSlot(InputType.Axis, "Depth");
+    SystemInput.AddSlotMapping(Keyboard.Up,   "Depth", -1);
+    SystemInput.AddSlotMapping(Keyboard.Down, "Depth",  1);
+    with(SystemInput.ValueProperties.GetOrCreate("Depth"))
+    {
+      Sensitivity = 0.005f;
+    }
+
+    SystemInput.RegisterInputSlot(InputType.Axis, "CameraX");
+    SystemInput.AddSlotMapping(XInput.XLeftStick, "CameraX");
+    SystemInput.AddSlotMapping(Keyboard.A, "CameraX", -1);
+    SystemInput.AddSlotMapping(Keyboard.D, "CameraX",  1);
+
+    SystemInput.RegisterInputSlot(InputType.Axis, "CameraY");
+    SystemInput.AddSlotMapping(XInput.YLeftStick, "CameraY");
+    SystemInput.AddSlotMapping(Keyboard.W, "CameraY",  1);
+    SystemInput.AddSlotMapping(Keyboard.S, "CameraY", -1);
+
+    SystemInput.RegisterInputSlot(InputType.Axis, "CameraZ");
+    SystemInput.AddSlotMapping(XInput.YRightStick, "CameraZ", -1);
+    SystemInput.AddSlotMapping(Keyboard.Q, "CameraZ", -1);
+    SystemInput.AddSlotMapping(Keyboard.E, "CameraZ",  1);
 
     //
     // Vulkan
     //
-
     bool VulkanInitialized;
 
     {
@@ -341,22 +378,23 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
         // Main Loop
         //
         Vulkan.DepthStencilValue = 1.0f;
-        Vulkan.DepthStencilIncrement = 0.0f;
         .Running = true;
         while(.Running)
         {
-          Win32ProcessPendingMessages();
-
-          Vulkan.DepthStencilValue = Clamp(Vulkan.DepthStencilValue + Vulkan.DepthStencilIncrement, 0.8f, 1.0f);
-
-          if(Vulkan.DepthStencilValue == 1.0f)
+          SystemInput.BeginInputFrame();
           {
-            Vulkan.DepthStencilIncrement = -0.001;
+            Win32MessagePump();
+            Win32PollXInput(SystemInput);
           }
-          else if(Vulkan.DepthStencilValue == 0.8f)
+          SystemInput.EndInputFrame();
+
+          if(SystemInput["Quit"].ButtonIsDown)
           {
-            Vulkan.DepthStencilIncrement = 0.001;
+            .Running = false;
+            break;
           }
+
+          Vulkan.DepthStencilValue = Clamp(Vulkan.DepthStencilValue + SystemInput["Depth"].AxisValue, 0.8f, 1.0f);
 
           //Log.Info("Depth Stencil Value Sample: %f", Vulkan.DepthStencilValue);
 
@@ -377,7 +415,7 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
   return 0;
 }
 
-void Win32ProcessPendingMessages()
+void Win32MessagePump()
 {
   MSG Message;
   while(PeekMessageA(&Message, null, 0, 0, PM_REMOVE))
@@ -387,24 +425,6 @@ void Win32ProcessPendingMessages()
       case WM_QUIT:
       {
         .Running = false;
-      } break;
-
-      case WM_SYSKEYDOWN: goto case; // fallthrough
-      case WM_SYSKEYUP:   goto case; // fallthrough
-      case WM_KEYDOWN:    goto case; // fallthrough
-      case WM_KEYUP:
-      {
-        auto VKCode = Message.wParam;
-
-        if(VKCode == VK_SPACE)
-        {
-          Log.Info("Space");
-        }
-        else if(VKCode == VK_ESCAPE)
-        {
-          PostQuitMessage(0);
-        }
-
       } break;
 
       default:
@@ -424,11 +444,6 @@ extern(Windows)
 LRESULT Win32MainWindowCallback(HWND WindowHandle, UINT Message,
                                 WPARAM WParam, LPARAM LParam)
 {
-  enum RESIZE_EVENT_ID = 1337;
-  enum MILLISECONDS_TO_WAIT_BEFORE_RESIZING = 200;
-
-  LRESULT Result;
-
   auto Window = cast(WindowData)cast(void*)GetWindowLongPtr(WindowHandle, GWLP_USERDATA);
   if(Window is null) return DefWindowProcA(WindowHandle, Message, WParam, LParam);
 
@@ -437,28 +452,27 @@ LRESULT Win32MainWindowCallback(HWND WindowHandle, UINT Message,
   auto Vulkan = Window.Vulkan;
 
 
+  LRESULT Result = 0;
   switch(Message)
   {
     case WM_CLOSE:
     {
-      // TODO: Handle this with a message to the user?
       PostQuitMessage(0);
     } break;
 
     case WM_DESTROY:
     {
-      // TODO: Handle this as an error - recreate Window?
       PostQuitMessage(0);
     } break;
 
-    case WM_SYSKEYDOWN: goto case; // fallthrough
-    case WM_SYSKEYUP:   goto case; // fallthrough
-    case WM_KEYDOWN:    goto case; // fallthrough
-    case WM_KEYUP: assert(0, "Keyboard messages are handled in the main loop.");
-
-    case WM_ACTIVATEAPP:
+    case WM_KEYFIRST:   .. case WM_KEYLAST:   goto case; // fallthrough
+    case WM_MOUSEFIRST: .. case WM_MOUSELAST: goto case; // fallthrough
+    case WM_INPUT:
     {
-      //OutputDebugStringA("WM_ACTIATEAPP\n");
+      // TODO(Manu): Deal with the return value?
+      Win32ProcessInputMessage(WindowHandle, Message, WParam, LParam,
+                               Window.Input,
+                               .Log);
     } break;
 
     case WM_SIZE:
@@ -489,6 +503,7 @@ LRESULT Win32MainWindowCallback(HWND WindowHandle, UINT Message,
 
     default:
     {
+      // OutputDebugStringA("Default\n");
       Result = DefWindowProcA(WindowHandle, Message, WParam, LParam);
     } break;
   }
@@ -598,7 +613,6 @@ class VulkanData
     Array!VkFramebuffer Framebuffers;
 
     float DepthStencilValue = 1.0f;
-    float DepthStencilIncrement = 0.0f;
   }
 
   this(IAllocator Allocator)
