@@ -31,7 +31,7 @@ Type* Construct(Type, ArgTypes...)(Type* Pointer, auto ref ArgTypes Args)
 }
 
 void Destruct(Type)(Type Instance)
-  if(is(Type == class))
+  if(Meta.IsClassOrInterface!Type)
 {
   // TODO(Manu): assert(Instance)?
   if(Instance)
@@ -42,7 +42,7 @@ void Destruct(Type)(Type Instance)
 }
 
 void Destruct(Type)(Type* Instance)
-  if(!is(Type == class))
+  if(!Meta.IsClassOrInterface!Type)
 {
   // TODO(Manu): assert(Instance)?
   if(Instance)
@@ -63,7 +63,7 @@ void Destruct(Type)(Type* Instance)
           alias MemberType = typeof(mixin(`Instance.` ~ MemberName));
           static if(Meta.HasDestructor!MemberType && !Meta.IsPointer!MemberType)
           {
-            static if(is(MemberType == class))
+            static if(Meta.IsClassOrInterface!MemberType)
             {
               Destruct(mixin(`Instance.` ~ MemberName));
             }

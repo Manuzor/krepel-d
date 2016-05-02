@@ -11,16 +11,12 @@ private static import std.algorithm;
 private static import std.format;
 private static import std.range;
 private static import std.utf;
-private static import std.uni;
-private static import std.ascii;
 private static import std.typecons;
 
 
-alias Find    = std.algorithm.find;
-alias CanFind = std.algorithm.canFind;
+alias Find = std.algorithm.find;
 
 alias StartsWith = std.algorithm.startsWith;
-alias Count      = std.algorithm.count;
 alias CountUntil = std.algorithm.countUntil;
 alias CopyTo     = std.algorithm.copy;
 
@@ -78,24 +74,136 @@ void Swap(TypeA, TypeB)(ref TypeA A, ref TypeB B)
   B = SavedA;
 }
 
-version(none)
-void main()
+/// A bidirectional range yielding all enum values from .min to .max.
+static struct EnumIterator(EnumType)
+  // TODO(Manu): Constraint to ensure EnumType is actually an enum.
 {
-  import krepel.memory;
+  EnumType _Front = EnumType.min;
+  EnumType _Back = EnumType.max;
 
-  import std.c.stdlib;
+  @property bool empty() const { return _Front > _Back; }
+  @property inout(EnumType) front() inout { assert(!empty); return _Front; }
+  @property inout(EnumType) back() inout { assert(!empty); return _Back; }
+  void popFront() { _Front = cast(EnumType)(cast(ulong)_Front + 1); }
+  void popBack()  { _Back  = cast(EnumType)(cast(ulong)_Back  - 1); }
+}
 
-  const BufferSize = 1.MiB;
-  auto BufferPtr = cast(ubyte*)malloc(BufferSize);
-  scope(exit) free(BufferPtr);
+/// Tracks whether the value of a given type was set or not.
+///
+/// Mostly useful for members of structs/classes.
+struct TrackedValue(Type)
+{
+  bool IsSet;
+  Type _Value = void;
 
-  GlobalAllocator.Memory.Initialize(BufferPtr[0 .. BufferSize]);
-  scope(exit) GlobalAllocator.Memory.Deinitialize();
+  this(AssignType)(AssignType Value)
+  {
+    this.Value = Value;
+  }
 
-  Log.Sinks ~= ToDelegate(&StdoutLogSink);
+  /// Getter
+  @property inout(Type) Value() inout
+  {
+    assert(this.IsSet);
+    return cast(typeof(return))this._Value;
+  }
 
-  Log.Info("Hello");
-  Log.Info("World");
+  /// Setter
+  @property void Value(AssignType)(AssignType NewValue)
+  {
+    this._Value = NewValue;
+    this.IsSet = true;
+  }
 
-  return;
+  void opAssign(AssignType)(AssignType NewValue)
+  {
+    this.Value = NewValue;
+  }
+
+  inout(Type) ValueOr(FallbackType : Type)(FallbackType FallbackValue) inout
+  {
+    return this.IsSet ? this._Value : FallbackValue;
+  }
+
+  inout(To) opCast(To)() inout
+  {
+    return cast(typeof(return))this.Value;
+  }
+}
+
+// A nicer name for optional values, e.g. `Optional!int Count;`.
+alias Optional = TrackedValue;
+
+// A nicer name for required values, e.g. `Optional!Vector3 Extents;`.
+alias Required = TrackedValue;
+
+//
+// Unit Tests
+//
+
+unittest
+{
+  enum Foo
+  {
+    Bar,
+    Baz
+  }
+  // TODO(Manu): Find out why EnumIterator is not a bidirectional range in
+  // terms of Meta.IsBidirectionalRange, even though it behaves like one.
+  //static assert(Meta.IsBidirectionalRange!(EnumIterator!Foo),
+  //              "The EnumIterator template should be a bidirectional range.");
+  static assert(Meta.IsInputRange!(EnumIterator!Foo));
+
+  auto Iter = EnumIterator!Foo();
+  assert(Iter.front == Foo.Bar);
+  Iter.popFront();
+  assert(Iter.front == Foo.Baz);
+  Iter.popFront();
+  assert(Iter.empty);
+
+  int Count;
+  foreach(_; EnumIterator!Foo()) { Count++; }
+  assert(Count == 2);
+}
+
+unittest
+{
+  import core.exception : AssertError;
+  import std.exception : assertThrown;
+
+  TrackedValue!int Integer;
+  assert(!Integer.IsSet);
+  assertThrown!AssertError(Integer.Value == 0);
+  assertThrown!AssertError(cast(byte)Integer == 0);
+  assert(Integer.ValueOr(1337) == 1337);
+  Integer.Value = 42;
+  assert(Integer.Value == 42);
+  assert(Integer.ValueOr(1337) == 42);
+  assert(cast(float)Integer == 42.0f);
+
+  static struct FooData
+  {
+    int Data;
+
+    inout(To) opCast(To : int)() inout { return this.Data; }
+
+    void opAssign(Type)(Type Value)
+    {
+      this.Data = cast(int)Value;
+    }
+  }
+
+  static struct BarData
+  {
+    float Data;
+
+    To opCast(To)()
+    {
+      return cast(typeof(return))this.Data;
+    }
+  }
+
+  TrackedValue!FooData Foo;
+  Foo = BarData(42.0f);
+  assert(cast(int)Foo == 42);
 }
