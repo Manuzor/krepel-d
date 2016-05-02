@@ -214,20 +214,23 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
       Win32RegisterAllXInputSlots(SystemInput);
 
       SystemInput.RegisterInputSlot(InputType.Button, "Quit");
-      SystemInput.AddTrigger("Quit", Keyboard.Escape);
-      SystemInput.AddTrigger("Quit", XInput.Start);
+      SystemInput.AddSlotMapping(Keyboard.Escape, "Quit");
+      SystemInput.AddSlotMapping(XInput.Start, "Quit");
 
       SystemInput.RegisterInputSlot(InputType.Axis, "CameraX");
-      //SystemInput.AddTrigger("CameraX", XInput.XLeftStick);
-      SystemInput.AddTrigger("CameraX", Keyboard.A);
+      SystemInput.AddSlotMapping(XInput.XLeftStick, "CameraX");
+      SystemInput.AddSlotMapping(Keyboard.A, "CameraX", -1);
+      SystemInput.AddSlotMapping(Keyboard.D, "CameraX",  1);
 
       SystemInput.RegisterInputSlot(InputType.Axis, "CameraY");
-      //SystemInput.AddTrigger("CameraY", XInput.YLeftStick);
-      SystemInput.AddTrigger("CameraY", Keyboard.W);
+      SystemInput.AddSlotMapping(XInput.YLeftStick, "CameraY");
+      SystemInput.AddSlotMapping(Keyboard.W, "CameraY",  1);
+      SystemInput.AddSlotMapping(Keyboard.S, "CameraY", -1);
 
       SystemInput.RegisterInputSlot(InputType.Axis, "CameraZ");
-      //SystemInput.AddTrigger("CameraZ", XInput.YRightStick);
-      SystemInput.AddTrigger("CameraZ", Keyboard.Space);
+      SystemInput.AddSlotMapping(XInput.YRightStick, "CameraZ", -1);
+      SystemInput.AddSlotMapping(Keyboard.Q, "CameraZ", -1);
+      SystemInput.AddSlotMapping(Keyboard.E, "CameraZ",  1);
 
 
       //SystemInput.ChangeEvent.Add = (Id, Slot)
