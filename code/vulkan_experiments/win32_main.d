@@ -9,6 +9,7 @@ import krepel.container;
 import krepel.string;
 import krepel.math;
 import krepel.image;
+import krepel.input;
 
 
 import std.string : toStringz, fromStringz;
@@ -139,8 +140,26 @@ struct WindowConstructionData
   Optional!int WindowY;
 }
 
-HWND CreateWindow(IAllocator Allocator, WindowConstructionData Args,
-                  LogData* Log = null)
+class WindowData
+{
+  //
+  // These are set by CreateWindow.
+  //
+  HWND Handle;
+  int PositionX;
+  int PositionY;
+  int ClientWidth;
+  int ClientHeight;
+
+  //
+  // These are set by the user.
+  //
+  Win32InputContext Input;
+  VulkanData Vulkan;
+}
+
+WindowData CreateWindow(IAllocator Allocator, WindowConstructionData Args,
+                        LogData* Log = null)
 {
   if(!Args.ProcessHandle.IsSet)
   {
@@ -228,14 +247,30 @@ HWND CreateWindow(IAllocator Allocator, WindowConstructionData Args,
   if(WindowHandle is null)
   {
     Log.Failure("Failed to create window.");
+    return null;
   }
 
-  return WindowHandle;
+  auto Window = Allocator.New!WindowData();
+  Window.Handle = WindowHandle;
+  Window.PositionX = WindowX;
+  Window.PositionY = WindowY;
+  Window.ClientWidth = Args.ClientWidth.Value;
+  Window.ClientHeight = Args.ClientHeight.Value;
+
+  SetWindowLongPtr(Window.Handle, GWLP_USERDATA, cast(LONG_PTR)Window.AsPointerTo!void);
+
+  return Window;
 }
 
-void DestroyWindow(HWND WindowHandle)
+void DestroyWindow(IAllocator Allocator, WindowData Window)
 {
-  // TODO(Manu): Implement?
+  if(Window is null) return;
+
+  SetWindowLongPtr(Window.Handle, GWLP_USERDATA, cast(LONG_PTR)null);
+
+  // TODO(Manu): Close window using Window.Handle.
+
+  Allocator.Delete(Window);
 }
 
 int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
@@ -258,16 +293,27 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
     ClientWidth: 768,
     ClientHeight: 768,
   };
-  HWND Window = CreateWindow(.Allocator, WindowArgs,
-                             .Log);
+  WindowData Window = CreateWindow(.Allocator, WindowArgs,
+                                   .Log);
 
   if(Window)
   {
+    assert(Window.Handle);
+    scope(success) DestroyWindow(.Allocator, Window);
+
+    //
+    // Input
+    //
+
+    //
+    // Vulkan
+    //
+
     bool VulkanInitialized;
 
     {
       Log.BeginScope("Initializing Vulkan.");
-      VulkanInitialized = Vulkan.Initialize(Instance, Window);
+      VulkanInitialized = Vulkan.Initialize(Instance, Window.Handle);
       if(VulkanInitialized) Log.EndScope("Vulkan initialized successfully.");
       else                  Log.EndScope("Failed to initialize Vulkan.");
     }
@@ -279,8 +325,8 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
     {
       scope(success) Vulkan.Cleanup();
 
-      SetWindowLongPtr(Window, GWLP_USERDATA, cast(LONG_PTR)Vulkan.AsPointerTo!void);
-      scope(exit) SetWindowLongPtr(Window, GWLP_USERDATA, cast(LONG_PTR)null);
+      Window.Vulkan = Vulkan;
+      scope(success) Window.Vulkan = null;
 
       {
         Log.BeginScope("Preparing Swapchain for the first time.");
@@ -322,7 +368,7 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
             .IsResizeRequested = false;
           }
 
-          RedrawWindow(Window, null, null, RDW_INTERNALPAINT);
+          RedrawWindow(Window.Handle, null, null, RDW_INTERNALPAINT);
         }
       }
     }
@@ -375,7 +421,7 @@ __gshared uint ResizeRequest_Width;
 __gshared uint ResizeRequest_Height;
 
 extern(Windows)
-LRESULT Win32MainWindowCallback(HWND Window, UINT Message,
+LRESULT Win32MainWindowCallback(HWND WindowHandle, UINT Message,
                                 WPARAM WParam, LPARAM LParam)
 {
   enum RESIZE_EVENT_ID = 1337;
@@ -383,7 +429,13 @@ LRESULT Win32MainWindowCallback(HWND Window, UINT Message,
 
   LRESULT Result;
 
-  auto Vulkan = cast(VulkanData)cast(void*)GetWindowLongPtr(Window, GWLP_USERDATA);
+  auto Window = cast(WindowData)cast(void*)GetWindowLongPtr(WindowHandle, GWLP_USERDATA);
+  if(Window is null) return DefWindowProcA(WindowHandle, Message, WParam, LParam);
+
+  assert(Window.Handle == WindowHandle);
+
+  auto Vulkan = Window.Vulkan;
+
 
   switch(Message)
   {
@@ -416,8 +468,6 @@ LRESULT Win32MainWindowCallback(HWND Window, UINT Message,
         .IsResizeRequested = true;
         .ResizeRequest_Width = LParam & 0xffff;
         .ResizeRequest_Height = (LParam & 0xffff0000) >> 16;
-
-        //Vulkan.Resize(NewWidth, NewHeight);
       }
     } break;
 
@@ -426,10 +476,10 @@ LRESULT Win32MainWindowCallback(HWND Window, UINT Message,
       PAINTSTRUCT Paint;
 
       RECT Rect;
-      auto MustBeginEndPaint = cast(bool)GetUpdateRect(Window, &Rect, FALSE);
+      auto MustBeginEndPaint = cast(bool)GetUpdateRect(WindowHandle, &Rect, FALSE);
 
-      if(MustBeginEndPaint) BeginPaint(Window, &Paint);
-      scope(exit) if(MustBeginEndPaint) EndPaint(Window, &Paint);
+      if(MustBeginEndPaint) BeginPaint(WindowHandle, &Paint);
+      scope(exit) if(MustBeginEndPaint) EndPaint(WindowHandle, &Paint);
 
       if(Vulkan && Vulkan.IsPrepared)
       {
@@ -439,7 +489,7 @@ LRESULT Win32MainWindowCallback(HWND Window, UINT Message,
 
     default:
     {
-      Result = DefWindowProcA(Window, Message, WParam, LParam);
+      Result = DefWindowProcA(WindowHandle, Message, WParam, LParam);
     } break;
   }
 
