@@ -35,13 +35,13 @@ class DxState
   ~this()
   {
 
-    if(Device) ReleaseAndNullify(Device);
-    if(Device1) ReleaseAndNullify(Device1);
-    if(ImmediateContext) ReleaseAndNullify(ImmediateContext);
-    if(ImmediateContext1) ReleaseAndNullify(ImmediateContext1);
-    if(SwapChain) ReleaseAndNullify(SwapChain);
-    if(SwapChain1) ReleaseAndNullify(SwapChain1);
-    if(RenderTargetView) ReleaseAndNullify(RenderTargetView);
+    ReleaseAndNullify(Device);
+    ReleaseAndNullify(Device1);
+    ReleaseAndNullify(ImmediateContext);
+    ReleaseAndNullify(ImmediateContext1);
+    ReleaseAndNullify(SwapChain);
+    ReleaseAndNullify(SwapChain1);
+    ReleaseAndNullify(RenderTargetView);
     debug
     {
       if(DebugDevice)
@@ -56,8 +56,11 @@ class DxState
 void ReleaseAndNullify(Type)(Type Instance)
   if(__traits(compiles, { Instance.Release(); Instance = null; }))
 {
-  Instance.Release();
-  Instance = null;
+  if(Instance)
+  {
+    Instance.Release();
+    Instance = null;
+  }
 }
 
 class DxShaderCode
@@ -69,6 +72,20 @@ class DxShaderCode
   ~this()
   {
     ReleaseAndNullify(Blob);
+  }
+}
+
+class DxDepthStencilBuffer : IRenderDepthStencilBuffer
+{
+  ID3D11Texture2D Texture;
+  ID3D11DepthStencilState State;
+  ID3D11DepthStencilView View;
+
+  ~this()
+  {
+    ReleaseAndNullify(Texture);
+    ReleaseAndNullify(State);
+    ReleaseAndNullify(View);
   }
 }
 
@@ -147,6 +164,11 @@ class DxInputLayout : IRenderInputLayout
   {
     ReleaseAndNullify(InputLayout);
   }
+}
+
+D3D11_COMPARISON_FUNC ConvertComparisonEnum(RenderDepthCompareMethod Method)
+{
+  return Method + 1;
 }
 
 class DxInputLayoutDescription : IRenderInputLayoutDescription
@@ -266,6 +288,7 @@ ARC!DxShaderCode LoadAndCompileDxShader(DxState State, WString FileName, UString
 class D3D11RenderDevice : IRenderDevice
 {
   DxState DeviceState;
+  DxDepthStencilBuffer DepthStencilBuffer;
   IAllocator Allocator;
   this(IAllocator Allocator)
   {
@@ -356,11 +379,112 @@ class D3D11RenderDevice : IRenderDevice
     Desc.DepthClipEnable = Description.EnableDepthCulling;
     if(FAILED(DeviceState.Device.CreateRasterizerState(&Desc, &State.RasterizerState)))
     {
-      Allocator.Delete(State);
       Log.Failure("Failed to create rasterizer state");
+      Allocator.Delete(State);
       return null;
     }
     return State;
+  }
+
+  IRenderDepthStencilBuffer CreateDepthStencilBuffer(RenderDepthStencilDescription Description)
+  {
+    DxDepthStencilBuffer Buffer = Allocator.New!DxDepthStencilBuffer();
+
+    RECT ClientRect;
+    GetClientRect(DeviceState.WindowHandle, &ClientRect);
+    auto WindowWidth = ClientRect.right - ClientRect.left;
+    auto WindowHeight = ClientRect.bottom - ClientRect.top;
+    D3D11_TEXTURE2D_DESC DescDepth;
+    with(DescDepth)
+    {
+      Width = WindowWidth;
+      Height = WindowHeight;
+      MipLevels = 1;
+      ArraySize = 1;
+      Format = DXGI_FORMAT_D32_FLOAT_S8X24_UINT;
+      SampleDesc.Count = 1;
+      SampleDesc.Quality = 0;
+      Usage = D3D11_USAGE_DEFAULT;
+      BindFlags = D3D11_BIND_DEPTH_STENCIL;
+      CPUAccessFlags = 0;
+      MiscFlags = 0;
+    }
+    if(FAILED(DeviceState.Device.CreateTexture2D( &DescDepth, NULL, &Buffer.Texture )))
+    {
+      Allocator.Delete(Buffer);
+      Log.Failure("Failed to create depth stencil texture");
+      return null;
+    }
+
+    D3D11_DEPTH_STENCIL_DESC DepthStencilDescription;
+    with(DepthStencilDescription)
+    {
+      // Depth test parameters
+      DepthEnable = Description.EnableDepthTest;
+      DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
+      DepthFunc = ConvertComparisonEnum(Description.DepthCompareFunc);
+
+      // Stencil test parameters
+      StencilEnable = Description.EnableStencil;
+      StencilReadMask = 0xFF;
+      StencilWriteMask = 0xFF;
+
+      // Stencil operations if pixel is front-facing
+      FrontFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
+      FrontFace.StencilDepthFailOp = D3D11_STENCIL_OP_INCR;
+      FrontFace.StencilPassOp = D3D11_STENCIL_OP_KEEP;
+      FrontFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
+
+      // Stencil operations if pixel is back-facing
+      BackFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
+      BackFace.StencilDepthFailOp = D3D11_STENCIL_OP_DECR;
+      BackFace.StencilPassOp = D3D11_STENCIL_OP_KEEP;
+      BackFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
+    }
+    // Create depth stencil state
+    if(FAILED(DeviceState.Device.CreateDepthStencilState(&DepthStencilDescription, &Buffer.State)))
+    {
+      Allocator.Delete(Buffer);
+      Log.Failure("Failed to create depth stencil state");
+      return null;
+    }
+
+    D3D11_DEPTH_STENCIL_VIEW_DESC ViewDescription;
+    with(ViewDescription)
+    {
+      Format = DXGI_FORMAT_D32_FLOAT_S8X24_UINT;
+      ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
+      Texture2D.MipSlice = 0;
+    }
+    // Create the depth stencil view
+    if(FAILED(DeviceState.Device.CreateDepthStencilView( Buffer.Texture, // Depth stencil texture
+                                      &ViewDescription, // Depth stencil desc
+                                      &Buffer.View )))  // [out] Depth stencil view
+    {
+      Allocator.Delete(Buffer);
+      Log.Failure("Failed to create depth stencil view");
+      return null;
+    }
+
+    return Buffer;
+
+  }
+
+  void ReleaseDepthStencilBuffer(IRenderDepthStencilBuffer Buffer)
+  {
+    auto DepthStencilBuffer = cast(DxDepthStencilBuffer)Buffer;
+    Allocator.Delete(DepthStencilBuffer);
+  }
+
+  void ReleaseRasterizerState(IRenderRasterizerState State)
+  {
+    auto DxState = cast(DxRasterizerState)State;
+    Allocator.Delete(DxState);
+  }
+  void SetRasterizerState(IRenderRasterizerState State)
+  {
+    auto DxState = cast(DxRasterizerState)State;
+    DeviceState.ImmediateContext.RSSetState(DxState.RasterizerState);
   }
 
   IShader LoadPixelShader(WString FileName, UString EntryPoint, UString Profile)
@@ -502,6 +626,7 @@ class D3D11RenderDevice : IRenderDevice
   void ClearRenderTarget(Vector4 Color)
   {
     DeviceState.ImmediateContext.ClearRenderTargetView(DeviceState.RenderTargetView, Color.Data);
+    DeviceState.ImmediateContext.ClearDepthStencilView(DepthStencilBuffer.View, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
   }
 
   void SetVertexShader(IShader Shader)
@@ -529,7 +654,7 @@ class D3D11RenderDevice : IRenderDevice
     DeviceState.SwapChain.Present(0, 0);
   }
 
-  bool InitDevice()
+  bool InitDevice(RenderDeviceCreationDescription Description)
   {
     version(DXGI_RuntimeLinking)  LoadDXGI();
 
@@ -677,7 +802,10 @@ class D3D11RenderDevice : IRenderDevice
 
     if(FAILED(Result)) return false;
 
-    DeviceState.ImmediateContext.OMSetRenderTargets(1, &DeviceState.RenderTargetView, null);
+    DepthStencilBuffer = cast(DxDepthStencilBuffer)CreateDepthStencilBuffer(Description.DepthStencilDescription);
+
+    DeviceState.ImmediateContext.OMSetDepthStencilState(DepthStencilBuffer.State, 1);
+    DeviceState.ImmediateContext.OMSetRenderTargets(1, &DeviceState.RenderTargetView, DepthStencilBuffer.View);
 
     D3D11_VIEWPORT ViewPort;
     with(ViewPort)

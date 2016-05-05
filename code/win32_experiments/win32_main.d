@@ -138,8 +138,14 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
 
     if(Device.DeviceState.WindowHandle)
     {
-
-      Device.InitDevice();
+      RenderDeviceCreationDescription Description;
+      with(Description.DepthStencilDescription)
+      {
+        EnableDepthTest = true;
+        DepthCompareFunc = RenderDepthCompareMethod.Less;
+        EnableStencil = true;
+      }
+      Device.InitDevice(Description);
 
       auto VertexShader = Device.LoadVertexShader(WString("../data/shader/first.hlsl", Device.DeviceState.Allocator),
                                                       UString("VSMain", Device.DeviceState.Allocator),
@@ -166,6 +172,10 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
       scope(exit) Device.DestroyInputLayout(InputLayout);
       Device.SetInputLayout(InputLayout);
 
+      RenderRasterizerDescription RasterDescription;
+      auto RasterState = Device.CreateRasterizerState(RasterDescription);
+      scope(exit) Device.ReleaseRasterizerState(RasterState);
+      Device.SetRasterizerState(RasterState);
 
       auto PixelShader = Device.LoadPixelShader(WString("../data/shader/first.hlsl", Device.DeviceState.Allocator),
                                                 UString("PSMain", Device.DeviceState.Allocator),
