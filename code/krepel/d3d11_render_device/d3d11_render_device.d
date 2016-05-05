@@ -30,9 +30,11 @@ class DxState
   IDXGISwapChain SwapChain;
   IDXGISwapChain1 SwapChain1;
   ID3D11RenderTargetView RenderTargetView;
+  debug ID3D11Debug DebugDevice;
 
   ~this()
   {
+
     if(Device) ReleaseAndNullify(Device);
     if(Device1) ReleaseAndNullify(Device1);
     if(ImmediateContext) ReleaseAndNullify(ImmediateContext);
@@ -40,6 +42,14 @@ class DxState
     if(SwapChain) ReleaseAndNullify(SwapChain);
     if(SwapChain1) ReleaseAndNullify(SwapChain1);
     if(RenderTargetView) ReleaseAndNullify(RenderTargetView);
+    debug
+    {
+      if(DebugDevice)
+      {
+        //DebugDevice.ReportLiveDeviceObjects(D3D11_RLDO_DETAIL);
+        ReleaseAndNullify(DebugDevice);
+      }
+    }
   }
 }
 
@@ -62,13 +72,23 @@ class DxShaderCode
   }
 }
 
-class DxConstantBuffer : IConstantBuffer
+class DxConstantBuffer : IRenderConstantBuffer
 {
   ID3D11Buffer ConstantBuffer;
 
   ~this()
   {
     ReleaseAndNullify(ConstantBuffer);
+  }
+}
+
+class DxRasterizerState : IRenderRasterizerState
+{
+  ID3D11RasterizerState RasterizerState;
+
+  ~this()
+  {
+    ReleaseAndNullify(RasterizerState);
   }
 }
 
@@ -255,6 +275,11 @@ class D3D11RenderDevice : IRenderDevice
     DeviceState.Allocator = Allocator;
   }
 
+  ~this()
+  {
+    Allocator.Delete(DeviceState);
+  }
+
   IShader LoadVertexShader(WString FileName, UString EntryPoint, UString Profile)
   {
     auto Code = DeviceState.LoadAndCompileDxShader(FileName, EntryPoint, Profile);
@@ -310,6 +335,34 @@ class D3D11RenderDevice : IRenderDevice
     Allocator.Delete(cast(DxInputLayout)Layout);
   }
 
+  IRenderRasterizerState CreateRasterizerState(RenderRasterizerDescription Description)
+  {
+    auto State = Allocator.New!DxRasterizerState();
+    D3D11_RASTERIZER_DESC Desc;
+    Desc.FillMode = Description.RasterizationMethod == RenderRasterizationMethod.Solid ? D3D11_FILL_SOLID : D3D11_FILL_WIREFRAME;
+    final switch (Description.CullMode)
+    {
+      case RenderCullMode.None:
+        Desc.CullMode = D3D11_CULL_NONE;
+        break;
+      case RenderCullMode.Back:
+        Desc.CullMode = D3D11_CULL_BACK;
+        break;
+      case RenderCullMode.Front:
+        Desc.CullMode = D3D11_CULL_FRONT;
+        break;
+    }
+    Desc.FrontCounterClockwise = Description.WindingOrder == RenderWindingOrder.CounterClockWise;
+    Desc.DepthClipEnable = Description.EnableDepthCulling;
+    if(FAILED(DeviceState.Device.CreateRasterizerState(&Desc, &State.RasterizerState)))
+    {
+      Allocator.Delete(State);
+      Log.Failure("Failed to create rasterizer state");
+      return null;
+    }
+    return State;
+  }
+
   IShader LoadPixelShader(WString FileName, UString EntryPoint, UString Profile)
   {
     auto Code = DeviceState.LoadAndCompileDxShader(FileName, EntryPoint, Profile);
@@ -329,7 +382,7 @@ class D3D11RenderDevice : IRenderDevice
     return Shader;
   }
 
-  IConstantBuffer CreateConstantBuffer(void[] Data)
+  IRenderConstantBuffer CreateConstantBuffer(void[] Data)
   {
     auto ConstantBuffer = Allocator.New!DxConstantBuffer();
     D3D11_BUFFER_DESC Description;
@@ -356,13 +409,13 @@ class D3D11RenderDevice : IRenderDevice
     return ConstantBuffer;
   }
 
-  void SetVertexShaderConstantBuffer(IConstantBuffer Buffer, uint Index)
+  void SetVertexShaderConstantBuffer(IRenderConstantBuffer Buffer, uint Index)
   {
     DxConstantBuffer ConstantBuffer = cast(DxConstantBuffer)Buffer;
     DeviceState.ImmediateContext.VSSetConstantBuffers(Index, 1, &ConstantBuffer.ConstantBuffer);
   }
 
-  void ReleaseConstantBuffer(IConstantBuffer Buffer)
+  void ReleaseConstantBuffer(IRenderConstantBuffer Buffer)
   {
     DxConstantBuffer ConstantBuffer = cast(DxConstantBuffer)Buffer;
     Allocator.Delete(ConstantBuffer);
@@ -530,6 +583,11 @@ class D3D11RenderDevice : IRenderDevice
 
     if(FAILED(Result))
       return false;
+
+    debug
+    {
+      DeviceState.Device.QueryInterface(uuidof!ID3D11Debug, cast(void**)&DeviceState.DebugDevice);
+    }
 
     // Obtain DXGI factory from device.
     IDXGIFactory1 DXGIFactory;

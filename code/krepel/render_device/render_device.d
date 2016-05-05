@@ -32,6 +32,38 @@ struct RenderInputLayoutDescription
   bool PerVertexData;
 }
 
+enum RenderCullMode
+{
+  None,
+  Back,
+  Front
+}
+
+enum RenderWindingOrder
+{
+  ClockWise,
+  CounterClockWise
+}
+
+enum RenderRasterizationMethod
+{
+  Solid,
+  Wireframe
+}
+
+struct RenderRasterizerDescription
+{
+  RenderCullMode CullMode;
+  RenderWindingOrder WindingOrder;
+  bool EnableDepthCulling;
+  RenderRasterizationMethod RasterizationMethod;
+}
+
+interface IRenderRasterizerState
+{
+
+}
+
 interface IRenderInputLayoutDescription
 {
 
@@ -42,9 +74,9 @@ interface IRenderInputLayout
 
 }
 
-interface IConstantBuffer
+interface IRenderConstantBuffer
 {
-  
+
 }
 
 interface IRenderDevice

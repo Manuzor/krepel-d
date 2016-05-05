@@ -106,6 +106,10 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
   Log.Info("=== Beginning of Log");
   scope(exit) Log.Info("=== End of Log");
   D3D11RenderDevice Device = MainAllocator.New!D3D11RenderDevice(MainAllocator);
+  scope(exit)
+  {
+    MainAllocator.Delete(Device);
+  }
   Device.DeviceState.ProcessInstance = Instance;
 
   WNDCLASSA WindowClass;
