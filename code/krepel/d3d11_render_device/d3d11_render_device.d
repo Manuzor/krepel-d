@@ -180,7 +180,7 @@ class DxInputLayoutDescription : IRenderInputLayoutDescription
     SourceDescriptions.Clear();
     SourceDescriptions.PushBack(Desc[]);
     InputDescription.Clear();
-    foreach(SourceDescription; SourceDescriptions)
+    foreach(Index, SourceDescription; SourceDescriptions)
     {
       auto Format = GetFormatFromDescription(SourceDescription);
       if (Format == DXGI_FORMAT_UNKNOWN)
@@ -195,7 +195,7 @@ class DxInputLayoutDescription : IRenderInputLayoutDescription
             SemanticIndex,
             Format,
             0,
-            0,
+            D3D11_APPEND_ALIGNED_ELEMENT,
             PerVertexData ? D3D11_INPUT_PER_VERTEX_DATA : D3D11_INPUT_PER_INSTANCE_DATA,
             0
           )

@@ -3,20 +3,27 @@ cbuffer Camera
   matrix MVP;
 };
 
-
+struct VSOut
+{
+  float4 Pos : SV_POSITION;
+  float2 UV : UV;
+};
 //--------------------------------------------------------------------------------------
 // Vertex Shader
 //--------------------------------------------------------------------------------------
-float4 VSMain( float3 Pos : POSITION ) : SV_POSITION
+VSOut VSMain( float3 Pos : POSITION, float2 UV : UV )
 {
-    return mul(float4(Pos, 1.0f), MVP);
+  VSOut Output;
+  Output.Pos = mul(float4(Pos, 1.0f), MVP);
+  Output.UV = UV;
+  return Output;
 }
 
 
 //--------------------------------------------------------------------------------------
 // Pixel Shader
 //--------------------------------------------------------------------------------------
-float4 PSMain( float4 Pos : SV_POSITION ) : SV_Target
+float4 PSMain( VSOut Input ) : SV_Target
 {
-    return float4( 1.0f, 1.0f, 0.0f, 1.0f );    // Yellow, with Alpha = 1
+    return float4( Input.UV, 0.0f, 1.0f );
 }
