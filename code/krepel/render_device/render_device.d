@@ -1,6 +1,9 @@
 module krepel.render_device.render_device;
 
+import krepel;
 import krepel.string;
+import krepel.resources;
+
 
 interface IShader
 {
@@ -110,5 +113,39 @@ interface IRenderConstantBuffer
 
 interface IRenderDevice
 {
+  bool InitDevice(RenderDeviceCreationDescription Description);
 
+  IShader LoadVertexShader(WString FileName, UString EntryPoint, UString Profile);
+  void SetVertexShader(IShader Shader);
+  void ReleaseVertexShader(IShader Shader);
+
+  IRenderInputLayoutDescription CreateInputLayoutDescription(RenderInputLayoutDescription[] Descriptions);
+  void DestroyInputLayoutDescription(IRenderInputLayoutDescription Description);
+  IRenderInputLayout CreateVertexShaderInputLayoutFromDescription(IShader Shader, IRenderInputLayoutDescription Description);
+  void SetInputLayout(IRenderInputLayout Layout);
+  void DestroyInputLayout(IRenderInputLayout Layout);
+
+  IRenderDepthStencilBuffer CreateDepthStencilBuffer(RenderDepthStencilDescription Description);
+  void ReleaseDepthStencilBuffer(IRenderDepthStencilBuffer Buffer);
+
+  IRenderRasterizerState CreateRasterizerState(RenderRasterizerDescription Description);
+  void SetRasterizerState(IRenderRasterizerState State);
+  void ReleaseRasterizerState(IRenderRasterizerState State);
+
+  IShader LoadPixelShader(WString FileName, UString EntryPoint, UString Profile);
+  void SetPixelShader(IShader Shader);
+  void ReleasePixelShader(IShader Shader);
+
+  IRenderConstantBuffer CreateConstantBuffer(void[] Data);
+  void SetVertexShaderConstantBuffer(IRenderConstantBuffer Buffer, uint Index);
+  void ReleaseConstantBuffer(IRenderConstantBuffer Buffer);
+
+  IRenderMesh CreateRenderMesh(SubMesh Mesh);
+  void SetMesh(IRenderMesh Mesh);
+  void ReleaseRenderMesh(IRenderMesh Mesh);
+
+  void ClearRenderTarget(Vector4 Color);
+  void Draw(uint VertexCount, uint Offset = 0);
+  void DrawIndexed(uint VertexCount, uint IndexOffset = 0, uint VertexOffset = 0);
+  void Present();
 }
