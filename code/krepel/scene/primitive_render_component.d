@@ -1,4 +1,4 @@
-module krepel.scnene.primitive_render_component;
+module krepel.scene.primitive_render_component;
 
 import krepel.scene.scene_component;
 import krepel.resources;
