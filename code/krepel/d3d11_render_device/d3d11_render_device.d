@@ -539,6 +539,16 @@ class D3D11RenderDevice : IRenderDevice
     DeviceState.ImmediateContext.VSSetConstantBuffers(Index, 1, &ConstantBuffer.ConstantBuffer);
   }
 
+  override void UpdateConstantBuffer(IRenderConstantBuffer ConstantBuffer, void[] Data, uint Offset = 0)
+  {
+    auto DxBuffer = cast(DxConstantBuffer)ConstantBuffer;
+
+    D3D11_MAPPED_SUBRESOURCE MappedResource;
+    DeviceState.ImmediateContext.Map(DxBuffer.ConstantBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &MappedResource);
+    MappedResource.pData[Offset .. Data.length + Offset] = Data[];
+    DeviceState.ImmediateContext.Unmap(DxBuffer.ConstantBuffer, 0);
+  }
+
   override void ReleaseConstantBuffer(IRenderConstantBuffer Buffer)
   {
     DxConstantBuffer ConstantBuffer = cast(DxConstantBuffer)Buffer;

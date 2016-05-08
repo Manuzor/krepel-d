@@ -137,6 +137,7 @@ interface IRenderDevice
   void ReleasePixelShader(IShader Shader);
 
   IRenderConstantBuffer CreateConstantBuffer(void[] Data);
+  void UpdateConstantBuffer(IRenderConstantBuffer ConstantBuffer, void[] Data, uint Offset = 0);
   void SetVertexShaderConstantBuffer(IRenderConstantBuffer Buffer, uint Index);
   void ReleaseConstantBuffer(IRenderConstantBuffer Buffer);
 
