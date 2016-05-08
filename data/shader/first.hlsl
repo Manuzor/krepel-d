@@ -1,5 +1,6 @@
 cbuffer Camera
 {
+  matrix Model;
   matrix MVP;
 };
 

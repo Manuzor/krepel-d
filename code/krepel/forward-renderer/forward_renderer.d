@@ -18,6 +18,8 @@ struct RenderMeshResources
   IRenderMesh Mesh;
   IRenderConstantBuffer[16] ConstantBuffer;
   WorldConstantBuffer CurrentWorldConstantBufferContent;
+  PrimitiveRenderComponent Component;
+  SubMesh RenderedSubMesh;
 }
 
 struct WorldConstantBuffer
@@ -46,6 +48,9 @@ class ForwardRenderer
   IRenderInputLayoutDescription DefaultInputLayoutDescription;
   IRenderRasterizerState DefaultRasterizerState;
   CameraComponent ActiveCamera;
+  Matrix4 ViewProjMatrix;
+
+  Vector4 BackgroundColor = Vector4(100 / 255.0f, 149 / 255.0f, 237 / 255.0f, 1.0f);
 
   this(IAllocator Allocator)
   {
@@ -202,14 +207,32 @@ class ForwardRenderer
             RenderComponent.GetWorldTransform().ToMatrix() * GetViewProjectionMatrix();
           Resources.ConstantBuffer[0] = RenderDevice.CreateConstantBuffer(Buffer.AsVoidRange);
           Resources.Mesh = MeshGraphic;
+          Resources.Component = RenderComponent;
+          Resources.RenderedSubMesh = SubMesh;
           RenderResources[Id] = Resources;
         }
       }
     }
   }
 
-  private void RenderScene(SceneGraph Graph)
+  void Render()
   {
+    RenderDevice.ClearRenderTarget(BackgroundColor);
+    foreach(ref Command ; RenderResources.Values)
+    {
+      WorldConstantBuffer WorldData;
+      WorldData.ModelMatrix = Command.Component.GetWorldTransform.ToMatrix;
+      WorldData.ModelViewProjectionMatrix = WorldData.ModelMatrix * GetViewProjectionMatrix;
+      WorldData.ModelMatrix = WorldData.ModelMatrix.GetTransposed;
+      WorldData.ModelViewProjectionMatrix = WorldData.ModelViewProjectionMatrix.GetTransposed;
+      RenderDevice.UpdateConstantBuffer(Command.ConstantBuffer[0], WorldData.AsVoidRange);
+      SetActiveConstantBuffer(Command.ConstantBuffer[0], 0);
+      SetActiveMesh(Command.Mesh);
+      SetActiveVertexShader(Command.VertexShader);
+      SetActivePixelShader(Command.PixelShader);
+      RenderDevice.DrawIndexed(Command.Mesh.GetIndexCount);
+    }
 
+    RenderDevice.Present();
   }
 }

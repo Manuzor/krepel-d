@@ -16,6 +16,7 @@ import krepel.d3d11_render_device;
 import krepel.render_device;
 import krepel.resources;
 import krepel.scene;
+import krepel.forward_renderer;
 
 version(Windows):
 import std.string : toStringz, fromStringz;
@@ -147,56 +148,16 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
       }
       Device.InitDevice(Description);
 
-      auto VertexShader = Device.LoadVertexShader(WString("../data/shader/first.hlsl", Device.DeviceState.Allocator),
-                                                      UString("VSMain", Device.DeviceState.Allocator),
-                                                      UString("vs_5_0", Device.DeviceState.Allocator));
-      scope(exit)
-      {
-        if (VertexShader)
-        {
-          Device.ReleaseVertexShader(VertexShader);
-        }
-      }
-
-      RenderInputLayoutDescription[5] Layout =
-      [
-        RenderInputLayoutDescription(UString("POSITION", MainAllocator), 0, InputDescriptionDataType.Float, 3, true),
-        RenderInputLayoutDescription(UString("UV", MainAllocator), 0, InputDescriptionDataType.Float, 2, true),
-        RenderInputLayoutDescription(UString("NORMAL", MainAllocator), 0, InputDescriptionDataType.Float, 3, true),
-        RenderInputLayoutDescription(UString("TANGENT", MainAllocator), 0, InputDescriptionDataType.Float, 4, true),
-        RenderInputLayoutDescription(UString("BINORMAL", MainAllocator), 0, InputDescriptionDataType.Float, 3, true),
-      ];
-      auto InputLayoutDescription = Device.CreateInputLayoutDescription(Layout);
-      scope(exit) Device.DestroyInputLayoutDescription(InputLayoutDescription);
-      auto InputLayout = Device.CreateVertexShaderInputLayoutFromDescription(VertexShader, InputLayoutDescription);
-      scope(exit) Device.DestroyInputLayout(InputLayout);
-      Device.SetInputLayout(InputLayout);
-
-      RenderRasterizerDescription RasterDescription;
-      auto RasterState = Device.CreateRasterizerState(RasterDescription);
-      scope(exit) Device.ReleaseRasterizerState(RasterState);
-      Device.SetRasterizerState(RasterState);
-
-      auto PixelShader = Device.LoadPixelShader(WString("../data/shader/first.hlsl", Device.DeviceState.Allocator),
-                                                UString("PSMain", Device.DeviceState.Allocator),
-                                                UString("ps_5_0", Device.DeviceState.Allocator));
-      scope(exit)
-      {
-        if (PixelShader)
-        {
-          Device.ReleasePixelShader(PixelShader);
-        }
-      }
+      ForwardRenderer Renderer = MainAllocator.New!ForwardRenderer(MainAllocator);
+      scope(exit) MainAllocator.Delete(Renderer);
+      Renderer.Initialize(Device);
 
       ResourceManager Manager = MainAllocator.New!ResourceManager(MainAllocator);
       auto WaveFrontLoader = MainAllocator.New!WavefrontResourceLoader();
       Manager.RegisterLoader(WaveFrontLoader, WString(".obj", MainAllocator));
       MeshResource Mesh = Manager.LoadMesh(WString("../data/mesh/Suzanne.obj", MainAllocator));
-
-      IRenderMesh RenderMesh = Device.CreateRenderMesh(Mesh.Meshes[0]);
       scope(exit)
       {
-        Device.ReleaseRenderMesh(RenderMesh);
         Manager.DestroyResource(Mesh);
         MainAllocator.Delete(WaveFrontLoader);
         MainAllocator.Delete(Manager);
@@ -212,8 +173,19 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
       CameraComponent.FarPlane = 10.0f;
       CameraComponent.SetWorldTransform(Transform(Vector3(0,0,2), Quaternion.Identity, Vector3.UnitScaleVector));
       Matrix4 Mat = CameraComponent.GetViewProjectionMatrix().GetTransposed;
-      auto ConstantBuffer = Device.CreateConstantBuffer((cast(void*)&Mat)[0..Matrix4.sizeof]);
-      scope(exit) Device.ReleaseConstantBuffer(ConstantBuffer);
+
+      auto SuzanneObj = Graph.CreateDefaultGameObject(UString("Suzanne", MainAllocator));
+      auto RenderChild = SuzanneObj.ConstructChild!PrimitiveRenderComponent(UString("SuzanneRender", MainAllocator));
+      RenderChild.SetMesh(Mesh);
+
+
+      SuzanneObj = Graph.CreateDefaultGameObject(UString("Suzanne", MainAllocator));
+      RenderChild = SuzanneObj.ConstructChild!PrimitiveRenderComponent(UString("SuzanneRender", MainAllocator));
+      RenderChild.SetMesh(Mesh);
+      SuzanneObj.RootComponent.SetWorldTransform(Transform(Vector3(1,0,0), Quaternion.Identity, Vector3.UnitScaleVector));
+      Renderer.ActiveCamera = CameraComponent;
+
+      Renderer.RegisterScene(Graph);
 
       version(XInput_RuntimeLinking) LoadXInput();
 
@@ -275,27 +247,18 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
         //
         // Apply Input
         //
-        Device.ReleaseConstantBuffer(ConstantBuffer);
         Transform WorldTransform = CameraComponent.GetWorldTransform();
         WorldTransform.Translation.X += SystemInput["CameraX"].AxisValue * (1 / 3000.0f);
         WorldTransform.Translation.Y += SystemInput["CameraY"].AxisValue * (1 / 3000.0f);
         WorldTransform.Translation.Z += SystemInput["CameraZ"].AxisValue * (1 / 3000.0f);
         CameraComponent.SetWorldTransform(WorldTransform);
         Mat = CameraComponent.GetViewProjectionMatrix().GetTransposed;
-        ConstantBuffer = Device.CreateConstantBuffer((cast(void*)&Mat)[0..Matrix4.sizeof]);
 
-        //
-        // Do the rendering
-        //
-        auto CornflowerBlue = Vector4(100 / 255.0f, 149 / 255.0f, 237 / 255.0f, 1.0f);
-        Device.ClearRenderTarget(CornflowerBlue);
-        Device.SetVertexShader(VertexShader);
-        Device.SetPixelShader(PixelShader);
-        Device.SetVertexShaderConstantBuffer(ConstantBuffer, 0);
-        Device.SetMesh(RenderMesh);
-        Device.DrawIndexed(RenderMesh.GetIndexCount());
-        Device.Present();
+        Renderer.Render();
+
       }
+
+
     }
   }
 

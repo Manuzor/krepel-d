@@ -48,9 +48,14 @@ class GameObject
       {
         RootComponent = NewChild;
       }
-      if(Parent !is null)
+      else if(Parent !is null)
       {
         Parent.Children ~= NewChild;
+      }
+      else if (RootComponent !is null)
+      {
+        NewChild.Parent = RootComponent;
+        RootComponent.Children ~= NewChild;
       }
     }
 
