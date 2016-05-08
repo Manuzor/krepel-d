@@ -1,6 +1,6 @@
 // Original file name: d3d11sdklayers.idl
 // Conversion date: 2016-Mar-30 10:01:33.2347196
-
+module directx.d3d11sdklayers;
 version(Windows):
 
 import core.sys.windows.windows;

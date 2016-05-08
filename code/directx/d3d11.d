@@ -860,13 +860,13 @@ extern(Windows):
 
 struct D3D11_RASTERIZER_DESC
 {
-  D3D11_FILL_MODE FillMode;
-  D3D11_CULL_MODE CullMode;
-  BOOL FrontCounterClockwise;
+  D3D11_FILL_MODE FillMode = D3D11_FILL_SOLID;
+  D3D11_CULL_MODE CullMode = D3D11_CULL_BACK;
+  BOOL FrontCounterClockwise = true;
   INT DepthBias;
-  FLOAT DepthBiasClamp;
-  FLOAT SlopeScaledDepthBias;
-  BOOL DepthClipEnable;
+  FLOAT DepthBiasClamp = 0.0f;
+  FLOAT SlopeScaledDepthBias = 0.0f;
+  BOOL DepthClipEnable = true;
   BOOL ScissorEnable;
   BOOL MultisampleEnable;
   BOOL AntialiasedLineEnable;
