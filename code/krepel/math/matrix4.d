@@ -312,7 +312,13 @@ Matrix4 CreateOrthogonalMatrix(float Width, float Height, float ZScale, float ZO
 
 Matrix4 CreateLookAtMatrix(Vector3 Target, Vector3 Position, Vector3 Up = Vector3.UpVector)
 {
-  auto Direction = (Target - Position).SafeNormalizedCopy;
+  auto Direction = (Target - Position);
+  return CreateLookDirMatrix(Direction, Position, Up);
+}
+
+Matrix4 CreateLookDirMatrix(Vector3 Direction, Vector3 Position, Vector3 Up = Vector3.UpVector)
+{
+  Direction = Direction.SafeNormalizedCopy;
   Vector3 Right = Direction ^ Up.SafeNormalizedCopy;
   Up = Right ^ Direction;
   return Matrix4(
