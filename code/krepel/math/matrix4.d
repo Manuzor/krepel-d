@@ -371,7 +371,7 @@ Matrix4 CreateMatrixFromScaleRotateTranslate(Vector3 Position, Quaternion Rotati
 
 /// 4x4 Matrix accessed first by row, then by column
 /// Translation part is stored in the lower row (M[3][0] -> M[3][2])
-align(16) struct Matrix4
+struct Matrix4
 {
   @safe:
 
