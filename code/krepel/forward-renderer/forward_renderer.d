@@ -4,6 +4,7 @@ import krepel;
 import krepel.scene;
 import krepel.render_device;
 import krepel.resources;
+import krepel.color;
 
 struct RenderSubMeshResource
 {
@@ -26,12 +27,11 @@ struct WorldConstantBuffer
 {
   Matrix4 ModelMatrix;
   Matrix4 ModelViewProjectionMatrix;
+  Vector4 LightDir = Vector4(0,0.7,0.7,0);
+  ColorLinear Color = ColorLinear(0.5f, 0.5f, 0.5f,0);
+  ColorLinear AmbientColor = ColorLinear(0.5f, 0.5f, 0.5f,0);
 }
 
-
-//TODO(Marvin): Rendering components should register somehow
-// to the renderer so here we don't have to traverse the
-// whole graph to collect the rendering components
 class ForwardRenderer
 {
   Array!SceneGraph RegisteredSceneGraphs;

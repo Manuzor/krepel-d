@@ -182,7 +182,7 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
       SuzanneObj = Graph.CreateDefaultGameObject(UString("Suzanne", MainAllocator));
       RenderChild = SuzanneObj.ConstructChild!PrimitiveRenderComponent(UString("SuzanneRender", MainAllocator));
       RenderChild.SetMesh(Mesh);
-      SuzanneObj.RootComponent.SetWorldTransform(Transform(Vector3(1,0,0), Quaternion.Identity, Vector3.UnitScaleVector));
+      SuzanneObj.RootComponent.SetWorldTransform(Transform(Vector3(2,0,0), Quaternion.Identity, Vector3.UnitScaleVector));
       Renderer.ActiveCamera = CameraComponent;
 
       Renderer.RegisterScene(Graph);
@@ -253,6 +253,10 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
         WorldTransform.Translation.Z += SystemInput["CameraZ"].AxisValue * (1 / 3000.0f);
         CameraComponent.SetWorldTransform(WorldTransform);
         Mat = CameraComponent.GetViewProjectionMatrix().GetTransposed;
+        auto CurrentTransform = SuzanneObj.RootComponent.GetWorldTransform;
+        Quaternion RotZ = Quaternion(Vector3.UpVector, 2 * PI * (1/3000f));
+        CurrentTransform.Rotation *= RotZ;
+        SuzanneObj.RootComponent.SetWorldTransform(CurrentTransform);
 
         Renderer.Render();
 

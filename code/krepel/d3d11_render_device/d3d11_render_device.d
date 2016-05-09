@@ -512,7 +512,7 @@ class D3D11RenderDevice : IRenderDevice
     D3D11_BUFFER_DESC Description;
     with(Description)
     {
-      ByteWidth = cast(uint)Data.length;
+      ByteWidth = cast(uint)AlignedSize(Data.length, 16);
       Usage = D3D11_USAGE_DYNAMIC;
       BindFlags = D3D11_BIND_CONSTANT_BUFFER;
       CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
