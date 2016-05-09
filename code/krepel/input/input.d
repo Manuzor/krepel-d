@@ -100,10 +100,11 @@ alias InputEvent = Event!(InputId, InputSlotData);
 // TODO(Manu): Implement ActionEvent so that users can listen to a specific action.
 class InputContext
 {
-  static struct TriggerPair
+  static struct SlotMappingData
   {
-    InputId SlotId;    // This is the slot that is triggered by TriggerId.
-    InputId TriggerId; // This is the slot that will trigger SlotId.
+    InputId SourceSlotId; // When this slots' value is changed, the TargetSlotId will be changed.
+    InputId TargetSlotId; // This is the slot which value will be changed if SourceSlotId's value changes.
+    float Scale;          // A factor used when mapping slots.
   }
 
   InputContext Parent;
@@ -112,7 +113,7 @@ class InputContext
 
   Dictionary!(InputId, InputSlotData) Slots;
   Dictionary!(InputId, InputValueProperties) ValueProperties;
-  Array!TriggerPair Triggers;
+  Array!SlotMappingData SlotMappings;
   InputEvent ChangeEvent;
 
   ulong CurrentFrame;
@@ -123,7 +124,7 @@ class InputContext
   {
     this.Slots.Allocator = NewAllocator;
     this.ValueProperties.Allocator = NewAllocator;
-    this.Triggers.Allocator = NewAllocator;
+    this.SlotMappings.Allocator = NewAllocator;
     this.ChangeEvent.Allocator = NewAllocator;
     this.CharacterBuffer.Allocator = NewAllocator;
   }
@@ -144,10 +145,10 @@ class InputContext
     Slot.Type = Type;
   }
 
-  bool AddTrigger(InputId SlotId, InputId TriggerId)
+  bool AddSlotMapping(InputId SlotId, InputId TriggerId, float Scale = 1.0f)
   {
     // TODO(Manu): Eliminate duplicates.
-    this.Triggers ~= TriggerPair(SlotId, TriggerId);
+    this.SlotMappings ~= SlotMappingData(SlotId, TriggerId, Scale);
     return true;
   }
 
@@ -177,16 +178,16 @@ class InputContext
     TriggeringSlot.Frame = this.CurrentFrame;
     TriggeringSlot.Value = NewValue;
 
-    foreach(Trigger; this.Triggers)
+    //
+    // Apply input mapping
+    //
+
+    foreach(ref Mapping; this.SlotMappings)
     {
-      if(Trigger.TriggerId == TriggeringSlotId)
+      if(Mapping.SourceSlotId == TriggeringSlotId)
       {
-        auto Slot = this.Slots.Get(Trigger.SlotId);
-        if(Slot)
-        {
-          Slot.Frame = this.CurrentFrame;
-          Slot.Value = AttuneInputValue(Trigger.SlotId, NewValue);
-        }
+        float NewMappedValue = NewValue * Mapping.Scale;
+        UpdateSlotValue(Mapping.TargetSlotId, NewMappedValue);
       }
     }
 
