@@ -17,6 +17,7 @@ import krepel.render_device;
 import krepel.resources;
 import krepel.scene;
 import krepel.forward_renderer;
+import krepel.engine;
 
 version(Windows):
 import std.string : toStringz, fromStringz;
@@ -106,12 +107,7 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
 
   Log.Info("=== Beginning of Log");
   scope(exit) Log.Info("=== End of Log");
-  D3D11RenderDevice Device = MainAllocator.New!D3D11RenderDevice(MainAllocator);
-  scope(exit)
-  {
-    MainAllocator.Delete(Device);
-  }
-  Device.DeviceState.ProcessInstance = Instance;
+
 
   WNDCLASSA WindowClass;
   with(WindowClass)
@@ -135,9 +131,11 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
                                         Instance,
                                         null);
 
-    Device.DeviceState.WindowHandle = WindowHandle;
+    EngineCreationInformation Info;
+    Info.Instance = Instance;
+    Info.WindowHandle = WindowHandle;
 
-    if(Device.DeviceState.WindowHandle)
+    if(WindowHandle)
     {
       RenderDeviceCreationDescription Description;
       with(Description.DepthStencilDescription)
@@ -258,7 +256,7 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
         Mat = CameraComponent.GetViewProjectionMatrix().GetTransposed;
         auto CurrentTransform = SuzanneObj.RootComponent.GetWorldTransform;
         Quaternion RotZ = Quaternion(Vector3.UpVector, 2 * PI * (1/3000f));
-        CurrentTransform.Rotation *= RotZ;
+        //CurrentTransform.Rotation *= RotZ;
         SuzanneObj.RootComponent.SetWorldTransform(CurrentTransform);
 
         Renderer.Render();
