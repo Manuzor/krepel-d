@@ -134,31 +134,19 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
     EngineCreationInformation Info;
     Info.Instance = Instance;
     Info.WindowHandle = WindowHandle;
+    SetupGobalEngine(MainAllocator, Info);
 
     if(WindowHandle)
     {
-      RenderDeviceCreationDescription Description;
-      with(Description.DepthStencilDescription)
-      {
-        EnableDepthTest = true;
-        DepthCompareFunc = RenderDepthCompareMethod.Less;
-        EnableStencil = true;
-      }
-      Device.InitDevice(Description);
 
-      ForwardRenderer Renderer = MainAllocator.New!ForwardRenderer(MainAllocator);
-      scope(exit) MainAllocator.Delete(Renderer);
-      Renderer.Initialize(Device);
 
-      ResourceManager Manager = MainAllocator.New!ResourceManager(MainAllocator);
-      auto WaveFrontLoader = MainAllocator.New!WavefrontResourceLoader();
-      Manager.RegisterLoader(WaveFrontLoader, WString(".obj", MainAllocator));
-      MeshResource Mesh = Manager.LoadMesh(WString("../data/mesh/Suzanne.obj", MainAllocator));
+
+
+
+      MeshResource Mesh = GlobalEngine.Resources.LoadMesh(WString("../data/mesh/Suzanne.obj", MainAllocator));
       scope(exit)
       {
-        Manager.DestroyResource(Mesh);
-        MainAllocator.Delete(WaveFrontLoader);
-        MainAllocator.Delete(Manager);
+        GlobalEngine.Resources.DestroyResource(Mesh);
       }
 
       SceneGraph Graph = MainAllocator.New!(SceneGraph)(MainAllocator);
@@ -181,9 +169,9 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
       RenderChild = SuzanneObj.ConstructChild!PrimitiveRenderComponent(UString("SuzanneRender", MainAllocator));
       RenderChild.SetMesh(Mesh);
       SuzanneObj.RootComponent.SetWorldTransform(Transform(Vector3(2,0,0), Quaternion.Identity, Vector3.UnitScaleVector));
-      Renderer.ActiveCamera = CameraComponent;
+      GlobalEngine.Renderer.ActiveCamera = CameraComponent;
 
-      Renderer.RegisterScene(Graph);
+      GlobalEngine.Renderer.RegisterScene(Graph);
 
       version(XInput_RuntimeLinking) LoadXInput();
 
@@ -256,10 +244,10 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
         Mat = CameraComponent.GetViewProjectionMatrix().GetTransposed;
         auto CurrentTransform = SuzanneObj.RootComponent.GetWorldTransform;
         Quaternion RotZ = Quaternion(Vector3.UpVector, 2 * PI * (1/3000f));
-        //CurrentTransform.Rotation *= RotZ;
+        CurrentTransform.Rotation *= RotZ;
         SuzanneObj.RootComponent.SetWorldTransform(CurrentTransform);
 
-        Renderer.Render();
+        GlobalEngine.Renderer.Render();
 
       }
 
