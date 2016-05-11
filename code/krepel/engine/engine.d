@@ -26,6 +26,12 @@ class Engine
   IAllocator EngineAllocator;
   ResourceManager Resources;
 
+  this(IAllocator Allocator)
+  {
+    EngineAllocator = Allocator;
+    InputContexts.Allocator = EngineAllocator;
+  }
+
   void Initialize(EngineCreationInformation Info)
   {
 
@@ -52,6 +58,24 @@ class Engine
     Resources = EngineAllocator.New!ResourceManager(EngineAllocator);
     auto WaveFrontLoader = EngineAllocator.New!WavefrontResourceLoader();
     Resources.RegisterLoader(WaveFrontLoader, WString(".obj", EngineAllocator));
+
+    foreach(Index; 0..4)
+    {
+      version(Windows)
+      {
+        auto InputContext = EngineAllocator.New!Win32InputContext(EngineAllocator);
+        // Note(Manu): Let's pretend the system is user 0 for now.
+        InputContext.UserIndex = Index;
+
+        if (Index == 0)
+        {
+          Win32RegisterAllKeyboardSlots(InputContext);
+          Win32RegisterAllMouseSlots(InputContext);
+        }
+        Win32RegisterAllXInputSlots(InputContext);
+        InputContexts ~= InputContext;
+      }
+    }
   }
 
   bool Update()
@@ -61,7 +85,13 @@ class Engine
 
   void Destroy()
   {
-
+    EngineAllocator.Delete(Renderer);
+    EngineAllocator.Delete(RenderDevice);
+    EngineAllocator.Delete(Resources);
+    foreach(Input ; InputContexts)
+    {
+      EngineAllocator.Delete(Input);
+    }
   }
 
 }
@@ -70,8 +100,15 @@ Engine GlobalEngine;
 
 void SetupGobalEngine(IAllocator Allocator, EngineCreationInformation Info)
 {
-  GlobalEngine = Allocator.New!Engine();
-  GlobalEngine.EngineAllocator = Allocator;
-
+  GlobalEngine = Allocator.New!Engine(Allocator);
   GlobalEngine.Initialize(Info);
+}
+
+void DestroyGlobalEngine()
+{
+  if (GlobalEngine)
+  {
+    GlobalEngine.Destroy();
+    GlobalEngine.EngineAllocator.Delete(GlobalEngine);
+  }
 }

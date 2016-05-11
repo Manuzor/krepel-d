@@ -138,11 +138,6 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
 
     if(WindowHandle)
     {
-
-
-
-
-
       MeshResource Mesh = GlobalEngine.Resources.LoadMesh(WString("../data/mesh/Suzanne.obj", MainAllocator));
       scope(exit)
       {
@@ -152,12 +147,15 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
       SceneGraph Graph = MainAllocator.New!(SceneGraph)(MainAllocator);
       auto CameraObject= Graph.CreateDefaultGameObject(UString("Camera", MainAllocator));
       auto CameraComponent = CameraObject.ConstructChild!CameraComponent(UString("CameraComponent", MainAllocator), CameraObject.RootComponent);
-      CameraComponent.FieldOfView = PI/2;
-      CameraComponent.Width = 1280;
-      CameraComponent.Height = 720;
-      CameraComponent.NearPlane = 0.1f;
-      CameraComponent.FarPlane = 10.0f;
-      CameraComponent.SetWorldTransform(Transform(Vector3(0,0,2), Quaternion.Identity, Vector3.UnitScaleVector));
+      with(CameraComponent)
+      {
+        FieldOfView = PI/2;
+        Width = 1280;
+        Height = 720;
+        NearPlane = 0.1f;
+        FarPlane = 10.0f;
+        SetWorldTransform(Transform(Vector3(0,0,2), Quaternion.Identity, Vector3.UnitScaleVector));
+      }
       Matrix4 Mat = CameraComponent.GetViewProjectionMatrix().GetTransposed;
 
       auto SuzanneObj = Graph.CreateDefaultGameObject(UString("Suzanne", MainAllocator));
@@ -175,15 +173,8 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
 
       version(XInput_RuntimeLinking) LoadXInput();
 
-      auto SystemInput = MainAllocator.New!Win32InputContext(MainAllocator);
-      scope(exit) MainAllocator.Delete(SystemInput);
 
-      // Note(Manu): Let's pretend the system is user 0 for now.
-      SystemInput.UserIndex = 0;
-
-      Win32RegisterAllKeyboardSlots(SystemInput);
-      Win32RegisterAllMouseSlots(SystemInput);
-      Win32RegisterAllXInputSlots(SystemInput);
+      auto SystemInput = cast(Win32InputContext)GlobalEngine.InputContexts[0];
 
       SystemInput.RegisterInputSlot(InputType.Button, "Quit");
       SystemInput.AddSlotMapping(Keyboard.Escape, "Quit");
@@ -254,7 +245,7 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
 
     }
   }
-
+  DestroyGlobalEngine();
   return 0;
 }
 
