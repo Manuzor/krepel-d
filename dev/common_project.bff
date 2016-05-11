@@ -5,9 +5,9 @@
     Using(.ProjectBuildCommon)
     .ProjectOutput="workspace/$ProjectName$.vcxproj"
     .Output="..\build\$ProjectName$.exe"
-    .OutputDirectory="build"
+    .OutputDirectory="^$(SolutionDir)build"
     .ProjectBasePath="."
-    .LocalDebuggerWorkingDirectory = "$(OutDir)"
+    .LocalDebuggerWorkingDirectory = "^$(OutDir)"
   }
   ^Projects + "$ProjectName$"
 }
