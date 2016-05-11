@@ -271,6 +271,7 @@ private:
   static BlockData* NextBlock(BlockData* Block)
   {
     assert(Block);
+    assert(Block.Size != 0);
     return cast(BlockData*)(cast(void*)Block + Block.Size);
   }
 
