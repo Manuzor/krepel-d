@@ -10,7 +10,7 @@ import krepel.resources;
 
 struct EngineCreationInformation
 {
-  version(Windows)
+version(Windows)
   {
     import krepel.win32;
     HINSTANCE Instance;
@@ -25,6 +25,8 @@ class Engine
   IRenderDevice RenderDevice;
   IAllocator EngineAllocator;
   ResourceManager Resources;
+  bool RunEngine = true;
+  GameFrameworkManager GameFramework;
 
   this(IAllocator Allocator)
   {
@@ -35,7 +37,7 @@ class Engine
   void Initialize(EngineCreationInformation Info)
   {
 
-    version(Windows)
+    version(D3D11_RuntimeLinking)
     {
       import krepel.d3d11_render_device;
       D3D11RenderDevice Device = EngineAllocator.New!D3D11RenderDevice(EngineAllocator);
@@ -50,7 +52,7 @@ class Engine
       DepthCompareFunc = RenderDepthCompareMethod.Less;
       EnableStencil = true;
     }
-    Device.InitDevice(Description);
+    RenderDevice.InitDevice(Description);
 
     Renderer = EngineAllocator.New!ForwardRenderer(EngineAllocator);
     Renderer.Initialize(RenderDevice);
@@ -76,11 +78,46 @@ class Engine
         InputContexts ~= InputContext;
       }
     }
+
+    GameFramework = EngineAllocator.New!GameFrameworkManager(EngineAllocator);
   }
 
   bool Update()
   {
-    return false;
+    foreach(Input; InputContexts)
+    {
+      Input.BeginInputFrame();
+      {
+        Win32MessagePump();
+        Win32PollXInput(cast(Win32InputContext)Input);
+      }
+      Input.EndInputFrame();
+
+    }
+    Renderer.Render();
+    return RunEngine;
+  }
+
+  version(Windows) void Win32MessagePump()
+  {
+    import krepel.win32;
+    MSG Message;
+    while(PeekMessageA(&Message, null, 0, 0, PM_REMOVE))
+    {
+      switch(Message.message)
+      {
+        case WM_QUIT:
+        {
+          RunEngine = false;
+        } break;
+
+        default:
+        {
+          TranslateMessage(&Message);
+          DispatchMessageA(&Message);
+        } break;
+      }
+    }
   }
 
   void Destroy()

@@ -174,34 +174,28 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
       version(XInput_RuntimeLinking) LoadXInput();
 
 
-      auto SystemInput = cast(Win32InputContext)GlobalEngine.InputContexts[0];
+      auto User1Input = cast(Win32InputContext)GlobalEngine.InputContexts[0];
 
-      SystemInput.RegisterInputSlot(InputType.Button, "Quit");
-      SystemInput.AddSlotMapping(Keyboard.Escape, "Quit");
-      SystemInput.AddSlotMapping(XInput.Start, "Quit");
+      User1Input.RegisterInputSlot(InputType.Button, "Quit");
+      User1Input.AddSlotMapping(Keyboard.Escape, "Quit");
+      User1Input.AddSlotMapping(XInput.Start, "Quit");
 
-      SystemInput.RegisterInputSlot(InputType.Axis, "CameraX");
-      SystemInput.AddSlotMapping(XInput.XLeftStick, "CameraX");
-      SystemInput.AddSlotMapping(Keyboard.A, "CameraX", -1);
-      SystemInput.AddSlotMapping(Keyboard.D, "CameraX",  1);
+      User1Input.RegisterInputSlot(InputType.Axis, "CameraX");
+      User1Input.AddSlotMapping(XInput.XLeftStick, "CameraX");
+      User1Input.AddSlotMapping(Keyboard.A, "CameraX", -1);
+      User1Input.AddSlotMapping(Keyboard.D, "CameraX",  1);
 
-      SystemInput.RegisterInputSlot(InputType.Axis, "CameraY");
-      SystemInput.AddSlotMapping(XInput.YLeftStick, "CameraY");
-      SystemInput.AddSlotMapping(Keyboard.W, "CameraY",  1);
-      SystemInput.AddSlotMapping(Keyboard.S, "CameraY", -1);
+      User1Input.RegisterInputSlot(InputType.Axis, "CameraY");
+      User1Input.AddSlotMapping(XInput.YLeftStick, "CameraY");
+      User1Input.AddSlotMapping(Keyboard.W, "CameraY",  1);
+      User1Input.AddSlotMapping(Keyboard.S, "CameraY", -1);
 
-      SystemInput.RegisterInputSlot(InputType.Axis, "CameraZ");
-      SystemInput.AddSlotMapping(XInput.YRightStick, "CameraZ", -1);
-      SystemInput.AddSlotMapping(Keyboard.Q, "CameraZ", -1);
-      SystemInput.AddSlotMapping(Keyboard.E, "CameraZ",  1);
+      User1Input.RegisterInputSlot(InputType.Axis, "CameraZ");
+      User1Input.AddSlotMapping(XInput.YRightStick, "CameraZ", -1);
+      User1Input.AddSlotMapping(Keyboard.Q, "CameraZ", -1);
+      User1Input.AddSlotMapping(Keyboard.E, "CameraZ",  1);
 
-
-      //SystemInput.ChangeEvent.Add = (Id, Slot)
-      //{
-      //  Log.Info("Input change '%s': %s %s", Id, Slot.Type, Slot.Value);
-      //};
-
-      auto Window = MainAllocator.New!WindowData(SystemInput);
+      auto Window = MainAllocator.New!WindowData(User1Input);
       scope(exit) MainAllocator.Delete(Window);
 
       SetWindowLongPtrA(WindowHandle, GWLP_USERDATA, *cast(LONG_PTR*)&Window);
@@ -211,14 +205,9 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
 
       while(GlobalRunning)
       {
-        SystemInput.BeginInputFrame();
-        {
-          Win32MessagePump();
-          Win32PollXInput(SystemInput);
-        }
-        SystemInput.EndInputFrame();
 
-        if(SystemInput["Quit"].ButtonIsDown)
+
+        if(User1Input["Quit"].ButtonIsDown)
         {
           .GlobalRunning = false;
           break;
@@ -228,9 +217,9 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
         // Apply Input
         //
         Transform WorldTransform = CameraComponent.GetWorldTransform();
-        WorldTransform.Translation.X += SystemInput["CameraX"].AxisValue * (1 / 3000.0f);
-        WorldTransform.Translation.Y += SystemInput["CameraY"].AxisValue * (1 / 3000.0f);
-        WorldTransform.Translation.Z += SystemInput["CameraZ"].AxisValue * (1 / 3000.0f);
+        WorldTransform.Translation.X += User1Input["CameraX"].AxisValue * (1 / 3000.0f);
+        WorldTransform.Translation.Y += User1Input["CameraY"].AxisValue * (1 / 3000.0f);
+        WorldTransform.Translation.Z += User1Input["CameraZ"].AxisValue * (1 / 3000.0f);
         CameraComponent.SetWorldTransform(WorldTransform);
         Mat = CameraComponent.GetViewProjectionMatrix().GetTransposed;
         auto CurrentTransform = SuzanneObj.RootComponent.GetWorldTransform;
@@ -238,7 +227,7 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
         CurrentTransform.Rotation *= RotZ;
         SuzanneObj.RootComponent.SetWorldTransform(CurrentTransform);
 
-        GlobalEngine.Renderer.Render();
+        GlobalRunning = GlobalEngine.Update();
 
       }
 
@@ -247,27 +236,6 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
   }
   DestroyGlobalEngine();
   return 0;
-}
-
-void Win32MessagePump()
-{
-  MSG Message;
-  while(PeekMessageA(&Message, null, 0, 0, PM_REMOVE))
-  {
-    switch(Message.message)
-    {
-      case WM_QUIT:
-      {
-        GlobalRunning = false;
-      } break;
-
-      default:
-      {
-        TranslateMessage(&Message);
-        DispatchMessageA(&Message);
-      } break;
-    }
-  }
 }
 
 extern(Windows)
@@ -286,13 +254,13 @@ LRESULT Win32MainWindowCallback(HWND WindowHandle, UINT Message,
     case WM_CLOSE:
     {
       // TODO: Handle this with a message to the user?
-      GlobalRunning = false;
+      GlobalEngine.RunEngine = false;
     } break;
 
     case WM_DESTROY:
     {
       // TODO: Handle this as an error - recreate Window?
-      GlobalRunning = false;
+      GlobalEngine.RunEngine = false;
     } break;
 
     case WM_KEYFIRST:   .. case WM_KEYLAST:   goto case; // fallthrough
