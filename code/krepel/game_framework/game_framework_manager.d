@@ -32,9 +32,9 @@ class GameFrameworkManager
     SceneGraphs.RemoveFirst(Graph);
   }
 
-  void TickManager(float ElapsedTime)
+  void Tick(float ElapsedTime)
   {
-    assert(ElapsedTime >= 0.0f);
+    assert(ElapsedTime > 0.0f);
     if (FixedTimeStep)
     {
       assert(FixedTickInterval > 0.0f, "Cannot have 0 or negative update interval");

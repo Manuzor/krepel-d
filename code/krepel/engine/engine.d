@@ -7,6 +7,7 @@ import krepel.render_device;
 import krepel.forward_renderer;
 import krepel.game_framework;
 import krepel.resources;
+import krepel.chrono;
 
 struct EngineCreationInformation
 {
@@ -27,6 +28,8 @@ class Engine
   ResourceManager Resources;
   bool RunEngine = true;
   GameFrameworkManager GameFramework;
+  Timer FrameTimer;
+  TickData FrameTimeData;
 
   this(IAllocator Allocator)
   {
@@ -79,6 +82,14 @@ class Engine
     }
 
     GameFramework = EngineAllocator.New!GameFrameworkManager(EngineAllocator);
+
+    with(FrameTimeData)
+    {
+      TimeFromStart = 0;
+      TimeDilation = 1.0f;
+      RealtimeElapsedTime = 0.0f;
+    }
+	FrameTimer.Start();
   }
 
   void RegisterScene(SceneGraph Graph)
@@ -89,6 +100,9 @@ class Engine
 
   bool Update()
   {
+    FrameTimer.Stop();
+    double ElapsedTime = FrameTimer.TotalElapsedSeconds();
+    FrameTimer.Start();
     foreach(Input; InputContexts)
     {
       Input.BeginInputFrame();
@@ -99,6 +113,9 @@ class Engine
       Input.EndInputFrame();
 
     }
+    FrameTimeData.RealtimeElapsedTime = ElapsedTime;
+    FrameTimeData.TimeFromStart += ElapsedTime;
+    GameFramework.Tick(ElapsedTime);
     Renderer.Render();
     return RunEngine;
   }
