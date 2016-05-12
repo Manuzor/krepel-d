@@ -145,6 +145,7 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
       }
 
       SceneGraph Graph = MainAllocator.New!(SceneGraph)(MainAllocator);
+      GlobalEngine.RegisterScene(Graph);
       auto CameraObject= Graph.CreateDefaultGameObject(UString("Camera", MainAllocator));
       auto CameraComponent = CameraObject.ConstructChild!CameraComponent(UString("CameraComponent", MainAllocator), CameraObject.RootComponent);
       with(CameraComponent)
@@ -156,20 +157,22 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
         FarPlane = 10.0f;
         SetWorldTransform(Transform(Vector3(0,0,2), Quaternion.Identity, Vector3.UnitScaleVector));
       }
+      CameraComponent.RegisterComponent();
       Matrix4 Mat = CameraComponent.GetViewProjectionMatrix().GetTransposed;
 
       auto SuzanneObj = Graph.CreateDefaultGameObject(UString("Suzanne", MainAllocator));
       auto RenderChild = SuzanneObj.ConstructChild!PrimitiveRenderComponent(UString("SuzanneRender", MainAllocator));
       RenderChild.SetMesh(Mesh);
+      RenderChild.RegisterComponent();
 
 
       SuzanneObj = Graph.CreateDefaultGameObject(UString("Suzanne", MainAllocator));
       RenderChild = SuzanneObj.ConstructChild!PrimitiveRenderComponent(UString("SuzanneRender", MainAllocator));
       RenderChild.SetMesh(Mesh);
+      RenderChild.RegisterComponent();
       SuzanneObj.RootComponent.SetWorldTransform(Transform(Vector3(2,0,0), Quaternion.Identity, Vector3.UnitScaleVector));
       GlobalEngine.Renderer.ActiveCamera = CameraComponent;
 
-      GlobalEngine.Renderer.RegisterScene(Graph);
 
       version(XInput_RuntimeLinking) LoadXInput();
 

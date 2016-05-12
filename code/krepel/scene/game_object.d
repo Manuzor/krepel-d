@@ -7,6 +7,7 @@ import krepel.container;
 import krepel.scene.component;
 import krepel.scene.scene_component;
 import krepel.game_framework.tick;
+import krepel.scene.scene_graph;
 
 class GameObject
 {
@@ -15,14 +16,16 @@ class GameObject
   UString Name;
   Array!GameComponent Components;
   SceneComponent RootComponent;
+  SceneGraph World;
 
   bool TickEnabled = true;
 
-  this(IAllocator Allocator, UString Name)
+  this(IAllocator Allocator, UString Name, SceneGraph World)
   {
     this.Allocator = Allocator;
     this.Name = Name;
     Components.Allocator = Allocator;
+    this.World = World;
   }
 
   ~this()
@@ -58,7 +61,7 @@ class GameObject
         RootComponent.Children ~= NewChild;
       }
     }
-
+    World.NotifyComponentCreated(NewChild);
     return NewChild;
   }
 
@@ -66,6 +69,7 @@ class GameObject
   {
     foreach(Component ; Components)
     {
+      World.NotifyComponentRemoved(Component);
       Allocator.Delete(Component);
     }
     Components.Clear();

@@ -6,3 +6,4 @@ public import krepel.string;
 public import krepel.math;
 public import krepel.container;
 public import krepel.util;
+public import krepel.delegates;

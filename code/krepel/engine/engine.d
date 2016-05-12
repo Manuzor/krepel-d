@@ -66,7 +66,6 @@ class Engine
       version(Windows)
       {
         auto InputContext = EngineAllocator.New!Win32InputContext(EngineAllocator);
-        // Note(Manu): Let's pretend the system is user 0 for now.
         InputContext.UserIndex = Index;
 
         if (Index == 0)
@@ -80,6 +79,12 @@ class Engine
     }
 
     GameFramework = EngineAllocator.New!GameFrameworkManager(EngineAllocator);
+  }
+
+  void RegisterScene(SceneGraph Graph)
+  {
+    GameFramework.RegisterScene(Graph);
+    Renderer.RegisterScene(Graph);
   }
 
   bool Update()

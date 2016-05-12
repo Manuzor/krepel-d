@@ -11,6 +11,11 @@ class GameComponent
   UString Name;
   GameObject Owner;
 
+  void RegisterComponent()
+  {
+    Owner.World.NotifyComponentRegistered(this);
+  }
+
   bool TickEnabled;
 
   this(IAllocator Allocator, UString Name, GameObject Owner)

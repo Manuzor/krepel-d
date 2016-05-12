@@ -166,13 +166,22 @@ class ForwardRenderer
     }
   }
 
-  //TODO(Marvin): This does not handle post-register-creation of render components (aka dynamic creation)
   void RegisterScene(SceneGraph Graph)
   {
     RegisteredSceneGraphs ~= Graph;
     foreach(GameObject ; Graph.GetGameObjects)
     {
       RegisterGameObject(GameObject);
+    }
+    Graph.OnComponentRegistered ~= &OnComponentRegistered;
+  }
+
+  void OnComponentRegistered(GameObject Obj, GameComponent Component)
+  {
+    auto RenderComponent = cast(PrimitiveRenderComponent)Component;
+    if(RenderComponent !is null)
+    {
+      RegisterComponent(RenderComponent);
     }
   }
 
@@ -181,36 +190,44 @@ class ForwardRenderer
     foreach(Component ; GameObj.Components)
     {
       auto RenderComponent = cast(PrimitiveRenderComponent)(Component);
-      if(RenderComponent !is null && RenderComponent.GetMesh !is null)
+      if(RenderComponent !is null)
       {
-        foreach(SubMesh ; RenderComponent.GetMesh.Meshes)
+        RegisterComponent(RenderComponent);
+      }
+    }
+  }
+
+  private void RegisterComponent(PrimitiveRenderComponent RenderComponent)
+  {
+    if(RenderComponent.GetMesh !is null)
+    {
+      foreach(SubMesh ; RenderComponent.GetMesh.Meshes)
+      {
+        IRenderMesh* RegisteredMesh = MeshGraphicResources.Get(SubMesh);
+        IRenderMesh MeshGraphic = null;
+        if (RegisteredMesh !is null)
         {
-          IRenderMesh* RegisteredMesh = MeshGraphicResources.Get(SubMesh);
-          IRenderMesh MeshGraphic = null;
-          if (RegisteredMesh !is null)
-          {
-            MeshGraphic = *RegisteredMesh;
-          }
-          if(MeshGraphic is null)
-          {
-            MeshGraphic = RenderDevice.CreateRenderMesh(SubMesh);
-            MeshGraphicResources[SubMesh] = MeshGraphic;
-          }
-          assert(MeshGraphic !is null);
-          auto Id = RenderSubMeshResource(RenderComponent, SubMesh);
-          RenderMeshResources Resources;
-          Resources.VertexShader = DefaultVertexShader;
-          Resources.PixelShader = DefaultPixelShader;
-          WorldConstantBuffer Buffer;
-          Buffer.ModelMatrix = RenderComponent.GetWorldTransform().ToMatrix();
-          Buffer.ModelViewProjectionMatrix =
-            RenderComponent.GetWorldTransform().ToMatrix() * GetViewProjectionMatrix();
-          Resources.ConstantBuffer[0] = RenderDevice.CreateConstantBuffer(Buffer.AsVoidRange);
-          Resources.Mesh = MeshGraphic;
-          Resources.Component = RenderComponent;
-          Resources.RenderedSubMesh = SubMesh;
-          RenderResources[Id] = Resources;
+          MeshGraphic = *RegisteredMesh;
         }
+        if(MeshGraphic is null)
+        {
+          MeshGraphic = RenderDevice.CreateRenderMesh(SubMesh);
+          MeshGraphicResources[SubMesh] = MeshGraphic;
+        }
+        assert(MeshGraphic !is null);
+        auto Id = RenderSubMeshResource(RenderComponent, SubMesh);
+        RenderMeshResources Resources;
+        Resources.VertexShader = DefaultVertexShader;
+        Resources.PixelShader = DefaultPixelShader;
+        WorldConstantBuffer Buffer;
+        Buffer.ModelMatrix = RenderComponent.GetWorldTransform().ToMatrix();
+        Buffer.ModelViewProjectionMatrix =
+          RenderComponent.GetWorldTransform().ToMatrix() * GetViewProjectionMatrix();
+        Resources.ConstantBuffer[0] = RenderDevice.CreateConstantBuffer(Buffer.AsVoidRange);
+        Resources.Mesh = MeshGraphic;
+        Resources.Component = RenderComponent;
+        Resources.RenderedSubMesh = SubMesh;
+        RenderResources[Id] = Resources;
       }
     }
   }

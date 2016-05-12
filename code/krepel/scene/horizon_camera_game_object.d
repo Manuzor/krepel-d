@@ -8,9 +8,9 @@ class HorizonCamera : GameObject
 {
 
   CameraComponent CamComponent;
-  this(IAllocator Allocator, UString Name)
+  this(IAllocator Allocator, UString Name, SceneGraph World)
   {
-    super(Allocator, Name);
+    super(Allocator, Name, World);
 
     CamComponent = ConstructChild!CameraComponent(UString("HorizonCamera", Allocator));
     with(CamComponent)
