@@ -84,6 +84,7 @@ struct RenderDepthStencilDescription
 struct RenderDeviceCreationDescription
 {
   RenderDepthStencilDescription DepthStencilDescription;
+  bool EnableVSync = true;
 }
 
 interface IRenderDepthStencilBuffer

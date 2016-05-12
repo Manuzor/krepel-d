@@ -290,6 +290,7 @@ class D3D11RenderDevice : IRenderDevice
   DxState DeviceState;
   DxDepthStencilBuffer DepthStencilBuffer;
   IAllocator Allocator;
+  RenderDeviceCreationDescription Description;
   this(IAllocator Allocator)
   {
     this.Allocator = Allocator;
@@ -661,11 +662,12 @@ class D3D11RenderDevice : IRenderDevice
 
   override void Present()
   {
-    DeviceState.SwapChain.Present(0, 0);
+    DeviceState.SwapChain.Present(Description.EnableVSync ? 1 : 0, 0);
   }
 
   override bool InitDevice(RenderDeviceCreationDescription Description)
   {
+    this.Description = Description;
     version(DXGI_RuntimeLinking)  LoadDXGI();
 
     LoadD3D11();
