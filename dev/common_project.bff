@@ -4,10 +4,11 @@
     Using(.CommonDProject)
     Using(.ProjectBuildCommon)
     .ProjectOutput="workspace/$ProjectName$.vcxproj"
-    .Output="..\build\$ProjectName$.exe"
+    .Output="^$(OutDir)\$ProjectName$.exe"
     .OutputDirectory="^$(SolutionDir)build"
     .ProjectBasePath="."
     .LocalDebuggerWorkingDirectory = "^$(OutDir)"
+    .LocalDebuggerCommand = "^$(OutDir)$ProjectName$.exe"
   }
   ^Projects + "$ProjectName$"
 }
