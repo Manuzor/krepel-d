@@ -15,6 +15,28 @@ float Sqrt(float Value)
   return std.math.sqrt(Value);
 }
 
+// See: https://en.wikipedia.org/wiki/Fast_inverse_square_root
+float InvSqrt(float Value)
+{
+  union FloatInt
+  {
+    float Float;
+    int Int;
+  }
+  FloatInt MagicNumber;
+  float HalfValue, Result;
+  const float ThreeHalfs = 1.5F;
+
+  HalfValue = Value * 0.5F;
+  Result = Value;
+  MagicNumber.Float = Result;                // evil floating point bit level hacking
+  MagicNumber.Int  = 0x5f3759df - ( MagicNumber.Int >> 1 );   // what the fuck?
+  Result = MagicNumber.Float;
+  Result = Result * ( ThreeHalfs - ( HalfValue * Result * Result ) );    // 1st iteration
+
+  return Result;
+}
+
 /// Returns the absolute Value (the positive Value)
 float Abs(float Value)
 {

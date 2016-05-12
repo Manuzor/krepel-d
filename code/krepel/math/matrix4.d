@@ -93,6 +93,61 @@ float GetDeterminant(Matrix4 Mat)
   return DetA - DetB + DetC - DetD;
 }
 
+Quaternion ToQuaternion(Matrix4 M)
+{
+  Quaternion Result;
+  if (M.GetScaledAxis(EAxisType.X).IsNearlyZero() || M.GetScaledAxis(EAxisType.Y).IsNearlyZero() || M.GetScaledAxis(EAxisType.Z).IsNearlyZero())
+  {
+    Result = Quaternion.Identity;
+    return Result;
+  }
+
+  //const MeReal *const t = (MeReal *) tm;
+  float  HalfInvSqrt;
+
+  // Check diagonal (trace)
+  const float Trace = M.M[0][0] + M.M[1][1] + M.M[2][2];
+
+  if (Trace > 0.0f)
+  {
+    float InvS = InvSqrt(Trace + 1.0f);
+    Result.W = 0.5f * (1.0f / InvS);
+    HalfInvSqrt = 0.5f * InvS;
+
+    Result.X = (M.M[1][2] - M.M[2][1]) * HalfInvSqrt;
+    Result.Y = (M.M[2][0] - M.M[0][2]) * HalfInvSqrt;
+    Result.Z = (M.M[0][1] - M.M[1][0]) * HalfInvSqrt;
+  }
+  else
+  {
+    // diagonal is negative
+    int Index = 0;
+
+    if (M.M[1][1] > M.M[0][0])
+      Index = 1;
+
+    if (M.M[2][2] > M.M[Index][Index])
+      Index = 2;
+
+    const int[3] Next = [ 1, 2, 0 ];
+    const int j = Next[Index];
+    const int k = Next[j];
+
+    HalfInvSqrt = M.M[Index][Index] - M.M[j][j] - M.M[k][k] + 1.0f;
+
+    float InvS = InvSqrt(HalfInvSqrt);
+
+    Result.Data[Index] = 0.5f * (1.0f / InvS);
+
+    HalfInvSqrt = 0.5f * InvS;
+
+    Result.Data[3] = (M.M[j][k] - M.M[k][j]) * HalfInvSqrt;
+    Result.Data[j] = (M.M[Index][j] + M.M[j][Index]) * HalfInvSqrt;
+    Result.Data[k] = (M.M[Index][k] + M.M[k][Index]) * HalfInvSqrt;
+  }
+  return Result;
+}
+
 /// Calculcates the inversion of the matrix, if possible, otherwise return the identity matrix.
 /// Additionally checks for Zero scale matrix and returns an Identity Matrix in this case as well.
 Matrix4 SafeInvert(Matrix4 Mat)
@@ -677,4 +732,9 @@ unittest
   Result = Mat.TransformPosition(Vector3.ForwardVector);
 
   assert(Result == Vector3.ZeroVector);
+}
+
+unittest
+{
+  assert(Quaternion.Identity.ToRotationMatrix.ToQuaternion == Quaternion.Identity);
 }
