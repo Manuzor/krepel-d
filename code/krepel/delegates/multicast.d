@@ -2,41 +2,29 @@ module krepel.delegates.multicast;
 
 import krepel;
 
-struct MultiCastDelegate(ReturnType, DelegateArgs...)
+struct MultiCastDelegate(DelegateArgs...)
 {
-  Array!(ReturnType delegate(DelegateArgs)) Listeners;
+  Array!(void delegate(DelegateArgs)) Listeners;
 
   this(IAllocator Allocator)
   {
     Listeners.Allocator = Allocator;
   }
 
-  void Bind(ReturnType delegate(DelegateArgs) DelegateToBind)
+  void Bind(void delegate(DelegateArgs) DelegateToBind)
   {
     Listeners ~= DelegateToBind;
   }
 
-  ReturnType Call(DelegateArgs Arguments)
+  void Call(DelegateArgs Arguments)
   {
-    static if(is(ReturnType == void))
+    foreach(Delegate; Listeners)
     {
-      foreach(Delegate; Listeners)
-      {
-        Delegate(Arguments);
-      }
-    }
-    else
-    {
-      ReturnType Value;
-      foreach(Delegate; Listeners)
-      {
-        Value = Delegate(Arguments);
-      }
-      return Value;
+      Delegate(Arguments);
     }
   }
 
-  void opOpAssign(string Operator)(ReturnType delegate(DelegateArgs) DelegateToBind)
+  void opOpAssign(string Operator)(void delegate(DelegateArgs) DelegateToBind)
   {
     static if(Operator == "~" || Operator == "+")
     {
@@ -55,7 +43,7 @@ struct MultiCastDelegate(ReturnType, DelegateArgs...)
     }
   }
 
-  ReturnType opCall(DelegateArgs Arguments)
+  void opCall(DelegateArgs Arguments)
   {
     return Call(Arguments);
   }
@@ -71,7 +59,7 @@ unittest
     NumCalled++;
   }
 
-  auto IntCallbacks = MultiCastDelegate!(void, int)(Allocator);
+  auto IntCallbacks = MultiCastDelegate!(int)(Allocator);
   IntCallbacks.Bind(&Test);
 
   IntCallbacks.Call(3);
