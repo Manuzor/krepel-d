@@ -57,7 +57,7 @@ enum RenderRasterizationMethod
 struct RenderRasterizerDescription
 {
   RenderCullMode CullMode = RenderCullMode.Back;
-  RenderWindingOrder WindingOrder = RenderWindingOrder.CounterClockWise;
+  RenderWindingOrder WindingOrder = RenderWindingOrder.ClockWise;
   bool EnableDepthCulling = true;
   RenderRasterizationMethod RasterizationMethod = RenderRasterizationMethod.Solid;
 }
