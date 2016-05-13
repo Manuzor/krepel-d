@@ -59,6 +59,21 @@ Transform InversedCopy(in ref Transform InputTransform)
   return Result;
 }
 
+Vector3 ForwardVector(in Transform InputTransform)
+{
+  return InputTransform.TransformDirection(Vector3.ForwardVector);
+}
+
+Vector3 RightVector(in Transform InputTransform)
+{
+  return InputTransform.TransformDirection(Vector3.RightVector);
+}
+
+Vector3 UpVector(in Transform InputTransform)
+{
+  return InputTransform.TransformDirection(Vector3.UpVector);
+}
+
 struct Transform
 {
   Vector3 Translation;
