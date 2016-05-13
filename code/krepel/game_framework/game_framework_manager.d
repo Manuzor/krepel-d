@@ -11,7 +11,7 @@ class GameFrameworkManager
 {
   Array!SceneGraph SceneGraphs;
   IAllocator Allocator;
-  float TimeDilation;
+  float TimeDilation = 1.0f;
   float FixedTickInterval = 0.0166666f;
   float PendingElapsedTime = 0.0f;
   bool FixedTimeStep = true;
