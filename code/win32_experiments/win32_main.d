@@ -146,18 +146,9 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
 
       SceneGraph Graph = MainAllocator.New!(SceneGraph)(MainAllocator);
       GlobalEngine.RegisterScene(Graph);
-      auto CameraObject= Graph.CreateDefaultGameObject(UString("Camera", MainAllocator));
-      auto CameraComponent = CameraObject.ConstructChild!CameraComponent(UString("CameraComponent", MainAllocator), CameraObject.RootComponent);
-      with(CameraComponent)
-      {
-        FieldOfView = PI/2;
-        Width = 1280;
-        Height = 720;
-        NearPlane = 0.1f;
-        FarPlane = 10.0f;
-        SetWorldTransform(Transform(Vector3(0,0,2), Quaternion.Identity, Vector3.UnitScaleVector));
-      }
-      CameraComponent.RegisterComponent();
+      auto CameraObject= Graph.CreateGameObject!HorizonCamera(UString("Camera", MainAllocator));
+      auto CameraComponent = cast(CameraComponent)CameraObject.RootComponent;
+      CameraComponent.SetWorldTransform(Transform(Vector3(0,-2,0), Quaternion.Identity, Vector3.UnitScaleVector));
       Matrix4 Mat = CameraComponent.GetViewProjectionMatrix().GetTransposed;
 
       auto SuzanneObj = Graph.CreateDefaultGameObject(UString("Suzanne", MainAllocator));
@@ -182,16 +173,6 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
       User1Input.RegisterInputSlot(InputType.Button, "Quit");
       User1Input.AddSlotMapping(Keyboard.Escape, "Quit");
       User1Input.AddSlotMapping(XInput.Start, "Quit");
-
-      User1Input.RegisterInputSlot(InputType.Axis, "CameraX");
-      User1Input.AddSlotMapping(XInput.XLeftStick, "CameraX");
-      User1Input.AddSlotMapping(Keyboard.A, "CameraX", -1);
-      User1Input.AddSlotMapping(Keyboard.D, "CameraX",  1);
-
-      User1Input.RegisterInputSlot(InputType.Axis, "CameraY");
-      User1Input.AddSlotMapping(XInput.YLeftStick, "CameraY");
-      User1Input.AddSlotMapping(Keyboard.W, "CameraY",  1);
-      User1Input.AddSlotMapping(Keyboard.S, "CameraY", -1);
 
       User1Input.RegisterInputSlot(InputType.Axis, "CameraZ");
       User1Input.AddSlotMapping(XInput.YRightStick, "CameraZ", -1);
@@ -220,9 +201,9 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
         // Apply Input
         //
         Transform WorldTransform = CameraComponent.GetWorldTransform();
-        WorldTransform.Translation.X += User1Input["CameraX"].AxisValue * (1 / 3000.0f);
-        WorldTransform.Translation.Y += User1Input["CameraY"].AxisValue * (1 / 3000.0f);
-        WorldTransform.Translation.Z += User1Input["CameraZ"].AxisValue * (1 / 3000.0f);
+        //WorldTransform.Translation.X += User1Input["CameraX"].AxisValue * (1 / 3000.0f);
+        //WorldTransform.Translation.Y += User1Input["CameraY"].AxisValue * (1 / 3000.0f);
+        //WorldTransform.Translation.Z += User1Input["CameraZ"].AxisValue * (1 / 3000.0f);
         CameraComponent.SetWorldTransform(WorldTransform);
         Mat = CameraComponent.GetViewProjectionMatrix().GetTransposed;
         auto CurrentTransform = SuzanneObj.RootComponent.GetWorldTransform;
