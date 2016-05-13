@@ -1,4 +1,4 @@
-module krepel.delegates.multicast;
+module krepel.util.delegates.multicast;
 
 import krepel;
 
