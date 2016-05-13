@@ -51,6 +51,17 @@ class SceneGraph
     GameObjects ~= NewGO;
     NewGO.ConstructChild!SceneComponent(UString("Scene Component", Allocator));
     OnGameObjectAdded(NewGO);
+    NewGO.Start();
+    return NewGO;
+  }
+
+  GameObjectType CreateGameObject(GameObjectType)(UString Name)
+    if(is(GameObjectType : GameObject))
+  {
+    auto NewGO = Allocator.New!(GameObjectType)(Allocator, Name, this);
+    GameObjects ~= NewGO;
+    OnGameObjectAdded(NewGO);
+    NewGO.Start();
     return NewGO;
   }
 

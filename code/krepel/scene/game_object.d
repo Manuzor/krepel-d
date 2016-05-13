@@ -75,6 +75,10 @@ class GameObject
     Components.Clear();
   }
 
+  void Start()
+  {
+  }
+
   void Tick(TickData Tick)
   {
     foreach(Component; Components)
