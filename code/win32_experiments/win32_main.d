@@ -148,7 +148,7 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
       GlobalEngine.RegisterScene(Graph);
       auto CameraObject= Graph.CreateGameObject!HorizonCamera(UString("Camera", MainAllocator));
       auto CameraComponent = cast(CameraComponent)CameraObject.RootComponent;
-      CameraComponent.SetWorldTransform(Transform(Vector3(0,-2,0), Quaternion.Identity, Vector3.UnitScaleVector));
+      CameraComponent.SetWorldTransform(Transform(Vector3(0,2,0), Quaternion.Identity, Vector3.UnitScaleVector));
       Matrix4 Mat = CameraComponent.GetViewProjectionMatrix().GetTransposed;
 
       auto SuzanneObj = Graph.CreateDefaultGameObject(UString("Suzanne", MainAllocator));
