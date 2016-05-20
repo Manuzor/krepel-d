@@ -10,22 +10,22 @@ import krepel.scene.component;
 
 class SceneGraph
 {
-  MultiCastDelegate!(GameObject) OnGameObjectAdded;
-  MultiCastDelegate!(GameObject) OnGameObjectRemoved;
-  MultiCastDelegate!(GameObject, GameComponent) OnComponentAdded;
-  MultiCastDelegate!(GameObject, GameComponent) OnComponentRegistered;
-  MultiCastDelegate!(GameObject, GameComponent) OnComponentRemoved;
+  Event!(GameObject) OnGameObjectAdded;
+  Event!(GameObject) OnGameObjectRemoved;
+  Event!(GameObject, GameComponent) OnComponentAdded;
+  Event!(GameObject, GameComponent) OnComponentRegistered;
+  Event!(GameObject, GameComponent) OnComponentRemoved;
 
   IAllocator Allocator;
   this(IAllocator Allocator)
   {
     this.Allocator = Allocator;
     GameObjects.Allocator = Allocator;
-    OnGameObjectAdded = MultiCastDelegate!(GameObject)(Allocator);
-    OnGameObjectRemoved = MultiCastDelegate!(GameObject)(Allocator);
-    OnComponentAdded = MultiCastDelegate!(GameObject, GameComponent)(Allocator);
-    OnComponentRegistered = MultiCastDelegate!(GameObject, GameComponent)(Allocator);
-    OnComponentRemoved = MultiCastDelegate!(GameObject, GameComponent)(Allocator);
+    OnGameObjectAdded = Event!(GameObject)(Allocator);
+    OnGameObjectRemoved = Event!(GameObject)(Allocator);
+    OnComponentAdded = Event!(GameObject, GameComponent)(Allocator);
+    OnComponentRegistered = Event!(GameObject, GameComponent)(Allocator);
+    OnComponentRemoved = Event!(GameObject, GameComponent)(Allocator);
   }
 
   Array!GameObject GameObjects;

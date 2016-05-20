@@ -173,7 +173,7 @@ class ForwardRenderer
     {
       RegisterGameObject(GameObject);
     }
-    Graph.OnComponentRegistered ~= &OnComponentRegistered;
+    Graph.OnComponentRegistered.Add(&OnComponentRegistered);
   }
 
   void OnComponentRegistered(GameObject Obj, GameComponent Component)
