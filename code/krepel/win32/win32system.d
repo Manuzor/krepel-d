@@ -10,7 +10,7 @@ IFile OpenFile(IAllocator Allocator, const wchar[] Path, FileOpenMode Mode = Fil
 {
   auto NewFile = Allocator.New!Win32File();
   NewFile.OpenFile(Path, Mode);
-
+  
   return NewFile;
 }
 
