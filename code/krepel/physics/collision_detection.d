@@ -78,9 +78,9 @@ class CollisionDetection
   {
     Vector3 SphereWorldPosition = Sphere.Owner.GetWorldTransform.Translation;
     Vector3 PlaneNormal = Plane.Shape.Plane.Plane.XYZ;
-    const float Distance = ((SphereWorldPosition | PlaneNormal) + Plane.Shape.Plane.Plane.W)/PlaneNormal.Length;
+    const float Distance = Abs(((SphereWorldPosition | PlaneNormal) + Plane.Shape.Plane.Plane.W))/PlaneNormal.Length;
     CollisionResult Result;
-    Result.DoesCollide = Abs(Distance) < Sphere.Shape.Sphere.Radius;
+    Result.DoesCollide = Distance < Sphere.Shape.Sphere.Radius;
     if (Result.DoesCollide)
     {
       Result.PenetrationDepth = Sphere.Shape.Sphere.Radius - Distance;
