@@ -17,6 +17,7 @@ import krepel.render_device;
 import krepel.resources;
 import krepel.scene;
 import krepel.forward_renderer;
+import krepel.physics;
 import krepel.engine;
 
 version(Windows):
@@ -138,31 +139,44 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
 
     if(WindowHandle)
     {
-      MeshResource Mesh = GlobalEngine.Resources.LoadMesh(WString("../data/mesh/Suzanne.obj", MainAllocator));
+      MeshResource UnitPlane = GlobalEngine.Resources.LoadMesh(WString("../data/mesh/UnitPlane.obj", MainAllocator));
+      MeshResource UnitSphere = GlobalEngine.Resources.LoadMesh(WString("../data/mesh/UnitSphere.obj", MainAllocator));
       scope(exit)
       {
-        GlobalEngine.Resources.DestroyResource(Mesh);
+        GlobalEngine.Resources.DestroyResource(UnitPlane);
       }
+
+
+
 
       SceneGraph Graph = MainAllocator.New!(SceneGraph)(MainAllocator);
       GlobalEngine.RegisterScene(Graph);
       auto CameraObject= Graph.CreateGameObject!HorizonCamera(UString("Camera", MainAllocator));
       auto CameraComponent = cast(CameraComponent)CameraObject.RootComponent;
-      CameraComponent.SetWorldTransform(Transform(Vector3(0,2,0), Quaternion.Identity, Vector3.UnitScaleVector));
+      CameraComponent.SetWorldTransform(Transform(Vector3(-3,0,1), Quaternion.Identity, Vector3.UnitScaleVector));
       Matrix4 Mat = CameraComponent.GetViewProjectionMatrix().GetTransposed;
 
-      auto SuzanneObj = Graph.CreateDefaultGameObject(UString("Suzanne", MainAllocator));
-      auto RenderChild = SuzanneObj.ConstructChild!PrimitiveRenderComponent(UString("SuzanneRender", MainAllocator));
-      RenderChild.SetMesh(Mesh);
+      auto Plane = Graph.CreateDefaultGameObject(UString("Plane", MainAllocator));
+      auto PlanePhysicsChild = Plane.ConstructChild!PhysicsComponent(UString("PlanePhysics", MainAllocator));
+      PlanePhysicsChild.ComponentBody.Shape.SetPlane(PlaneShapeData(Vector4(0,0,1,0)));
+      PlanePhysicsChild.RegisterComponent();
+      auto RenderChild = Plane.ConstructChild!PrimitiveRenderComponent(UString("PlaneRender", MainAllocator), PlanePhysicsChild);
+      RenderChild.SetMesh(UnitPlane);
       RenderChild.RegisterComponent();
 
 
-      SuzanneObj = Graph.CreateDefaultGameObject(UString("Suzanne", MainAllocator));
-      RenderChild = SuzanneObj.ConstructChild!PrimitiveRenderComponent(UString("SuzanneRender", MainAllocator));
-      RenderChild.SetMesh(Mesh);
+      auto Sphere = Graph.CreateDefaultGameObject(UString("Sphere", MainAllocator));
+      auto SpherePhysicsChild = Sphere.ConstructChild!PhysicsComponent(UString("SpherePhysics", MainAllocator));
+      SpherePhysicsChild.ComponentBody.Shape.SetSphere(SphereShapeData(1.0f));
+      SpherePhysicsChild.RegisterComponent();
+      RenderChild = Sphere.ConstructChild!PrimitiveRenderComponent(UString("SphereRender", MainAllocator), SpherePhysicsChild);
+      RenderChild.SetWorldTransform(Transform(Vector3(0,0,0), Quaternion.Identity, Vector3.UnitScaleVector));
+
+      RenderChild.SetMesh(UnitSphere);
       RenderChild.RegisterComponent();
-      SuzanneObj.RootComponent.SetWorldTransform(Transform(Vector3(2,0,0), Quaternion.Identity, Vector3.UnitScaleVector));
+      Sphere.RootComponent.SetWorldTransform(Transform(Vector3(0,0,0), Quaternion.Identity, Vector3.UnitScaleVector));
       GlobalEngine.Renderer.ActiveCamera = CameraComponent;
+
 
 
       version(XInput_RuntimeLinking) LoadXInput();
@@ -174,10 +188,12 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
       User1Input.AddSlotMapping(Keyboard.Escape, "Quit");
       User1Input.AddSlotMapping(XInput.Start, "Quit");
 
-      User1Input.RegisterInputSlot(InputType.Axis, "CameraZ");
-      User1Input.AddSlotMapping(XInput.YRightStick, "CameraZ", -1);
-      User1Input.AddSlotMapping(Keyboard.Q, "CameraZ", -1);
-      User1Input.AddSlotMapping(Keyboard.E, "CameraZ",  1);
+      User1Input.RegisterInputSlot(InputType.Axis, "ObjX");
+      User1Input.RegisterInputSlot(InputType.Axis, "ObjY");
+      User1Input.RegisterInputSlot(InputType.Axis, "ObjZ");
+      User1Input.AddSlotMapping(Keyboard.Up, "ObjZ");
+      User1Input.AddSlotMapping(Keyboard.Down, "ObjZ", -1);
+
 
       auto Window = MainAllocator.New!WindowData(User1Input);
       scope(exit) MainAllocator.Delete(Window);
@@ -200,18 +216,21 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
         //
         // Apply Input
         //
-        Transform WorldTransform = CameraComponent.GetWorldTransform();
-        //WorldTransform.Translation.X += User1Input["CameraX"].AxisValue * (1 / 3000.0f);
-        //WorldTransform.Translation.Y += User1Input["CameraY"].AxisValue * (1 / 3000.0f);
-        //WorldTransform.Translation.Z += User1Input["CameraZ"].AxisValue * (1 / 3000.0f);
-        CameraComponent.SetWorldTransform(WorldTransform);
-        Mat = CameraComponent.GetViewProjectionMatrix().GetTransposed;
-        auto CurrentTransform = SuzanneObj.RootComponent.GetWorldTransform;
-        Quaternion RotZ = Quaternion(Vector3.UpVector, 2 * PI * (1/3000f));
-        CurrentTransform.Rotation *= RotZ;
-        SuzanneObj.RootComponent.SetWorldTransform(CurrentTransform);
+        auto Transform = SpherePhysicsChild.GetLocalTransform();
+        Transform.Translation += Vector3.UpVector * User1Input["ObjZ"].AxisValue * GlobalEngine.FrameTimeData.ElapsedTime;
+        SpherePhysicsChild.SetLocalTransform(Transform);
 
         GlobalRunning = GlobalEngine.Update();
+
+        if(CollisionDetection.DoesCollide(SpherePhysicsChild.ComponentBody, PlanePhysicsChild.ComponentBody))
+        {
+          Log.Info("Collision");
+        }
+        else
+        {
+          Log.Info("No Collision");
+        }
+
 
       }
 

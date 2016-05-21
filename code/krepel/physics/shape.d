@@ -27,16 +27,20 @@ struct PlaneShapeData
 
 void SetBox(PhysicsShape Shape, BoxShapeData Data)
 {
+  Shape.Type = ShapeType.Box;
   Shape.Box = Data;
 }
 
 void SetSphere(PhysicsShape Shape, SphereShapeData Data)
 {
+  Shape.Type = ShapeType.Sphere;
   Shape.Sphere = Data;
 }
 
 void SetPlane(PhysicsShape Shape, PlaneShapeData Data)
 {
+  Shape.Type = ShapeType.Plane;
+
   Shape.Plane = Data;
 }
 
