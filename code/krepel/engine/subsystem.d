@@ -2,6 +2,7 @@ module krepel.engine.subsystem;
 
 import krepel;
 import krepel.game_framework.tick;
+import krepel.engine.engine;
 
 class Subsystem
 {
@@ -11,6 +12,9 @@ class Subsystem
   float PendingElapsedTime = 0.0f;
   bool FixedTimeStep = true;
   float TimeElapsedFromStart = 0.0f;
+
+  abstract void Initialize(Engine ParentEngine);
+  abstract void Destroy();
 
   void TickSubsystem(float ElapsedTime)
   {

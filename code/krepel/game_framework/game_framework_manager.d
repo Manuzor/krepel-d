@@ -7,6 +7,7 @@ import krepel.memory;
 import krepel.game_framework.tick;
 import krepel.scene;
 import krepel.engine.subsystem;
+import krepel.engine.engine;
 
 class GameFrameworkManager : Subsystem
 {
@@ -26,6 +27,16 @@ class GameFrameworkManager : Subsystem
   void UnregisterScene(SceneGraph Graph)
   {
     SceneGraphs.RemoveFirst(Graph);
+  }
+
+  override void Initialize(Engine ParentEngine)
+  {
+
+  }
+
+  override void Destroy()
+  {
+
   }
 
   override void Tick(TickData Tick)

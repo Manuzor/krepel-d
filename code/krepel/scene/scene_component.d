@@ -47,6 +47,18 @@ class SceneComponent : GameComponent
     Transformation = NewTransform;
   }
 
+  void MoveWorld(Vector3 Delta)
+  {
+    auto WorldTransform = GetWorldTransform();
+    WorldTransform.Translation += Delta;
+    SetWorldTransform(WorldTransform);
+  }
+
+  void MoveLocal(Vector3 Delta)
+  {
+    Transformation.Translation += Delta;
+  }
+
 
 
 private:

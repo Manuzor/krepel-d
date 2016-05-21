@@ -9,6 +9,7 @@ import krepel.game_framework;
 import krepel.resources;
 import krepel.chrono;
 import krepel.engine.subsystem;
+import krepel.physics;
 
 struct EngineCreationInformation
 {
@@ -31,6 +32,7 @@ class Engine
   GameFrameworkManager GameFramework;
   Timer FrameTimer;
   TickData FrameTimeData;
+  PhysicsSystem Physics;
   Array!Subsystem Subsystems;
 
   this(IAllocator Allocator)
@@ -87,13 +89,16 @@ class Engine
     GameFramework = EngineAllocator.New!GameFrameworkManager(EngineAllocator);
     Subsystems ~= GameFramework;
 
+    Physics = EngineAllocator.New!PhysicsSystem(EngineAllocator);
+    Subsystems ~= Physics;
+
     with(FrameTimeData)
     {
       TimeFromStart = 0;
       TimeDilation = 1.0f;
       RealtimeElapsedTime = 0.0f;
     }
-	FrameTimer.Start();
+    FrameTimer.Start();
   }
 
   void RegisterScene(SceneGraph Graph)
@@ -151,6 +156,8 @@ class Engine
 
   void Destroy()
   {
+    EngineAllocator.Delete(GameFramework);
+    EngineAllocator.Delete(Physics);
     EngineAllocator.Delete(Renderer);
     EngineAllocator.Delete(RenderDevice);
     EngineAllocator.Delete(Resources);
