@@ -4,89 +4,109 @@ import krepel;
 import krepel.physics.rigid_body;
 import krepel.physics.shape;
 
+struct CollisionResult
+{
+  bool DoesCollide;
+  Vector3 CollisionPoint = Vector3.ZeroVector;
+  Vector3 CollisionNormal = Vector3.ZeroVector; //Resolvance Vector can be determined by Scaling this vector by PenetrationDepth
+  float PenetrationDepth = 0.0f;
+  Vector3 SurfaceNormal = Vector3.ZeroVector; // Surface Normal of the other body
+
+  __gshared immutable EmptyResult = CollisionResult();
+}
+
 class CollisionDetection
 {
-  static bool DoesCollide(RigidBody Body1, RigidBody Body2)
+  static CollisionResult CheckCollision(RigidBody Body1, RigidBody Body2)
   {
     final switch(Body1.Shape.Type)
     {
       case ShapeType.Sphere:
-        return DoesCollideSphereAny(Body1, Body2);
+        return CheckCollisionSphereAny(Body1, Body2);
       case ShapeType.Box:
-        return DoesCollideBoxAny(Body1, Body2);
+        return CheckCollisionBoxAny(Body1, Body2);
       case ShapeType.Plane:
-        return DoesCollidePlaneAny(Body1, Body2);
+        return CheckCollisionPlaneAny(Body1, Body2);
     }
   }
 
-  static bool DoesCollideSphereAny(RigidBody Sphere, RigidBody Body2)
+  static CollisionResult CheckCollisionSphereAny(RigidBody Sphere, RigidBody Body2)
   {
     final switch(Body2.Shape.Type)
     {
       case ShapeType.Sphere:
-        return DoesCollideSphereSphere(Sphere, Body2);
+        return CheckCollisionSphereSphere(Sphere, Body2);
       case ShapeType.Box:
-        return DoesCollideSphereBox(Sphere, Body2);
+        return CheckCollisionSphereBox(Sphere, Body2);
       case ShapeType.Plane:
-        return DoesCollideSpherePlane(Sphere, Body2);
+        return CheckCollisionSpherePlane(Sphere, Body2);
     }
   }
 
-  static bool DoesCollideBoxAny(RigidBody Box, RigidBody Body2)
+  static CollisionResult CheckCollisionBoxAny(RigidBody Box, RigidBody Body2)
   {
     final switch(Body2.Shape.Type)
     {
       case ShapeType.Sphere:
-        return DoesCollideSphereBox(Body2, Box);
+        return CheckCollisionSphereBox(Body2, Box);
       case ShapeType.Box:
-        return DoesCollideBoxBox(Box, Body2);
+        return CheckCollisionBoxBox(Box, Body2);
       case ShapeType.Plane:
-        return DoesCollideBoxPlane(Box, Body2);
+        return CheckCollisionBoxPlane(Box, Body2);
     }
   }
 
-  static bool DoesCollidePlaneAny(RigidBody Plane, RigidBody Body2)
+  static CollisionResult CheckCollisionPlaneAny(RigidBody Plane, RigidBody Body2)
   {
     final switch(Body2.Shape.Type)
     {
       case ShapeType.Sphere:
-        return DoesCollideSpherePlane(Body2, Plane);
+        return CheckCollisionSpherePlane(Body2, Plane);
       case ShapeType.Box:
-        return DoesCollideBoxPlane(Body2, Plane);
+        return CheckCollisionBoxPlane(Body2, Plane);
       case ShapeType.Plane:
-        return DoesCollidePlanePlane(Plane, Body2);
+        return CheckCollisionPlanePlane(Plane, Body2);
     }
   }
 
-  static bool DoesCollideSphereBox(RigidBody Sphere, RigidBody Box)
+  static CollisionResult CheckCollisionSphereBox(RigidBody Sphere, RigidBody Box)
   {
-    return false;
+    return CollisionResult.EmptyResult;
   }
 
-  static bool DoesCollideSpherePlane(RigidBody Sphere, RigidBody Plane)
+  static CollisionResult CheckCollisionSpherePlane(RigidBody Sphere, RigidBody Plane)
   {
     Vector3 SphereWorldPosition = Sphere.Owner.GetWorldTransform.Translation;
-    const float Distance = Abs((SphereWorldPosition | Plane.Shape.Plane.Plane.XYZ) + Plane.Shape.Plane.Plane.W)/Plane.Shape.Plane.Plane.XYZ.Length;
-    return Distance < Sphere.Shape.Sphere.Radius;
+    Vector3 PlaneNormal = Plane.Shape.Plane.Plane.XYZ;
+    const float Distance = ((SphereWorldPosition | PlaneNormal) + Plane.Shape.Plane.Plane.W)/PlaneNormal.Length;
+    CollisionResult Result;
+    Result.DoesCollide = Abs(Distance) < Sphere.Shape.Sphere.Radius;
+    if (Result.DoesCollide)
+    {
+      Result.PenetrationDepth = Sphere.Shape.Sphere.Radius - Distance;
+      Result.CollisionNormal = SphereWorldPosition + PlaneNormal * Result.PenetrationDepth;
+      Result.SurfaceNormal = PlaneNormal;
+    }
+    return Result;
   }
 
-  static bool DoesCollideSphereSphere(RigidBody Sphere, RigidBody Plane)
+  static CollisionResult CheckCollisionSphereSphere(RigidBody Sphere, RigidBody Plane)
   {
-    return false;
+    return CollisionResult.EmptyResult;
   }
 
-  static bool DoesCollideBoxPlane(RigidBody Sphere, RigidBody Plane)
+  static CollisionResult CheckCollisionBoxPlane(RigidBody Sphere, RigidBody Plane)
   {
-    return false;
+    return CollisionResult.EmptyResult;
   }
 
-  static bool DoesCollideBoxBox(RigidBody Sphere, RigidBody Plane)
+  static CollisionResult CheckCollisionBoxBox(RigidBody Sphere, RigidBody Plane)
   {
-    return false;
+    return CollisionResult.EmptyResult;
   }
 
-  static bool DoesCollidePlanePlane(RigidBody Sphere, RigidBody Plane)
+  static CollisionResult CheckCollisionPlanePlane(RigidBody Sphere, RigidBody Plane)
   {
-    return false;
+    return CollisionResult.EmptyResult;
   }
 }

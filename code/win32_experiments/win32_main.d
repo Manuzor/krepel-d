@@ -174,7 +174,7 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
 
       RenderChild.SetMesh(UnitSphere);
       RenderChild.RegisterComponent();
-      Sphere.RootComponent.SetWorldTransform(Transform(Vector3(0,0,0), Quaternion.Identity, Vector3.UnitScaleVector));
+      Sphere.RootComponent.SetWorldTransform(Transform(Vector3(0,0,-1), Quaternion.Identity, Vector3.UnitScaleVector));
       GlobalEngine.Renderer.ActiveCamera = CameraComponent;
 
 
@@ -218,18 +218,20 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
         //
         auto Transform = SpherePhysicsChild.GetLocalTransform();
         Transform.Translation += Vector3.UpVector * User1Input["ObjZ"].AxisValue * GlobalEngine.FrameTimeData.ElapsedTime;
-        SpherePhysicsChild.SetLocalTransform(Transform);
 
         GlobalRunning = GlobalEngine.Update();
-
-        if(CollisionDetection.DoesCollide(SpherePhysicsChild.ComponentBody, PlanePhysicsChild.ComponentBody))
+        auto Result = CollisionDetection.CheckCollision(SpherePhysicsChild.ComponentBody, PlanePhysicsChild.ComponentBody);
+        if(Result.DoesCollide)
         {
+          Transform.Translation += Result.CollisionNormal * Result.PenetrationDepth;
           Log.Info("Collision");
+
         }
         else
         {
           Log.Info("No Collision");
         }
+        SpherePhysicsChild.SetLocalTransform(Transform);
 
 
       }
