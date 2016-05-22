@@ -19,6 +19,7 @@ void Win32ExperimentsTests(ref BuildContext Context)
   Context.OutFileName = "win32_experiments_tests.exe";
   Win32ExperimentsCommon(Context);
   Context.BuildArgs ~= "-unittest";
+  Context.BuildArgs ~= "-L/stack:1500000000";
   if(Compile(Context).CompilerStatus == 0)
   {
     Run(Context);

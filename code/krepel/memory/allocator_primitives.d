@@ -10,6 +10,83 @@ import krepel.algorithm;
 import krepel.math : IsPowerOfTwo, IsEven, IsOdd;
 import Meta = krepel.meta;
 
+struct MemoryVerifier
+{
+  import core.sys.windows.stacktrace;
+
+  mixin CommonMemoryImplementation;
+
+  bool Contains(in void[] SomeRegion){return false;}
+
+  struct AllocationInfo
+  {
+    void[] Region;
+    StackTrace Trace;
+  }
+
+  StaticStackMemory!(50.MiB) ArrayMemory;
+  Array!(AllocationInfo) AllocatedMemory;
+  IAllocator ChildAllocator;
+  this(IAllocator Child)
+  {
+    ChildAllocator = Child;
+    AllocatedMemory.Allocator = ArrayMemory.Wrap;
+  }
+
+  auto Allocate(size_t RequestedBytes, size_t Alignment = 0)
+  {
+    void[] NewMemory = ChildAllocator.Allocate(RequestedBytes, Alignment);
+
+    AllocationInfo Info;
+    Info.Region = NewMemory;
+    Info.Trace = new StackTrace(2, null);
+    foreach(Region; AllocatedMemory)
+    {
+      auto MaxStartAddress = Max(NewMemory.ptr, Region.Region.ptr);
+      auto MinEndAddress = Min(NewMemory.ptr + NewMemory.length, Region.Region.ptr + Region.Region.length);
+      if(Max(0, MinEndAddress - MaxStartAddress) > 0)
+      {
+        Log.Failure("Overlapping detected, between %x-%x and %x-%x of %d bytes\n======StackTrace first allocation:\n%s\n=====StackTrace conflicting allocation:\n%s",
+          NewMemory.ptr,
+          NewMemory.ptr + NewMemory.length,
+          Region.Region.ptr,
+          Region.Region.ptr + Region.Region.length,
+          Max(0, MinEndAddress - MaxStartAddress),
+          Region.Trace.toString(),
+          Info.Trace.toString() );
+        assert(0);
+      }
+    }
+    AllocatedMemory ~= Info;
+    return NewMemory;
+  }
+
+  /// See_Also: krepel.system.Deallocate
+  bool Deallocate(void[] MemoryToDeallocate)
+  {
+    if (MemoryToDeallocate.ptr is null)
+    {
+      return false;
+    }
+    long MemoryIndex = -1;
+    foreach(Index, Info; AllocatedMemory)
+    {
+      if (Info.Region == MemoryToDeallocate)
+      {
+        MemoryIndex = Index;
+        break;
+      }
+    }
+    if(MemoryIndex == -1 )
+    {
+      Log.Failure("Could not find allocation: %x-%x", MemoryToDeallocate.ptr, MemoryToDeallocate.ptr + MemoryToDeallocate.length);
+    }
+
+    assert(MemoryIndex > -1);
+    AllocatedMemory.RemoveAtSwap(MemoryIndex);
+    return ChildAllocator.Deallocate(MemoryToDeallocate);
+  }
+}
 
 /// Forwards all calls to the appropriate krepel.system.* functions.
 struct SystemMemory

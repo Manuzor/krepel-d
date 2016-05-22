@@ -92,9 +92,10 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
   }
   assert(RawMemory);
   auto Heap = HeapMemory((cast(ubyte*)RawMemory)[0 .. MemorySize]);
-  IAllocator MainAllocator = Heap.Wrap();
+  MemoryVerifier Verifier = MemoryVerifier(Heap.Wrap());
+  IAllocator MainAllocator = Verifier.Wrap();
 
-  Log = MainAllocator.New!LogData(MainAllocator);
+  Log = MainAllocator.New!LogData(Heap.Wrap);
   scope(success)
   {
     MainAllocator.Delete(Log);
