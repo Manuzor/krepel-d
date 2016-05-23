@@ -24,22 +24,30 @@ struct MemoryVerifier
     StackTrace Trace;
   }
 
-  StaticStackMemory!(50.MiB) ArrayMemory;
+  SystemMemory InternalDebugMemory;
+  IAllocator InternalDebugAllocator;
   Array!(AllocationInfo) AllocatedMemory;
   IAllocator ChildAllocator;
+
   this(IAllocator Child)
   {
     ChildAllocator = Child;
-    AllocatedMemory.Allocator = ArrayMemory.Wrap;
+    InternalDebugAllocator = InternalDebugMemory.Wrap();
+    AllocatedMemory.Allocator = InternalDebugAllocator;
   }
 
   auto Allocate(size_t RequestedBytes, size_t Alignment = 0)
   {
     void[] NewMemory = ChildAllocator.Allocate(RequestedBytes, Alignment);
 
+    if(NewMemory is null)
+    {
+      return null;
+    }
+
     AllocationInfo Info;
     Info.Region = NewMemory;
-    Info.Trace = new StackTrace(2, null);
+    Info.Trace = InternalDebugAllocator.New!StackTrace(2, null);
     foreach(Region; AllocatedMemory)
     {
       auto MaxStartAddress = Max(NewMemory.ptr, Region.Region.ptr);
@@ -66,14 +74,14 @@ struct MemoryVerifier
   /// See_Also: krepel.system.Deallocate
   bool Deallocate(void[] MemoryToDeallocate)
   {
-    if (MemoryToDeallocate.ptr is null)
+    if (MemoryToDeallocate is null)
     {
       return false;
     }
     long MemoryIndex = -1;
     foreach(Index, Info; AllocatedMemory)
     {
-      if (Info.Region == MemoryToDeallocate)
+      if (Info.Region is MemoryToDeallocate)
       {
         MemoryIndex = Index;
         break;
@@ -85,6 +93,7 @@ struct MemoryVerifier
     }
 
     assert(MemoryIndex > -1);
+    InternalDebugAllocator.Delete(AllocatedMemory[MemoryIndex].Trace);
     AllocatedMemory.RemoveAtSwap(MemoryIndex);
     return ChildAllocator.Deallocate(MemoryToDeallocate);
   }
