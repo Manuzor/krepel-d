@@ -1,10 +1,18 @@
 {
-	"folders":
-	[
-		{
-			"path": "."
-		}
-	],
+  "folders":
+  [
+    {
+      "path": ".",
+      "folder_exclude_patterns": [
+        ".vs",
+      ],
+      "file_exclude_patterns": [
+        "*.sdf",
+        "*.vc.*",
+        "*.fdb",
+      ],
+    }
+  ],
   "build_systems":
   [
     {
