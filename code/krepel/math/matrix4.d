@@ -145,6 +145,8 @@ Quaternion ToQuaternion(Matrix4 M)
     Result.Data[j] = (M.M[Index][j] + M.M[j][Index]) * HalfInvSqrt;
     Result.Data[k] = (M.M[Index][k] + M.M[k][Index]) * HalfInvSqrt;
   }
+
+  Result.SafeNormalize();
   return Result;
 }
 
@@ -736,5 +738,7 @@ unittest
 
 unittest
 {
-  assert(Quaternion.Identity.ToRotationMatrix.ToQuaternion == Quaternion.Identity);
+  auto RotationMatrix = Quaternion.Identity.ToRotationMatrix;
+  auto NewQuat = RotationMatrix.ToQuaternion;
+  assert(krepel.math.quaternion.NearlyEquals(NewQuat, Quaternion.Identity));
 }
