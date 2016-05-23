@@ -35,7 +35,7 @@ class ResourceManager
       if (ResourceLoader.TryGet(FileName[FileExtensionIndex .. $], Loader))
       {
         auto File = OpenFile(Allocator, FileName, FileOpenMode.Read);
-        auto Resource = Loader.Load(Allocator, FileName , File);
+        auto Resource = Loader.Load(Allocator, FileName, File);
         CloseFile(Allocator, File);
         return Resource;
       }

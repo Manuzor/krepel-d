@@ -54,7 +54,9 @@ struct MemoryVerifier
           Max(0, MinEndAddress - MaxStartAddress),
           Region.Trace.toString(),
           Info.Trace.toString() );
-        assert(0);
+          import core.sys.windows.windows;
+          DebugBreak();
+        assert(0, "Overlapping memory detected");
       }
     }
     AllocatedMemory ~= Info;
@@ -261,7 +263,9 @@ struct HeapMemory
 
     // Save padding size.
     *(UserPointer - 1) = cast(ubyte)PaddingSize;
+    assert((UserPointer - *(UserPointer - 1) - BlockOverhead) == cast(void*)Block);
     Block.IsAllocated = true;
+
 
     const RemainingAvailableSize = Block.Size - RequiredBlockSize;
     assert(RemainingAvailableSize.IsEven);
@@ -271,11 +275,10 @@ struct HeapMemory
       // We have enough space left for a new block, so we create one here.
 
       Block.Size = RequiredBlockSize;
-      auto NewBlock = NextBlock(Block);
+      auto NewBlock = cast(BlockData*)(cast(void*)Block + Block.Size);
       NewBlock.Size = RemainingAvailableSize;
       NewBlock.IsAllocated = false;
     }
-
     debug(HeapMemory)
     {
       auto DeadBeefPointer = cast(DeadBeefType*)(cast(void*)Block + Block.Size - DeadBeefType.sizeof);
@@ -292,7 +295,14 @@ struct HeapMemory
 
     ubyte PaddingSize = *cast(ubyte*)(MemoryToDeallocate.ptr - 1);
     auto Block = cast(BlockData*)(MemoryToDeallocate.ptr - PaddingSize - BlockData.sizeof);
+    assert(Block.IsAllocated);
 
+    debug(HeapMemory)
+    {
+      alias DeadBeefType = typeof(0xDeadBeef);
+      auto DeadBeefPointer = cast(DeadBeefType*)(cast(void*)Block + Block.Size - DeadBeefType.sizeof);
+      assert(*DeadBeefPointer == 0xDeadBeef, "Memory corruption detected");
+    }
     assert(IsValidBlockPointer(Block));
 
     assert(Block.Size.IsEven);
@@ -349,6 +359,15 @@ private:
   {
     assert(Block);
     assert(Block.Size != 0);
+    debug(HeapMemory)
+    {
+      if(Block.IsAllocated)
+      {
+        alias DeadBeefType = typeof(0xDeadBeef);
+        auto DeadBeefPointer = cast(DeadBeefType*)(cast(void*)Block + Block.Size - DeadBeefType.sizeof);
+        assert(*DeadBeefPointer == 0xDeadBeef, "Memory corruption detected");
+      }
+    }
     return cast(BlockData*)(cast(void*)Block + Block.Size);
   }
 

@@ -82,7 +82,7 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
   //MessageBoxA(null, "Hello World?", "Hello", MB_OK);
 
   const MemorySize = 6.GiB;
-  auto RawMemory = VirtualAlloc(null,
+  auto RawMemory = VirtualAlloc(cast(void*)0x0000010000000000,
                                 MemorySize,
                                 MEM_RESERVE | MEM_COMMIT,
                                 PAGE_READWRITE);
