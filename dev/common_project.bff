@@ -7,7 +7,7 @@
     .Output="^$(OutDir)\$ProjectName$.exe"
     .OutputDirectory="^$(SolutionDir)build"
     .ProjectBasePath="."
-    .LocalDebuggerWorkingDirectory = "^$(OutDir)"
+    .LocalDebuggerWorkingDirectory = "^$(SolutionDir)build\"
     .LocalDebuggerCommand = "^$(OutDir)$ProjectName$.exe"
   }
   ^Projects + "$ProjectName$"
