@@ -8,9 +8,13 @@ import core.sys.windows.stacktrace;
 
 private:
 
-__gshared bool IsStackTraceInitialized = false;
-__gshared bool IsAsserting = false;
-__gshared void[Meta.ClassInstanceSizeOf!StackTrace] RawStackTraceMemory = void;
+static bool IsAsserting = false;
+
+version(unittest)
+{
+  import core.exception : AssertError;
+  static immutable TheAssertError = new AssertError("Assertion failed.");
+}
 
 void Assert(char[] FileName, uint Line, string Message)
 {
@@ -36,7 +40,8 @@ void Assert(char[] FileName, uint Line, string Message)
     // Something went seriously wrong...
   }
 
-  DebugBreak();
+  version(unittest) throw TheAssertError;
+  else              DebugBreak();
 }
 
 extern(C) void _d_assert(char[] FileName, uint Line)
