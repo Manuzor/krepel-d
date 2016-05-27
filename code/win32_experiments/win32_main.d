@@ -164,7 +164,7 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
       GlobalEngine.RegisterScene(Graph);
       auto CameraObject= Graph.CreateGameObject!HorizonCamera(UString("Camera", MainAllocator));
       auto CameraComponent = cast(CameraComponent)CameraObject.RootComponent;
-      CameraComponent.SetWorldTransform(Transform(Vector3(-3,0,1), Quaternion.Identity, Vector3.UnitScaleVector));
+      CameraComponent.SetWorldTransform(Transform(Vector3(-20,0,3), Quaternion.Identity, Vector3.UnitScaleVector));
       Matrix4 Mat = CameraComponent.GetViewProjectionMatrix().GetTransposed;
 
       auto Plane = Graph.CreateDefaultGameObject(UString("Plane", MainAllocator));
@@ -173,13 +173,14 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
       PlanePhysicsChild.ComponentBody.BodyMovability = Movability.Static;
       PlanePhysicsChild.RegisterComponent();
       auto RenderChild = Plane.ConstructChild!PrimitiveRenderComponent(UString("PlaneRender", MainAllocator), PlanePhysicsChild);
+      Plane.RootComponent.SetWorldTransform(Transform(Vector3.ZeroVector, Quaternion.Identity, Vector3.UnitScaleVector* 100));
       RenderChild.SetMesh(UnitPlane);
       RenderChild.RegisterComponent();
-
 
       auto Sphere = Graph.CreateDefaultGameObject(UString("Sphere", MainAllocator));
       auto SpherePhysicsChild = Sphere.ConstructChild!PhysicsComponent(UString("SpherePhysics", MainAllocator));
       SpherePhysicsChild.ComponentBody.Shape.SetSphere(SphereShapeData(1.0f));
+      SpherePhysicsChild.ComponentBody.Restitution = 0.9f;
       SpherePhysicsChild.RegisterComponent();
       RenderChild = Sphere.ConstructChild!PrimitiveRenderComponent(UString("SphereRender", MainAllocator), SpherePhysicsChild);
       RenderChild.SetWorldTransform(Transform(Vector3(0,0,0), Quaternion.Identity, Vector3.UnitScaleVector));
@@ -191,13 +192,13 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
       Sphere2PhysicsChild.ComponentBody.Shape.SetSphere(SphereShapeData(1.0f));
       Sphere2PhysicsChild.RegisterComponent();
       RenderChild = Sphere2.ConstructChild!PrimitiveRenderComponent(UString("Sphere2Render", MainAllocator), Sphere2PhysicsChild);
-      Sphere2.RootComponent.SetWorldTransform(Transform(Vector3(0.5f,0,0), Quaternion.Identity, Vector3.UnitScaleVector));
+      Sphere2.RootComponent.SetWorldTransform(Transform(Vector3(0.0f,0.5f,5), Quaternion.Identity, Vector3.UnitScaleVector));
 
 
 
       RenderChild.SetMesh(UnitSphere);
       RenderChild.RegisterComponent();
-      Sphere.RootComponent.SetWorldTransform(Transform(Vector3(0,0,-1), Quaternion.Identity, Vector3.UnitScaleVector));
+      Sphere.RootComponent.SetWorldTransform(Transform(Vector3(0,0,3), Quaternion.Identity, Vector3.UnitScaleVector));
       GlobalEngine.Renderer.ActiveCamera = CameraComponent;
 
 

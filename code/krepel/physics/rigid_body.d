@@ -18,6 +18,8 @@ class RigidBody
   PhysicsComponent Owner;
   Movability BodyMovability = Movability.Dynamic;
   IAllocator Allocator;
+  Vector3 Velocity = Vector3.ZeroVector;
+  float Restitution = 1.0f;
 
   this(IAllocator Allocator, PhysicsComponent Owner)
   {

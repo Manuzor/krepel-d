@@ -90,7 +90,7 @@ class CollisionDetection
     if (Result.DoesCollide)
     {
       Result.PenetrationDepth = Sphere.Shape.Sphere.Radius - Distance;
-      Result.CollisionNormal = SphereWorldPosition + PlaneNormal * Result.PenetrationDepth;
+      Result.CollisionNormal = PlaneNormal;
       Result.SurfaceNormal = PlaneNormal;
     }
     return Result;

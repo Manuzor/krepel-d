@@ -12,6 +12,7 @@ class PhysicsSystem : Subsystem
   Array!RigidBody RigidBodies;
   IAllocator Allocator;
   Engine ParentEngine;
+  Vector3 Gravity = Vector3(0,0,-9.81f);
 
   this(IAllocator Allocator)
   {
@@ -44,11 +45,21 @@ class PhysicsSystem : Subsystem
   {
 
   }
-
+  bool WasUp = false;
   override void Tick(TickData Tick)
   {
-    if (ParentEngine.InputContexts[0]["Resolve"].ButtonIsDown)
+    if ((ParentEngine.InputContexts[0]["Resolve"].ButtonIsDown && WasUp) || true)
     {
+      WasUp = false;
+      Vector3 DeltaGravity = Gravity * Tick.ElapsedTime;
+      foreach(Body; RigidBodies)
+      {
+        if (Body.BodyMovability == Movability.Dynamic)
+        {
+          Body.Velocity += DeltaGravity;
+          Body.Owner.MoveWorld(Body.Velocity * Tick.ElapsedTime);
+        }
+      }
       foreach(Index1, Body1; RigidBodies)
       {
         foreach(Index2, Body2; RigidBodies[Index1+1..$])
@@ -71,12 +82,18 @@ class PhysicsSystem : Subsystem
                 Body1ResolvanceFactor = 0.0f;
                 Body2ResolvanceFactor = 1.0f;
               }
+              Body1.Velocity = Body1.Velocity.ReflectVector(ResolvanceVector.SafeNormalizedCopy) * Body1.Restitution;
+              Body2.Velocity = Body2.Velocity.ReflectVector(ResolvanceVector.SafeNormalizedCopy) * Body2.Restitution;
               Body1.Owner.MoveWorld(ResolvanceVector * Body1ResolvanceFactor);
               Body2.Owner.MoveWorld(-ResolvanceVector * Body2ResolvanceFactor);
             }
           }
         }
       }
+    }
+    else if(!ParentEngine.InputContexts[0]["Resolve"].ButtonIsDown)
+    {
+      WasUp = true;
     }
   }
 }
