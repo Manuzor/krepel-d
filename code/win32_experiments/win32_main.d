@@ -183,6 +183,17 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
       SpherePhysicsChild.RegisterComponent();
       RenderChild = Sphere.ConstructChild!PrimitiveRenderComponent(UString("SphereRender", MainAllocator), SpherePhysicsChild);
       RenderChild.SetWorldTransform(Transform(Vector3(0,0,0), Quaternion.Identity, Vector3.UnitScaleVector));
+      RenderChild.SetMesh(UnitSphere);
+      RenderChild.RegisterComponent();
+
+      auto Sphere2 = Graph.CreateDefaultGameObject(UString("Sphere2", MainAllocator));
+      auto Sphere2PhysicsChild = Sphere2.ConstructChild!PhysicsComponent(UString("Sphere2Physics", MainAllocator));
+      Sphere2PhysicsChild.ComponentBody.Shape.SetSphere(SphereShapeData(1.0f));
+      Sphere2PhysicsChild.RegisterComponent();
+      RenderChild = Sphere2.ConstructChild!PrimitiveRenderComponent(UString("Sphere2Render", MainAllocator), Sphere2PhysicsChild);
+      Sphere2.RootComponent.SetWorldTransform(Transform(Vector3(0.5f,0,0), Quaternion.Identity, Vector3.UnitScaleVector));
+
+
 
       RenderChild.SetMesh(UnitSphere);
       RenderChild.RegisterComponent();

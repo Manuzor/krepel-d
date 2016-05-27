@@ -105,8 +105,8 @@ class CollisionDetection
     {
       CollisionResult Result;
       Result.DoesCollide = true;
-      Result.SurfaceNormal = (Sphere1.Owner.GetWorldTransform().Translation -
-        Sphere2.Owner.GetWorldTransform().Translation).SafeNormalizedCopy();
+      Result.SurfaceNormal = (Sphere2.Owner.GetWorldTransform().Translation -
+        Sphere1.Owner.GetWorldTransform().Translation).SafeNormalizedCopy();
       Result.PenetrationDepth = AddedRadi - Sqrt(DistanceSquared);
       Result.CollisionNormal = -Result.SurfaceNormal;
       return Result;
