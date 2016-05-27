@@ -1,10 +1,18 @@
 {
-	"folders":
-	[
-		{
-			"path": "."
-		}
-	],
+  "folders":
+  [
+    {
+      "path": ".",
+      "folder_exclude_patterns": [
+        ".vs",
+      ],
+      "file_exclude_patterns": [
+        "*.sdf",
+        "*.vc.*",
+        "*.fdb",
+      ],
+    }
+  ],
   "build_systems":
   [
     {
@@ -21,7 +29,7 @@
       "variants":
       [
         {
-          "name": "Krepel Tests",
+          "name": "Krepel, Build and Run Tests",
 
           "windows":
           {
@@ -29,7 +37,7 @@
           }
         },
         {
-          "name": "Win32 Experiments",
+          "name": "Win32 Experiments, Build Only",
 
           "windows":
           {
@@ -37,7 +45,15 @@
           }
         },
         {
-          "name": "Vulkan Experiments",
+          "name": "Win32 Experiments, Build and Run Tests",
+
+          "windows":
+          {
+            "cmd": [ "${folder}\\build.bat", "win32_experiments_tests" ]
+          }
+        },
+        {
+          "name": "Vulkan Experiments, Build Only",
 
           "windows":
           {

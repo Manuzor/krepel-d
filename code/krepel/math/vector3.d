@@ -252,6 +252,23 @@ struct Vector3
     }
   }
 
+  Vector3 opOpAssign(string Operator)(Vector3 Rhs)
+  {
+    static if(Operator == "+" || Operator == "-")
+    {
+      auto Result = mixin("Vector3("~
+        "X" ~ Operator ~ "Rhs.X,"
+        "Y" ~ Operator ~ "Rhs.Y,"
+        "Z" ~ Operator ~ "Rhs.Z)");
+      Data[] = Result.Data[];
+      return this;
+    }
+    else
+    {
+      static assert(false, "Operator " ~ Operator ~ " not implemented.");
+    }
+  }
+
   //const (char)[] ToString() const
   //{
   //  // TODO: More memory friendly (no GC) implementation?

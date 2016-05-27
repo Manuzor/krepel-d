@@ -27,7 +27,7 @@ class CameraComponent : SceneComponent
   Matrix4 GetViewMatrix()
   {
     auto Result = GetWorldTransform().ToMatrix();
-    return Result.SafeInvert();
+    return Result.SafeInvert() * Matrix4(Vector3.UpVector, Vector3.ForwardVector, Vector3.RightVector);
   }
 
   Matrix4 GetViewProjectionMatrix()

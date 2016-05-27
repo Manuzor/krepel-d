@@ -247,12 +247,12 @@ SourceData SkipComments(ref SourceData OriginalSource, ref ParsingContext Contex
     auto SourceString = Source[];
     if(Source.IsAtLineComment(Context))
     {
-      auto NumToSkip = SourceString.length - SourceString.Find('\n').length;
+      auto NumToSkip = SourceString.length - SourceString.FindInCharArray('\n').length;
       Source.AdvanceBy(Min(NumToSkip + 1, SourceString.length));
     }
     else if(Source.IsAtMultiLineComment(Context))
     {
-      auto NumToSkip = SourceString.length - SourceString.Find("*/").length;
+      auto NumToSkip = SourceString.length - SourceString.FindInCharArray("*/").length;
       Source.AdvanceBy(Min(NumToSkip + 2, SourceString.length));
     }
     else

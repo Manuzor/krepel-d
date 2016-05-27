@@ -24,8 +24,8 @@ void Tests(ref BuildContext Context)
     //
     // Set runtime linking versions of DirectX
     //
-    BuildArgs ~= "-version=DXGI_RuntimeLinking";
-    BuildArgs ~= "-version=D3D11_RuntimeLinking";
+    //BuildArgs ~= "-version=DXGI_RuntimeLinking";
+    //BuildArgs ~= "-version=D3D11_RuntimeLinking";
     BuildArgs ~= "-version=XInput_RuntimeLinking";
 
     BuildArgs ~= "-unittest";

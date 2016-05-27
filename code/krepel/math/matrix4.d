@@ -93,6 +93,63 @@ float GetDeterminant(Matrix4 Mat)
   return DetA - DetB + DetC - DetD;
 }
 
+Quaternion ToQuaternion(Matrix4 M)
+{
+  Quaternion Result;
+  if (M.GetScaledAxis(EAxisType.X).IsNearlyZero() || M.GetScaledAxis(EAxisType.Y).IsNearlyZero() || M.GetScaledAxis(EAxisType.Z).IsNearlyZero())
+  {
+    Result = Quaternion.Identity;
+    return Result;
+  }
+
+  //const MeReal *const t = (MeReal *) tm;
+  float  HalfInvSqrt;
+
+  // Check diagonal (trace)
+  const float Trace = M.M[0][0] + M.M[1][1] + M.M[2][2];
+
+  if (Trace > 0.0f)
+  {
+    float InvS = InvSqrt(Trace + 1.0f);
+    Result.W = 0.5f * (1.0f / InvS);
+    HalfInvSqrt = 0.5f * InvS;
+
+    Result.X = (M.M[1][2] - M.M[2][1]) * HalfInvSqrt;
+    Result.Y = (M.M[2][0] - M.M[0][2]) * HalfInvSqrt;
+    Result.Z = (M.M[0][1] - M.M[1][0]) * HalfInvSqrt;
+  }
+  else
+  {
+    // diagonal is negative
+    int Index = 0;
+
+    if (M.M[1][1] > M.M[0][0])
+      Index = 1;
+
+    if (M.M[2][2] > M.M[Index][Index])
+      Index = 2;
+
+    const int[3] Next = [ 1, 2, 0 ];
+    const int j = Next[Index];
+    const int k = Next[j];
+
+    HalfInvSqrt = M.M[Index][Index] - M.M[j][j] - M.M[k][k] + 1.0f;
+
+    float InvS = InvSqrt(HalfInvSqrt);
+
+    Result.Data[Index] = 0.5f * (1.0f / InvS);
+
+    HalfInvSqrt = 0.5f * InvS;
+
+    Result.Data[3] = (M.M[j][k] - M.M[k][j]) * HalfInvSqrt;
+    Result.Data[j] = (M.M[Index][j] + M.M[j][Index]) * HalfInvSqrt;
+    Result.Data[k] = (M.M[Index][k] + M.M[k][Index]) * HalfInvSqrt;
+  }
+
+  Result.SafeNormalize();
+  return Result;
+}
+
 /// Calculcates the inversion of the matrix, if possible, otherwise return the identity matrix.
 /// Additionally checks for Zero scale matrix and returns an Identity Matrix in this case as well.
 Matrix4 SafeInvert(Matrix4 Mat)
@@ -289,13 +346,13 @@ Vector3 GetUnitAxis(Matrix4 Mat, EAxisType Type)
   return GetScaledAxis(Mat, Type).SafeNormalizedCopy();
 }
 
-/// Create a Right-Hand-Side Perspective Matrix
+/// Create a Left-Hand-Side Perspective Matrix
 Matrix4 CreatePerspectiveMatrix(float HalfFOVY, float Width, float Height, float NearPlane, float FarPlane)
 {
   return Matrix4([
     [1.0f/ Tan(HalfFOVY), 0.0f, 0.0f, 0.0f],
     [0.0f, Width/ Tan(HalfFOVY)/Height, 0.0f, 0.0f],
-    [0.0f, 0.0f, -1 * ((NearPlane == FarPlane) ? 1.0f : FarPlane / (FarPlane - NearPlane)), -1.0f],
+    [0.0f, 0.0f, ((NearPlane == FarPlane) ? 1.0f : FarPlane / (FarPlane - NearPlane)), 1.0f],
     [0.0f, 0.0f, -NearPlane * ((NearPlane == FarPlane) ? 1.0f : FarPlane / (FarPlane - NearPlane)), 0.0f],
     ]);
 }
@@ -312,7 +369,13 @@ Matrix4 CreateOrthogonalMatrix(float Width, float Height, float ZScale, float ZO
 
 Matrix4 CreateLookAtMatrix(Vector3 Target, Vector3 Position, Vector3 Up = Vector3.UpVector)
 {
-  auto Direction = (Target - Position).SafeNormalizedCopy;
+  auto Direction = (Target - Position);
+  return CreateLookDirMatrix(Direction, Position, Up);
+}
+
+Matrix4 CreateLookDirMatrix(Vector3 Direction, Vector3 Position, Vector3 Up = Vector3.UpVector)
+{
+  Direction = Direction.SafeNormalizedCopy;
   Vector3 Right = Direction ^ Up.SafeNormalizedCopy;
   Up = Right ^ Direction;
   return Matrix4(
@@ -365,7 +428,7 @@ Matrix4 CreateMatrixFromScaleRotateTranslate(Vector3 Position, Quaternion Rotati
 
 /// 4x4 Matrix accessed first by row, then by column
 /// Translation part is stored in the lower row (M[3][0] -> M[3][2])
-align(16) struct Matrix4
+struct Matrix4
 {
   @safe:
 
@@ -671,4 +734,11 @@ unittest
   Result = Mat.TransformPosition(Vector3.ForwardVector);
 
   assert(Result == Vector3.ZeroVector);
+}
+
+unittest
+{
+  auto RotationMatrix = Quaternion.Identity.ToRotationMatrix;
+  auto NewQuat = RotationMatrix.ToQuaternion;
+  assert(krepel.math.quaternion.NearlyEquals(NewQuat, Quaternion.Identity));
 }

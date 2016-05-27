@@ -12,10 +12,10 @@
     .ProjectInputPaths = "code"
     .ProjectBasePath = ".\"
     .ProjectFileTypes = {.DFileType}
-    .Output="..\build\$ProjectName$.exe"
+    .Output="^$(SolutionDir)\$ProjectName$.exe"
     .OutputDirectory="..\build"
     .ProjectAllowedFileExtensions = {".d"}
-    .LocalDebuggerWorkingDirectory = "$(OutDir)"
+    .LocalDebuggerWorkingDirectory = "^$(OutDir)"
 
   }
 

@@ -46,10 +46,10 @@ struct Array(T)
 
   this(this)
   {
-    if(Allocator && Count)
+    if(Allocator && Capacity)
     {
-      auto NewMemory = Allocator.NewUnconstructedArray!ElementType(Count);
-      NewMemory[] = Data[];
+      auto NewMemory = Allocator.NewUnconstructedArray!ElementType(Capacity);
+      NewMemory[0..Count] = Data[0..Count];
       Data = NewMemory;
       AvailableMemory = Data;
     }

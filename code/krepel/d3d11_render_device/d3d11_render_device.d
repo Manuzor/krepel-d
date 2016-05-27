@@ -30,24 +30,37 @@ class DxState
   IDXGISwapChain SwapChain;
   IDXGISwapChain1 SwapChain1;
   ID3D11RenderTargetView RenderTargetView;
+  debug ID3D11Debug DebugDevice;
 
   ~this()
   {
-    if(Device) ReleaseAndNullify(Device);
-    if(Device1) ReleaseAndNullify(Device1);
-    if(ImmediateContext) ReleaseAndNullify(ImmediateContext);
-    if(ImmediateContext1) ReleaseAndNullify(ImmediateContext1);
-    if(SwapChain) ReleaseAndNullify(SwapChain);
-    if(SwapChain1) ReleaseAndNullify(SwapChain1);
-    if(RenderTargetView) ReleaseAndNullify(RenderTargetView);
+
+    ReleaseAndNullify(Device);
+    ReleaseAndNullify(Device1);
+    ReleaseAndNullify(ImmediateContext);
+    ReleaseAndNullify(ImmediateContext1);
+    ReleaseAndNullify(SwapChain);
+    ReleaseAndNullify(SwapChain1);
+    ReleaseAndNullify(RenderTargetView);
+    debug
+    {
+      if(DebugDevice)
+      {
+        //DebugDevice.ReportLiveDeviceObjects(D3D11_RLDO_DETAIL);
+        ReleaseAndNullify(DebugDevice);
+      }
+    }
   }
 }
 
 void ReleaseAndNullify(Type)(Type Instance)
   if(__traits(compiles, { Instance.Release(); Instance = null; }))
 {
-  Instance.Release();
-  Instance = null;
+  if(Instance)
+  {
+    Instance.Release();
+    Instance = null;
+  }
 }
 
 class DxShaderCode
@@ -62,13 +75,37 @@ class DxShaderCode
   }
 }
 
-class DxConstantBuffer : IConstantBuffer
+class DxDepthStencilBuffer : IRenderDepthStencilBuffer
+{
+  ID3D11Texture2D Texture;
+  ID3D11DepthStencilState State;
+  ID3D11DepthStencilView View;
+
+  ~this()
+  {
+    ReleaseAndNullify(Texture);
+    ReleaseAndNullify(State);
+    ReleaseAndNullify(View);
+  }
+}
+
+class DxConstantBuffer : IRenderConstantBuffer
 {
   ID3D11Buffer ConstantBuffer;
 
   ~this()
   {
     ReleaseAndNullify(ConstantBuffer);
+  }
+}
+
+class DxRasterizerState : IRenderRasterizerState
+{
+  ID3D11RasterizerState RasterizerState;
+
+  ~this()
+  {
+    ReleaseAndNullify(RasterizerState);
   }
 }
 
@@ -129,6 +166,11 @@ class DxInputLayout : IRenderInputLayout
   }
 }
 
+D3D11_COMPARISON_FUNC ConvertComparisonEnum(RenderDepthCompareMethod Method)
+{
+  return Method + 1;
+}
+
 class DxInputLayoutDescription : IRenderInputLayoutDescription
 {
   Array!D3D11_INPUT_ELEMENT_DESC InputDescription;
@@ -180,7 +222,7 @@ class DxInputLayoutDescription : IRenderInputLayoutDescription
     SourceDescriptions.Clear();
     SourceDescriptions.PushBack(Desc[]);
     InputDescription.Clear();
-    foreach(SourceDescription; SourceDescriptions)
+    foreach(Index, SourceDescription; SourceDescriptions)
     {
       auto Format = GetFormatFromDescription(SourceDescription);
       if (Format == DXGI_FORMAT_UNKNOWN)
@@ -195,7 +237,7 @@ class DxInputLayoutDescription : IRenderInputLayoutDescription
             SemanticIndex,
             Format,
             0,
-            0,
+            D3D11_APPEND_ALIGNED_ELEMENT,
             PerVertexData ? D3D11_INPUT_PER_VERTEX_DATA : D3D11_INPUT_PER_INSTANCE_DATA,
             0
           )
@@ -246,7 +288,9 @@ ARC!DxShaderCode LoadAndCompileDxShader(DxState State, WString FileName, UString
 class D3D11RenderDevice : IRenderDevice
 {
   DxState DeviceState;
+  DxDepthStencilBuffer DepthStencilBuffer;
   IAllocator Allocator;
+  RenderDeviceCreationDescription Description;
   this(IAllocator Allocator)
   {
     this.Allocator = Allocator;
@@ -255,7 +299,12 @@ class D3D11RenderDevice : IRenderDevice
     DeviceState.Allocator = Allocator;
   }
 
-  IShader LoadVertexShader(WString FileName, UString EntryPoint, UString Profile)
+  ~this()
+  {
+    Allocator.Delete(DeviceState);
+  }
+
+  override IShader LoadVertexShader(WString FileName, UString EntryPoint, UString Profile)
   {
     auto Code = DeviceState.LoadAndCompileDxShader(FileName, EntryPoint, Profile);
     DxVertexShader Shader = Allocator.New!DxVertexShader();
@@ -274,7 +323,7 @@ class D3D11RenderDevice : IRenderDevice
     return Shader;
   }
 
-  IRenderInputLayoutDescription CreateInputLayoutDescription(RenderInputLayoutDescription[] Descriptions)
+  override IRenderInputLayoutDescription CreateInputLayoutDescription(RenderInputLayoutDescription[] Descriptions)
   {
     DxInputLayoutDescription Description = Allocator.New!DxInputLayoutDescription(Allocator);
     Description.SetDescription(Descriptions);
@@ -282,12 +331,12 @@ class D3D11RenderDevice : IRenderDevice
     return Description;
   }
 
-  void DestroyInputLayoutDescription(IRenderInputLayoutDescription Description)
+  override void DestroyInputLayoutDescription(IRenderInputLayoutDescription Description)
   {
     Allocator.Delete(cast(DxInputLayoutDescription)Description);
   }
 
-  IRenderInputLayout CreateVertexShaderInputLayoutFromDescription(IShader Shader, IRenderInputLayoutDescription Description)
+  override IRenderInputLayout CreateVertexShaderInputLayoutFromDescription(IShader Shader, IRenderInputLayoutDescription Description)
   {
     DxInputLayout VertexShaderLayout = Allocator.New!DxInputLayout();
     DxInputLayoutDescription InputDescription = cast(DxInputLayoutDescription)Description;
@@ -305,12 +354,141 @@ class D3D11RenderDevice : IRenderDevice
     return VertexShaderLayout;
   }
 
-  void DestroyInputLayout(IRenderInputLayout Layout)
+  override void DestroyInputLayout(IRenderInputLayout Layout)
   {
     Allocator.Delete(cast(DxInputLayout)Layout);
   }
 
-  IShader LoadPixelShader(WString FileName, UString EntryPoint, UString Profile)
+  override IRenderRasterizerState CreateRasterizerState(RenderRasterizerDescription Description)
+  {
+    auto State = Allocator.New!DxRasterizerState();
+    D3D11_RASTERIZER_DESC Desc;
+    Desc.FillMode = Description.RasterizationMethod == RenderRasterizationMethod.Solid ? D3D11_FILL_SOLID : D3D11_FILL_WIREFRAME;
+    final switch (Description.CullMode)
+    {
+      case RenderCullMode.None:
+        Desc.CullMode = D3D11_CULL_NONE;
+        break;
+      case RenderCullMode.Back:
+        Desc.CullMode = D3D11_CULL_BACK;
+        break;
+      case RenderCullMode.Front:
+        Desc.CullMode = D3D11_CULL_FRONT;
+        break;
+    }
+    Desc.FrontCounterClockwise = Description.WindingOrder == RenderWindingOrder.CounterClockWise;
+    Desc.DepthClipEnable = Description.EnableDepthCulling;
+    if(FAILED(DeviceState.Device.CreateRasterizerState(&Desc, &State.RasterizerState)))
+    {
+      Log.Failure("Failed to create rasterizer state");
+      Allocator.Delete(State);
+      return null;
+    }
+    return State;
+  }
+
+  override IRenderDepthStencilBuffer CreateDepthStencilBuffer(RenderDepthStencilDescription Description)
+  {
+    DxDepthStencilBuffer Buffer = Allocator.New!DxDepthStencilBuffer();
+
+    RECT ClientRect;
+    GetClientRect(DeviceState.WindowHandle, &ClientRect);
+    auto WindowWidth = ClientRect.right - ClientRect.left;
+    auto WindowHeight = ClientRect.bottom - ClientRect.top;
+    D3D11_TEXTURE2D_DESC DescDepth;
+    with(DescDepth)
+    {
+      Width = WindowWidth;
+      Height = WindowHeight;
+      MipLevels = 1;
+      ArraySize = 1;
+      Format = DXGI_FORMAT_D32_FLOAT_S8X24_UINT;
+      SampleDesc.Count = 1;
+      SampleDesc.Quality = 0;
+      Usage = D3D11_USAGE_DEFAULT;
+      BindFlags = D3D11_BIND_DEPTH_STENCIL;
+      CPUAccessFlags = 0;
+      MiscFlags = 0;
+    }
+    if(FAILED(DeviceState.Device.CreateTexture2D( &DescDepth, NULL, &Buffer.Texture )))
+    {
+      Allocator.Delete(Buffer);
+      Log.Failure("Failed to create depth stencil texture");
+      return null;
+    }
+
+    D3D11_DEPTH_STENCIL_DESC DepthStencilDescription;
+    with(DepthStencilDescription)
+    {
+      // Depth test parameters
+      DepthEnable = Description.EnableDepthTest;
+      DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
+      DepthFunc = ConvertComparisonEnum(Description.DepthCompareFunc);
+
+      // Stencil test parameters
+      StencilEnable = Description.EnableStencil;
+      StencilReadMask = 0xFF;
+      StencilWriteMask = 0xFF;
+
+      // Stencil operations if pixel is front-facing
+      FrontFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
+      FrontFace.StencilDepthFailOp = D3D11_STENCIL_OP_INCR;
+      FrontFace.StencilPassOp = D3D11_STENCIL_OP_KEEP;
+      FrontFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
+
+      // Stencil operations if pixel is back-facing
+      BackFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
+      BackFace.StencilDepthFailOp = D3D11_STENCIL_OP_DECR;
+      BackFace.StencilPassOp = D3D11_STENCIL_OP_KEEP;
+      BackFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
+    }
+    // Create depth stencil state
+    if(FAILED(DeviceState.Device.CreateDepthStencilState(&DepthStencilDescription, &Buffer.State)))
+    {
+      Allocator.Delete(Buffer);
+      Log.Failure("Failed to create depth stencil state");
+      return null;
+    }
+
+    D3D11_DEPTH_STENCIL_VIEW_DESC ViewDescription;
+    with(ViewDescription)
+    {
+      Format = DXGI_FORMAT_D32_FLOAT_S8X24_UINT;
+      ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
+      Texture2D.MipSlice = 0;
+    }
+    // Create the depth stencil view
+    if(FAILED(DeviceState.Device.CreateDepthStencilView( Buffer.Texture, // Depth stencil texture
+                                      &ViewDescription, // Depth stencil desc
+                                      &Buffer.View )))  // [out] Depth stencil view
+    {
+      Allocator.Delete(Buffer);
+      Log.Failure("Failed to create depth stencil view");
+      return null;
+    }
+
+    return Buffer;
+
+  }
+
+  override void ReleaseDepthStencilBuffer(IRenderDepthStencilBuffer Buffer)
+  {
+    auto DepthStencilBuffer = cast(DxDepthStencilBuffer)Buffer;
+    Allocator.Delete(DepthStencilBuffer);
+  }
+
+  override void ReleaseRasterizerState(IRenderRasterizerState State)
+  {
+    auto DxState = cast(DxRasterizerState)State;
+    Allocator.Delete(DxState);
+  }
+  override void SetRasterizerState(IRenderRasterizerState State)
+  {
+    auto DxState = cast(DxRasterizerState)State;
+    DeviceState.ImmediateContext.RSSetState(DxState.RasterizerState);
+  }
+
+  override IShader LoadPixelShader(WString FileName, UString EntryPoint, UString Profile)
   {
     auto Code = DeviceState.LoadAndCompileDxShader(FileName, EntryPoint, Profile);
     DxPixelShader Shader = Allocator.New!DxPixelShader();
@@ -329,13 +507,13 @@ class D3D11RenderDevice : IRenderDevice
     return Shader;
   }
 
-  IConstantBuffer CreateConstantBuffer(void[] Data)
+  override IRenderConstantBuffer CreateConstantBuffer(void[] Data)
   {
     auto ConstantBuffer = Allocator.New!DxConstantBuffer();
     D3D11_BUFFER_DESC Description;
     with(Description)
     {
-      ByteWidth = cast(uint)Data.length;
+      ByteWidth = cast(uint)AlignedSize(Data.length, 16);
       Usage = D3D11_USAGE_DYNAMIC;
       BindFlags = D3D11_BIND_CONSTANT_BUFFER;
       CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
@@ -356,19 +534,29 @@ class D3D11RenderDevice : IRenderDevice
     return ConstantBuffer;
   }
 
-  void SetVertexShaderConstantBuffer(IConstantBuffer Buffer, uint Index)
+  override void SetVertexShaderConstantBuffer(IRenderConstantBuffer Buffer, uint Index)
   {
     DxConstantBuffer ConstantBuffer = cast(DxConstantBuffer)Buffer;
     DeviceState.ImmediateContext.VSSetConstantBuffers(Index, 1, &ConstantBuffer.ConstantBuffer);
   }
 
-  void ReleaseConstantBuffer(IConstantBuffer Buffer)
+  override void UpdateConstantBuffer(IRenderConstantBuffer ConstantBuffer, void[] Data, uint Offset = 0)
+  {
+    auto DxBuffer = cast(DxConstantBuffer)ConstantBuffer;
+
+    D3D11_MAPPED_SUBRESOURCE MappedResource;
+    DeviceState.ImmediateContext.Map(DxBuffer.ConstantBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &MappedResource);
+    MappedResource.pData[Offset .. Data.length + Offset] = Data[];
+    DeviceState.ImmediateContext.Unmap(DxBuffer.ConstantBuffer, 0);
+  }
+
+  override void ReleaseConstantBuffer(IRenderConstantBuffer Buffer)
   {
     DxConstantBuffer ConstantBuffer = cast(DxConstantBuffer)Buffer;
     Allocator.Delete(ConstantBuffer);
   }
 
-  IRenderMesh CreateRenderMesh(SubMesh Mesh)
+  override IRenderMesh CreateRenderMesh(SubMesh Mesh)
   {
     DxRenderMesh RenderMesh = Allocator.New!DxRenderMesh();
 
@@ -408,13 +596,13 @@ class D3D11RenderDevice : IRenderDevice
     return RenderMesh;
   }
 
-  void ReleaseRenderMesh(IRenderMesh Mesh)
+  override void ReleaseRenderMesh(IRenderMesh Mesh)
   {
     DxRenderMesh DxMesh = cast(DxRenderMesh)Mesh;
     Allocator.Delete(DxMesh);
   }
 
-  void SetMesh(IRenderMesh Mesh)
+  override void SetMesh(IRenderMesh Mesh)
   {
     DxRenderMesh DxMesh = cast(DxRenderMesh)Mesh;
 
@@ -425,7 +613,7 @@ class D3D11RenderDevice : IRenderDevice
     DeviceState.ImmediateContext.IASetIndexBuffer(DxMesh.IndexBuffer, DxMesh.IndexFormat, DxMesh.IndexOffset);
   }
 
-  void ReleaseVertexShader(IShader Shader)
+  override void ReleaseVertexShader(IShader Shader)
   {
     if (Shader)
     {
@@ -433,7 +621,7 @@ class D3D11RenderDevice : IRenderDevice
     }
   }
 
-  void ReleasePixelShader(IShader Shader)
+  override void ReleasePixelShader(IShader Shader)
   {
     if (Shader)
     {
@@ -441,43 +629,45 @@ class D3D11RenderDevice : IRenderDevice
     }
   }
 
-  void SetInputLayout(IRenderInputLayout Layout)
+  override void SetInputLayout(IRenderInputLayout Layout)
   {
     DeviceState.ImmediateContext.IASetInputLayout((cast(DxInputLayout)Layout).InputLayout);
   }
 
-  void ClearRenderTarget(Vector4 Color)
+  override void ClearRenderTarget(Vector4 Color)
   {
     DeviceState.ImmediateContext.ClearRenderTargetView(DeviceState.RenderTargetView, Color.Data);
+    DeviceState.ImmediateContext.ClearDepthStencilView(DepthStencilBuffer.View, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
   }
 
-  void SetVertexShader(IShader Shader)
+  override void SetVertexShader(IShader Shader)
   {
     DeviceState.ImmediateContext.VSSetShader((cast(DxVertexShader)Shader).VertexShader, null, 0);
   }
 
-  void SetPixelShader(IShader Shader)
+  override void SetPixelShader(IShader Shader)
   {
     DeviceState.ImmediateContext.PSSetShader((cast(DxPixelShader)Shader).PixelShader, null, 0);
   }
 
-  void Draw(uint VertexCount, uint Offset = 0)
+  override void Draw(uint VertexCount, uint Offset = 0)
   {
     DeviceState.ImmediateContext.Draw(VertexCount, Offset);
   }
 
-  void DrawIndexed(uint VertexCount, uint IndexOffset = 0, uint VertexOffset = 0)
+  override void DrawIndexed(uint VertexCount, uint IndexOffset = 0, uint VertexOffset = 0)
   {
     DeviceState.ImmediateContext.DrawIndexed(VertexCount, IndexOffset, VertexOffset);
   }
 
-  void Present()
+  override void Present()
   {
-    DeviceState.SwapChain.Present(0, 0);
+    DeviceState.SwapChain.Present(Description.EnableVSync ? 1 : 0, 0);
   }
 
-  bool InitDevice()
+  override bool InitDevice(RenderDeviceCreationDescription Description)
   {
+    this.Description = Description;
     version(DXGI_RuntimeLinking)  LoadDXGI();
 
     LoadD3D11();
@@ -530,6 +720,11 @@ class D3D11RenderDevice : IRenderDevice
 
     if(FAILED(Result))
       return false;
+
+    debug
+    {
+      DeviceState.Device.QueryInterface(uuidof!ID3D11Debug, cast(void**)&DeviceState.DebugDevice);
+    }
 
     // Obtain DXGI factory from device.
     IDXGIFactory1 DXGIFactory;
@@ -619,7 +814,10 @@ class D3D11RenderDevice : IRenderDevice
 
     if(FAILED(Result)) return false;
 
-    DeviceState.ImmediateContext.OMSetRenderTargets(1, &DeviceState.RenderTargetView, null);
+    DepthStencilBuffer = cast(DxDepthStencilBuffer)CreateDepthStencilBuffer(Description.DepthStencilDescription);
+
+    DeviceState.ImmediateContext.OMSetDepthStencilState(DepthStencilBuffer.State, 1);
+    DeviceState.ImmediateContext.OMSetRenderTargets(1, &DeviceState.RenderTargetView, DepthStencilBuffer.View);
 
     D3D11_VIEWPORT ViewPort;
     with(ViewPort)
