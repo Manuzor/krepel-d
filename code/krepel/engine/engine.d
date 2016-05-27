@@ -91,6 +91,7 @@ class Engine
 
     Physics = EngineAllocator.New!PhysicsSystem(EngineAllocator);
     Subsystems ~= Physics;
+    Physics.Initialize(this);
 
     with(FrameTimeData)
     {
@@ -159,11 +160,22 @@ class Engine
     EngineAllocator.Delete(GameFramework);
     EngineAllocator.Delete(Physics);
     EngineAllocator.Delete(Renderer);
-    EngineAllocator.Delete(RenderDevice);
+    version(D3D11_RuntimeLinking)
+    {
+      import krepel.d3d11_render_device;
+      EngineAllocator.Delete(cast(D3D11RenderDevice)RenderDevice);
+    }
     EngineAllocator.Delete(Resources);
     foreach(Input ; InputContexts)
     {
-      EngineAllocator.Delete(Input);
+      version(Windows)
+      {
+        EngineAllocator.Delete(cast(Win32InputContext)Input);
+      }
+      else
+      {
+        EngineAllocator.Delete(Input);
+      }
     }
   }
 
