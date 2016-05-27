@@ -531,7 +531,9 @@ export extern(C)
 
   void krDestroyImageLoader_DDS(IAllocator Allocator, IImageLoader Loader)
   {
-    Allocator.Delete(Loader);
+    auto RealLoader = cast(DDSImageLoader)Loader;
+    assert(RealLoader, "Invalid given type.");
+    Allocator.Delete(RealLoader);
   }
   static assert(is(typeof(&krDestroyImageLoader_DDS) : PFN_DestroyLoader));
 }
