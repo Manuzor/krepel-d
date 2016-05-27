@@ -170,6 +170,7 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
       auto Plane = Graph.CreateDefaultGameObject(UString("Plane", MainAllocator));
       auto PlanePhysicsChild = Plane.ConstructChild!PhysicsComponent(UString("PlanePhysics", MainAllocator));
       PlanePhysicsChild.ComponentBody.Shape.SetPlane(PlaneShapeData(Vector4(0,0,1,0)));
+      PlanePhysicsChild.ComponentBody.BodyMovability = Movability.Static;
       PlanePhysicsChild.RegisterComponent();
       auto RenderChild = Plane.ConstructChild!PrimitiveRenderComponent(UString("PlaneRender", MainAllocator), PlanePhysicsChild);
       RenderChild.SetMesh(UnitPlane);
@@ -229,20 +230,9 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
         //
         auto Transform = SpherePhysicsChild.GetLocalTransform();
         Transform.Translation += Vector3.UpVector * User1Input["ObjZ"].AxisValue * GlobalEngine.FrameTimeData.ElapsedTime;
+        SpherePhysicsChild.SetLocalTransform(Transform);
 
         GlobalRunning = GlobalEngine.Update();
-        auto Result = CollisionDetection.CheckCollision(SpherePhysicsChild.ComponentBody, PlanePhysicsChild.ComponentBody);
-        if(Result.DoesCollide)
-        {
-          Transform.Translation += Result.CollisionNormal * Result.PenetrationDepth;
-          Log.Info("Collision");
-
-        }
-        else
-        {
-          Log.Info("No Collision");
-        }
-        SpherePhysicsChild.SetLocalTransform(Transform);
 
 
       }

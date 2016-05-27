@@ -4,6 +4,7 @@ import krepel;
 import krepel.scene;
 import krepel.physics.rigid_body;
 import krepel.physics.shape;
+import krepel.engine;
 
 class PhysicsComponent : SceneComponent
 {
@@ -16,6 +17,11 @@ class PhysicsComponent : SceneComponent
   ~this()
   {
     Allocator.Delete(ComponentBody);
+  }
+
+  override void RegisterComponent()
+  {
+    GlobalEngine.Physics.RegisterRigidBody(ComponentBody);
   }
 
   RigidBody ComponentBody;

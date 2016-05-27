@@ -48,7 +48,9 @@ class CollisionDetection
     final switch(Body2.Shape.Type)
     {
       case ShapeType.Sphere:
-        return CheckCollisionSphereBox(Body2, Box);
+        auto Result = CheckCollisionSphereBox(Body2, Box);
+        FixupCollisionDirection(Result);
+        return Result;
       case ShapeType.Box:
         return CheckCollisionBoxBox(Box, Body2);
       case ShapeType.Plane:
@@ -61,9 +63,13 @@ class CollisionDetection
     final switch(Body2.Shape.Type)
     {
       case ShapeType.Sphere:
-        return CheckCollisionSpherePlane(Body2, Plane);
+        auto Result = CheckCollisionSpherePlane(Body2, Plane);
+        FixupCollisionDirection(Result);
+        return Result;
       case ShapeType.Box:
-        return CheckCollisionBoxPlane(Body2, Plane);
+        auto Result = CheckCollisionBoxPlane(Body2, Plane);
+        FixupCollisionDirection(Result);
+        return Result;
       case ShapeType.Plane:
         return CheckCollisionPlanePlane(Plane, Body2);
     }
@@ -90,23 +96,44 @@ class CollisionDetection
     return Result;
   }
 
-  static CollisionResult CheckCollisionSphereSphere(RigidBody Sphere, RigidBody Plane)
+  static CollisionResult CheckCollisionSphereSphere(RigidBody Sphere1, RigidBody Sphere2)
+  {
+    float DistanceSquared = (Sphere1.Owner.GetWorldTransform().Translation -
+      Sphere2.Owner.GetWorldTransform().Translation).LengthSquared;
+    float AddedRadi = Sphere1.Shape.Sphere.Radius + Sphere2.Shape.Sphere.Radius;
+    if (DistanceSquared < AddedRadi * AddedRadi)
+    {
+      CollisionResult Result;
+      Result.DoesCollide = true;
+      Result.SurfaceNormal = (Sphere1.Owner.GetWorldTransform().Translation -
+        Sphere2.Owner.GetWorldTransform().Translation).SafeNormalizedCopy();
+      Result.PenetrationDepth = AddedRadi - Sqrt(DistanceSquared);
+      Result.CollisionNormal = -Result.SurfaceNormal;
+      return Result;
+    }
+    return CollisionResult.EmptyResult;
+  }
+
+  static CollisionResult CheckCollisionBoxPlane(RigidBody Box, RigidBody Plane)
   {
     return CollisionResult.EmptyResult;
   }
 
-  static CollisionResult CheckCollisionBoxPlane(RigidBody Sphere, RigidBody Plane)
+  static CollisionResult CheckCollisionBoxBox(RigidBody Box1, RigidBody Box2)
   {
     return CollisionResult.EmptyResult;
   }
 
-  static CollisionResult CheckCollisionBoxBox(RigidBody Sphere, RigidBody Plane)
+  static CollisionResult CheckCollisionPlanePlane(RigidBody Plane1, RigidBody Plane2)
   {
     return CollisionResult.EmptyResult;
   }
 
-  static CollisionResult CheckCollisionPlanePlane(RigidBody Sphere, RigidBody Plane)
+  static void FixupCollisionDirection(ref CollisionResult Result)
   {
-    return CollisionResult.EmptyResult;
+    if (Result.DoesCollide)
+    {
+      Result.CollisionNormal = -Result.CollisionNormal;
+    }
   }
 }
