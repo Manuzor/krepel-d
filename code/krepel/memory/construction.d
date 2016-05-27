@@ -31,7 +31,7 @@ Type* Construct(Type, ArgTypes...)(Type* Pointer, auto ref ArgTypes Args)
 }
 
 void Destruct(Type)(Type Instance)
-  if(Meta.IsClassOrInterface!Type)
+  if(is(Type == class))
 {
   // TODO(Manu): assert(Instance)?
   if(Instance)
@@ -39,6 +39,13 @@ void Destruct(Type)(Type Instance)
     static if(Meta.HasMember!(Type, "__dtor")) Instance.__dtor();
     //BlitInitialData((&Instance)[0 .. 1]);
   }
+}
+
+version(none) // Note(Manu): Not implemented.
+void Destruct(Type)(Type Instance)
+  if(is(Type == interface))
+{
+  // TODO(Manu): Implement destruction off interfaces?!
 }
 
 void Destruct(Type)(Type* Instance)
