@@ -1532,10 +1532,10 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
 
         assert(!UseStagingBuffer, "Not implemented.");
 
-        auto CreateLoader = cast(PFN_CreateLoader)GetProcAddress(null, "krCreateImageLoader_DDS");
+        auto CreateLoader = cast(PFN_CreateLoader)GetProcAddress(GetModuleHandle(null), "krCreateImageLoader_DDS");
         assert(CreateLoader !is null);
 
-        auto DestroyLoader = cast(PFN_DestroyLoader)GetProcAddress(null, "krDestroyImageLoader_DDS");
+        auto DestroyLoader = cast(PFN_DestroyLoader)GetProcAddress(GetModuleHandle(null), "krDestroyImageLoader_DDS");
         assert(DestroyLoader !is null);
 
         IImageLoader Loader = CreateLoader(.Allocator);
