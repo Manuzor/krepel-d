@@ -112,6 +112,22 @@ interface IRenderConstantBuffer
 
 }
 
+interface IRenderVertexBuffer
+{
+
+}
+
+interface IRenderIndexBuffer
+{
+
+}
+
+enum RenderPrimitiveTopology
+{
+  LineList,
+  TriangleList
+}
+
 interface IRenderDevice
 {
   bool InitDevice(RenderDeviceCreationDescription Description);
@@ -141,6 +157,16 @@ interface IRenderDevice
   void UpdateConstantBuffer(IRenderConstantBuffer ConstantBuffer, void[] Data, uint Offset = 0);
   void SetVertexShaderConstantBuffer(IRenderConstantBuffer Buffer, uint Index);
   void ReleaseConstantBuffer(IRenderConstantBuffer Buffer);
+
+  IRenderVertexBuffer CreateVertexBuffer(Vertex[] Vertices);
+  void SetVertexBuffer(IRenderVertexBuffer Buffer);
+  void ReleaseVertexBuffer(IRenderVertexBuffer Buffer);
+
+  IRenderIndexBuffer CreateIndexBuffer(uint[] Indices);
+  void SetIndexBuffer(IRenderIndexBuffer Buffer);
+  void ReleaseIndexBuffer(IRenderIndexBuffer Buffer);
+
+  void SetPrimitiveTopology(RenderPrimitiveTopology Topology);
 
   IRenderMesh CreateRenderMesh(SubMesh Mesh);
   void SetMesh(IRenderMesh Mesh);

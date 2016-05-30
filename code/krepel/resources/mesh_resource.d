@@ -1,10 +1,8 @@
 module krepel.resources.resource_mesh;
 
+import krepel;
 import krepel.resources;
-import krepel.container;
-import krepel.math;
-import krepel.memory;
-import krepel.string;
+import krepel.color;
 
 struct Vertex
 {
@@ -13,18 +11,19 @@ struct Vertex
   Vector3 Normal;
   Vector4 Tangent;
   Vector3 Binormal;
+  ColorLinear VertexColor;
 }
 
 class SubMesh
 {
   Array!Vertex Vertices;
-  Array!int Indices;
+  Array!uint Indices;
   UString Name;
 
   this(IAllocator Allocator)
   {
     Vertices = Array!Vertex(Allocator);
-    Indices = Array!int(Allocator);
+    Indices = Array!uint(Allocator);
   }
 }
 
