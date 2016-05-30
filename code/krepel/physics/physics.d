@@ -84,8 +84,14 @@ class PhysicsSystem : Subsystem
               }
               Body1.Velocity = Body1.Velocity.ReflectVector(ResolvanceVector.SafeNormalizedCopy) * Body1.Restitution;
               Body2.Velocity = Body2.Velocity.ReflectVector(ResolvanceVector.SafeNormalizedCopy) * Body2.Restitution;
-              Body1.Owner.MoveWorld(ResolvanceVector * Body1ResolvanceFactor);
-              Body2.Owner.MoveWorld(-ResolvanceVector * Body2ResolvanceFactor);
+              if (Body1.Movable)
+              {
+                Body1.Owner.MoveWorld(ResolvanceVector * Body1ResolvanceFactor);
+              }
+              if (Body2.Movable)
+              {
+                Body2.Owner.MoveWorld(-ResolvanceVector * Body2ResolvanceFactor);
+              }
             }
           }
         }

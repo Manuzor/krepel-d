@@ -18,6 +18,11 @@ class RigidBody
   PhysicsComponent Owner;
   Movability BodyMovability = Movability.Dynamic;
   IAllocator Allocator;
+
+  @property bool Movable() const
+  {
+    return BodyMovability == Movability.Dynamic;
+  }
   Vector3 Velocity = Vector3.ZeroVector;
   float Restitution = 1.0f;
 

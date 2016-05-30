@@ -181,11 +181,13 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
       auto SpherePhysicsChild = Sphere.ConstructChild!PhysicsComponent(UString("SpherePhysics", MainAllocator));
       SpherePhysicsChild.ComponentBody.Shape.SetSphere(SphereShapeData(1.0f));
       SpherePhysicsChild.ComponentBody.Restitution = 0.9f;
+      SpherePhysicsChild.ComponentBody.Mass = 1.0f;
       SpherePhysicsChild.RegisterComponent();
       RenderChild = Sphere.ConstructChild!PrimitiveRenderComponent(UString("SphereRender", MainAllocator), SpherePhysicsChild);
       RenderChild.SetWorldTransform(Transform(Vector3(0,0,0), Quaternion.Identity, Vector3.UnitScaleVector));
       RenderChild.SetMesh(UnitSphere);
       RenderChild.RegisterComponent();
+      Sphere.RootComponent.SetWorldTransform(Transform(Vector3(0,0,1.0f), Quaternion.Identity, Vector3.UnitScaleVector));
 
       auto Sphere2 = Graph.CreateDefaultGameObject(UString("Sphere2", MainAllocator));
       auto Sphere2PhysicsChild = Sphere2.ConstructChild!PhysicsComponent(UString("Sphere2Physics", MainAllocator));
@@ -198,7 +200,6 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
 
       RenderChild.SetMesh(UnitSphere);
       RenderChild.RegisterComponent();
-      Sphere.RootComponent.SetWorldTransform(Transform(Vector3(0,0,3), Quaternion.Identity, Vector3.UnitScaleVector));
       GlobalEngine.Renderer.ActiveCamera = CameraComponent;
 
 
