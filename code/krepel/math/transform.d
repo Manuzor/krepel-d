@@ -80,6 +80,13 @@ struct Transform
   Quaternion Rotation;
   Vector3 Scale;
 
+  this(Vector3 Translation, Quaternion Rotation = Quaternion.Identity, Vector3 Scale = Vector3.UnitScaleVector)
+  {
+    this.Translation = Translation;
+    this.Rotation = Rotation;
+    this.Scale = Scale;
+  }
+
   Matrix4 ToMatrix()
   {
     return CreateMatrixFromScaleRotateTranslate(Translation, Rotation, Scale);

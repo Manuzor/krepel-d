@@ -62,5 +62,5 @@ class SceneComponent : GameComponent
 
 
 private:
-  Transform Transformation;
+  Transform Transformation = Transform();
 }
