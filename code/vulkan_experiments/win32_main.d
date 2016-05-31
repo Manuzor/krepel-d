@@ -12,6 +12,7 @@ import krepel.image;
 import krepel.input;
 import krepel.color;
 import krepel.scene;
+import krepel.chrono;
 
 import std.string : toStringz, fromStringz;
 
@@ -317,32 +318,62 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
     Win32RegisterAllMouseSlots(SystemInput);
     Win32RegisterAllXInputSlots(SystemInput);
 
-    SystemInput.RegisterInputSlot(InputType.Button, "Quit");
-    SystemInput.AddSlotMapping(Keyboard.Escape, "Quit");
-    SystemInput.AddSlotMapping(XInput.Start, "Quit");
-
-    SystemInput.RegisterInputSlot(InputType.Axis, "Depth");
-    SystemInput.AddSlotMapping(Keyboard.Up,   "Depth", -1);
-    SystemInput.AddSlotMapping(Keyboard.Down, "Depth",  1);
-    with(SystemInput.ValueProperties.GetOrCreate("Depth"))
+    // Input mappings.
     {
-      Sensitivity = 0.005f;
+      SystemInput.RegisterInputSlot(InputType.Button, "Quit");
+      SystemInput.AddSlotMapping(Keyboard.Escape, "Quit");
+      SystemInput.AddSlotMapping(XInput.Start, "Quit");
+
+      SystemInput.RegisterInputSlot(InputType.Axis, "Depth");
+      SystemInput.AddSlotMapping(Keyboard.Up,   "Depth", -1);
+      SystemInput.AddSlotMapping(Keyboard.Down, "Depth",  1);
+      with(SystemInput.ValueProperties.GetOrCreate("Depth"))
+      {
+        Sensitivity = 0.005f;
+      }
+
+      // Adjust mouse sensitivity.
+      foreach(SlotProperty; Only(SystemInput.ValueProperties.GetOrCreate(Mouse.XDelta),
+                                 SystemInput.ValueProperties.GetOrCreate(Mouse.YDelta)))
+      {
+          SlotProperty.Sensitivity = 1.0f;
+      }
+
+      SystemInput.RegisterInputSlot(InputType.Axis, "Camera.MoveForward");
+      SystemInput.AddSlotMapping(XInput.YLeftStick, "Camera.MoveForward");
+      SystemInput.AddSlotMapping(Keyboard.W, "Camera.MoveForward",  1);
+      SystemInput.AddSlotMapping(Keyboard.S, "Camera.MoveForward", -1);
+
+      SystemInput.RegisterInputSlot(InputType.Axis, "Camera.MoveRight");
+      SystemInput.AddSlotMapping(XInput.XLeftStick, "Camera.MoveRight");
+      SystemInput.AddSlotMapping(Keyboard.D, "Camera.MoveRight",  1);
+      SystemInput.AddSlotMapping(Keyboard.A, "Camera.MoveRight", -1);
+
+      SystemInput.RegisterInputSlot(InputType.Axis, "Camera.MoveUp");
+      SystemInput.AddSlotMapping(XInput.LeftTrigger,  "Camera.MoveUp",  1);
+      SystemInput.AddSlotMapping(XInput.RightTrigger, "Camera.MoveUp", -1);
+      SystemInput.AddSlotMapping(Keyboard.E, "Camera.MoveUp",  1);
+      SystemInput.AddSlotMapping(Keyboard.Q, "Camera.MoveUp", -1);
+      with(SystemInput.ValueProperties.GetOrCreate("Camera.MoveUp"))
+      {
+        Exponent = 3.0f;
+      }
+
+      SystemInput.RegisterInputSlot(InputType.Axis, "Camera.RelYaw");
+      SystemInput.AddSlotMapping(XInput.XRightStick, "Camera.RelYaw");
+
+      SystemInput.RegisterInputSlot(InputType.Axis, "Camera.RelPitch");
+      SystemInput.AddSlotMapping(XInput.YRightStick, "Camera.RelPitch");
+
+      // TODO(Manu): Enable the slot mappings below once action input works
+      // properly (issue #33).
+
+      SystemInput.RegisterInputSlot(InputType.Axis, "Camera.AbsYaw");
+      //SystemInput.AddSlotMapping(Mouse.YDelta, "Camera.AbsYaw");
+
+      SystemInput.RegisterInputSlot(InputType.Axis, "Camera.AbsPitch");
+      //SystemInput.AddSlotMapping(Mouse.XDelta, "Camera.AbsPitch");
     }
-
-    SystemInput.RegisterInputSlot(InputType.Axis, "CameraX");
-    SystemInput.AddSlotMapping(XInput.XLeftStick, "CameraX", -1);
-    SystemInput.AddSlotMapping(Keyboard.A, "CameraX", -1);
-    SystemInput.AddSlotMapping(Keyboard.D, "CameraX",  1);
-
-    SystemInput.RegisterInputSlot(InputType.Axis, "CameraY");
-    SystemInput.AddSlotMapping(XInput.YLeftStick, "CameraY");
-    SystemInput.AddSlotMapping(Keyboard.W, "CameraY",  1);
-    SystemInput.AddSlotMapping(Keyboard.S, "CameraY", -1);
-
-    SystemInput.RegisterInputSlot(InputType.Axis, "CameraZ");
-    SystemInput.AddSlotMapping(XInput.YRightStick, "CameraZ", -1);
-    SystemInput.AddSlotMapping(Keyboard.Q, "CameraZ", -1);
-    SystemInput.AddSlotMapping(Keyboard.E, "CameraZ",  1);
 
     //
     // Vulkan
@@ -375,29 +406,45 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
 
       if(Vulkan.IsPrepared)
       {
-        //
-        // Build a scene
-        //
-        auto Scene = .Allocator.New!SceneGraph(.Allocator);
-        auto CameraObject = Scene.CreateDefaultGameObject(UString("Camera", .Allocator));
-        auto Camera = CameraObject.ConstructChild!CameraComponent(UString("CameraComponent", .Allocator), CameraObject.RootComponent);
+        CameraData Camera;
         with(Camera)
         {
           FieldOfView = PI / 2;
           Width = 1280;
           Height = 720;
           NearPlane = 0.1f;
-          FarPlane = 10.0f;
-          SetWorldTransform(Transform(Vector3(0, 0, 2), Quaternion.Identity, Vector3.UnitScaleVector));
+          FarPlane = 1000.0f;
         }
+        // Note(Manu): Setting the rotation here is pointless, since it gets
+        // overwritten in the main loop by a combination of CameraYaw and
+        // CameraPitch.
+        auto CameraTransform = Transform(Vector3(2, 0, 0),
+                                         Quaternion.Identity,
+                                         Vector3.UnitScaleVector);
+
+        // TODO(Manu): Investigate why the camera needs to have this weird initial transform.
+        float CameraYaw   = PI;
+        float CameraPitch = 0;
 
         //
         // Main Loop
         //
         Vulkan.DepthStencilValue = 1.0f;
         .Running = true;
+
+        Timer FrameTimer;
+        FrameTimer.Start();
+        float DeltaSeconds = 0.016f; // Assume 16 milliseconds for the first frame.
+
         while(.Running)
         {
+          scope(exit)
+          {
+            FrameTimer.Stop();
+            DeltaSeconds = cast(float)FrameTimer.TotalElapsedSeconds();
+            FrameTimer.Start();
+          }
+
           SystemInput.BeginInputFrame();
           {
             Win32MessagePump();
@@ -413,16 +460,25 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
 
           Vulkan.DepthStencilValue = Clamp(Vulkan.DepthStencilValue + SystemInput["Depth"].AxisValue, 0.8f, 1.0f);
 
-          Transform CameraWorldTransform = Camera.GetWorldTransform();
-          with(CameraWorldTransform)
-          {
-            Translation.X += SystemInput["CameraX"].AxisValue * (1 / 30.0f);
-            Translation.Y += SystemInput["CameraY"].AxisValue * (1 / 30.0f);
-            Translation.Z += SystemInput["CameraZ"].AxisValue * (1 / 30.0f);
-          }
-          Camera.SetWorldTransform(CameraWorldTransform);
+          enum CameraMovementSpeed = 7.0f; // Units per second.
+          enum CameraRotationSpeed = 3.0f; // Units per second.
 
-          const ViewProjectionMatrix = Camera.GetViewProjectionMatrix();
+          //
+          // Update camera transform.
+          //
+          CameraTransform.Translation += CameraMovementSpeed * DeltaSeconds * (
+            CameraTransform.ForwardVector * SystemInput["Camera.MoveForward"].AxisValue +
+            CameraTransform.RightVector   * SystemInput["Camera.MoveRight"  ].AxisValue +
+            CameraTransform.UpVector      * SystemInput["Camera.MoveUp"     ].AxisValue
+          );
+
+          CameraYaw   += (SystemInput["Camera.RelYaw"  ].AxisValue * CameraRotationSpeed * DeltaSeconds) + SystemInput["Camera.AbsYaw"  ].AxisValue;
+          CameraPitch += (SystemInput["Camera.RelPitch"].AxisValue * CameraRotationSpeed * DeltaSeconds) + SystemInput["Camera.AbsPitch"].AxisValue;
+          CameraTransform.Rotation = Quaternion(Vector3.UpVector, CameraYaw) *
+                                     Quaternion(Vector3.RightVector, CameraPitch);
+          CameraTransform.Rotation.SafeNormalize();
+
+          const ViewProjectionMatrix = ViewProjectionMatrix(Camera, CameraTransform);
 
           //
           // Upload shader globals
@@ -440,7 +496,7 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
             RawData[0 .. ViewProjectionMatrix.sizeof] = (cast(void*)&ViewProjectionMatrix)[0 .. ViewProjectionMatrix.sizeof];
           }
 
-          //Log.Info("Camera world transform: %s", CameraWorldTransform);
+          //Log.Info("Camera world transform: %s", CameraTransform);
 
           if(.IsResizeRequested)
           {
@@ -553,6 +609,31 @@ LRESULT Win32MainWindowCallback(HWND WindowHandle, UINT Message,
   }
 
   return Result;
+}
+
+struct CameraData
+{
+  float FieldOfView;
+  float Width;
+  float Height;
+  float NearPlane;
+  float FarPlane;
+}
+
+@property
+Matrix4 ProjectionMatrix(CameraData Camera)
+{
+  with(Camera)
+    return CreatePerspectiveMatrix(FieldOfView/2.0f, Width, Height, NearPlane, FarPlane);
+}
+
+@property
+Matrix4 ViewProjectionMatrix(CameraData Camera, Transform WorldTransformation)
+{
+  const WorldMatrix = WorldTransformation.ToMatrix();
+  const InvWorldMatrix = WorldMatrix.SafeInvert();
+  const ViewMatrix = InvWorldMatrix * Matrix4(Vector3.UpVector, Vector3.ForwardVector, Vector3.RightVector);
+  return ViewMatrix * Camera.ProjectionMatrix;
 }
 
 struct VulkanPhysicalDeviceData
@@ -1628,10 +1709,10 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
         Vector2 TexCoord;
       }
 
-      auto TopLeft     = VertexData(Vector3(-1.0f, -1.0f,  0.25f), Vector2(0.0f, 0.0f));
-      auto TopRight    = VertexData(Vector3( 1.0f, -1.0f,  0.25f), Vector2(1.0f, 0.0f));
-      auto BottomLeft  = VertexData(Vector3(-1.0f,  1.0f,  1.00f), Vector2(0.0f, 1.0f));
-      auto BottomRight = VertexData(Vector3( 1.0f,  1.0f,  1.00f), Vector2(1.0f, 1.0f));
+      auto TopLeft     = VertexData(Vector3(0.0f, -1.0f,  1.0f) * 1.0f, Vector2(0.0f, 0.0f));
+      auto TopRight    = VertexData(Vector3(0.0f,  1.0f,  1.0f) * 1.0f, Vector2(1.0f, 0.0f));
+      auto BottomLeft  = VertexData(Vector3(0.0f, -1.0f, -1.0f) * 1.0f, Vector2(0.0f, 1.0f));
+      auto BottomRight = VertexData(Vector3(0.0f,  1.0f, -1.0f) * 1.0f, Vector2(1.0f, 1.0f));
       VertexData[4] Geometry =
       [
         /*0*/TopLeft,    /*1*/TopRight,
@@ -1641,8 +1722,8 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
 
       uint[6] IndexData =
       [
-        0, 3, 1,
         0, 2, 3,
+        3, 1, 0,
       ];
       Indices.NumIndices = IndexData.length;
 
@@ -1963,6 +2044,7 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
         depthClampEnable = VK_FALSE;
         rasterizerDiscardEnable = VK_FALSE;
         depthBiasEnable = VK_FALSE;
+        lineWidth = 1.0f;
       }
 
       VkPipelineMultisampleStateCreateInfo MultisampleState;
@@ -2361,12 +2443,31 @@ void Draw(VulkanData Vulkan)
 
     // Assume the command buffer has been run on current_buffer before so
     // we need to set the image layout back to COLOR_ATTACHMENT_OPTIMAL
-    SetImageLayout(Vulkan.Device, Vulkan.CommandPool, Vulkan.SetupCommand,
-                   SwapchainBuffers[CurrentBufferIndex].Image,
-                   VK_IMAGE_ASPECT_COLOR_BIT,
-                   VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-                   VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                   0);
+    {
+      EnsureSetupCommandIsReady(Vulkan.Device, Vulkan.CommandPool, Vulkan.SetupCommand);
+
+      VkImageMemoryBarrier ImageMemoryBarrier;
+      with(ImageMemoryBarrier)
+      {
+        srcAccessMask = 0;
+        dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        oldLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+        newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        image = SwapchainBuffers[CurrentBufferIndex].Image;
+        subresourceRange = VkImageSubresourceRange(VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1);
+      }
+
+      VkPipelineStageFlags SourceStages = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+      VkPipelineStageFlags DestinationStages = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+
+      vkCmdPipelineBarrier(Vulkan.SetupCommand,             // commandBuffer
+                           SourceStages, DestinationStages, // dstStageMask, srcStageMask
+                           0,                               // dependencyFlags
+                           0, null,                         // memoryBarrierCount, pMemoryBarriers
+                           0, null,                         // bufferMemoryBarrierCount, pBufferMemoryBarriers
+                           1, &ImageMemoryBarrier);         // imageMemoryBarrierCount, pImageMemoryBarriers
+    }
+
     FlushSetupCommand(Vulkan.Device, Vulkan.Queue, Vulkan.CommandPool, Vulkan.SetupCommand);
 
     // Wait for the present complete semaphore to be signaled to ensure
