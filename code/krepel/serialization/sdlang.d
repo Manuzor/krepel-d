@@ -1,30 +1,108 @@
 module krepel.serialization.sdlang;
 
 import krepel;
-import krepel.string : UString;
-import krepel.container;
-import krepel.memory.reference_counting;
 import krepel.system;
 
 /// Class that contains and manages the (parsed) content of an SDL document.
 class SDLDocument
 {
-  /// Support reference counting.
-  RefCountPayloadData RefCountPayload;
+  mixin RefCountSupport;
 
-  /// The allocator used to allocate data for this document.
-  ///
-  /// Note: It's best to use a stack allocator, since the document itself will
-  /// never deallocate individual nodes.
-  IAllocator Allocator;
+  /// The flat list of all nodes that you should never have to access directly.
+  Array!SDLNode AllNodes;
 
   /// The first node in the SDL document.
-  SDLNode* FirstChild;
+  ///
+  /// Note: In XML this would be the first child of the root node.
+  SDLNodeRef _FirstChild;
+  @property SDLNodePtr FirstChild() { return SDLNodePtr(_FirstChild); }
+
+  @property IAllocator Allocator() { return this.AllNodes.Allocator; }
 
   this(IAllocator Allocator)
   {
-    this.Allocator = Allocator;
+    this.AllNodes.Allocator = Allocator;
   }
+
+  ~this()
+  {
+    foreach(Index, ref Node; this.AllNodes)
+    {
+      if(Node.RefCount > 0)
+      {
+        Log.Failure("SDL Node %d has a ref count of %d while destroying the document.", Index, Node.RefCount);
+      }
+    }
+  }
+
+  SDLNodeRef CreateNode()
+  {
+    typeof(return) Result = void;
+    Result._Document = this;
+    Result._Index = this.AllNodes.Count;
+    auto Node = &this.AllNodes.Expand();
+    Node.Document = this;
+    Node.Values.Allocator = this.Allocator;
+    Node.Attributes.Allocator = this.Allocator;
+    return Result;
+  }
+}
+
+/// A reference to an SDL node.
+///
+/// Does not do reference counting and is only supposed to be used internally.
+struct SDLNodeRef
+{
+  SDLDocument _Document;
+  size_t _Index;
+
+  @property
+  {
+    ref inout(SDLNode) _Node() inout
+    {
+      return _Document.AllNodes[_Index];
+    }
+
+    bool IsValid() const
+    {
+      return this._Document !is null;
+    }
+  }
+
+  alias _Node this;
+}
+
+
+/// A pointer to an SDL node.
+///
+/// This pointer automatically does reference counting on the referenced node.
+struct SDLNodePtr
+{
+  SDLNodeRef _NodeRef;
+
+  this(SDLNodeRef NodeRef)
+  {
+    this._NodeRef = NodeRef;
+    if(this._NodeRef.IsValid)
+      this.RefCount++;
+  }
+
+  this(this)
+  {
+    if(this._NodeRef.IsValid)
+      this.RefCount++;
+  }
+
+  ~this()
+  {
+    if(this._NodeRef.IsValid)
+    {
+      assert(this.RefCount > 0, "Invalid ref count.");
+      this.RefCount--;
+    }
+  }
+
+  alias _NodeRef this;
 }
 
 struct SDLNode
@@ -32,17 +110,26 @@ struct SDLNode
   /// The document this node belongs to.
   SDLDocument Document;
 
+  /// The number of external references to this node.
+  size_t RefCount;
+
   //
   // Siblings
   //
-  SDLNode* Next;
-  SDLNode* Previous;
+  SDLNodeRef _Next;
+  @property SDLNodePtr Next() { return SDLNodePtr(_Next); }
+
+  SDLNodeRef _Previous;
+  @property SDLNodePtr Previous() { return SDLNodePtr(_Previous); }
 
   //
   // Parents and Children
   //
-  SDLNode* Parent;
-  SDLNode* FirstChild;
+  SDLNodeRef _Parent;
+  @property SDLNodePtr Parent() { return SDLNodePtr(_Parent); }
+
+  SDLNodeRef _FirstChild;
+  @property SDLNodePtr FirstChild() { return SDLNodePtr(_FirstChild); }
 
   //
   // Node properties
@@ -52,15 +139,6 @@ struct SDLNode
   SDLIdentifier Name;
   Array!SDLLiteral Values;
   Array!SDLAttribute Attributes;
-
-  this(SDLDocument Document)
-  {
-    assert(Document);
-
-    this.Document = Document;
-    this.Values.Allocator = Document.Allocator;
-    this.Attributes.Allocator = Document.Allocator;
-  }
 }
 
 struct SDLIdentifier
@@ -83,7 +161,6 @@ struct SDLLiteral
   {
     string String;
     string NumberSource;
-    double Real;
     bool   Boolean;
     void*  Binary;   // TODO(Manu)
   }
@@ -402,15 +479,16 @@ bool ParseDocumentFromString(SDLDocument Document, string SourceString, ref Pars
 
 bool ParseDocumentFromSource(SDLDocument Document, ref SourceData Source, ref ParsingContext Context)
 {
-  return Document.ParseInnerNodes(Source, Context, &Document.FirstChild);
+  return Document.ParseInnerNodes(Source, Context, &Document._FirstChild);
 }
 
 bool ParseInnerNodes(SDLDocument Document, ref SourceData Source, ref ParsingContext Context,
-                     SDLNode** FirstNode)
+                     SDLNodeRef* FirstNode)
 {
   if(FirstNode is null)
   {
-    debug assert(false, "Need first node to parse inner nodes.");
+    Log.Failure("Need first node to parse inner nodes.");
+    debug assert(false);
     else return false;
   }
 
@@ -419,12 +497,12 @@ bool ParseInnerNodes(SDLDocument Document, ref SourceData Source, ref ParsingCon
     return false;
   }
 
-  SDLNode* PreviousNode = *FirstNode;
-  SDLNode* NewNode;
+  SDLNodeRef PreviousNode = *FirstNode;
+  SDLNodeRef NewNode;
   while(Document.ParseNode(Source, Context, &NewNode))
   {
-    PreviousNode.Next = NewNode;
-    NewNode.Previous = PreviousNode;
+    PreviousNode._Next = NewNode;
+    NewNode._Previous = PreviousNode;
     PreviousNode = NewNode;
   }
   return true;
@@ -504,15 +582,14 @@ bool ParseIdentifier(SDLDocument Document,
 bool ParseNode(SDLDocument Document,
                ref SourceData OriginalSource,
                ref ParsingContext Context,
-               SDLNode** OutNode)
+               SDLNodeRef* OutNode)
 {
   auto Source = OriginalSource;
   Source.SkipWhiteSpaceAndComments(Context, Yes.ConsumeNewLine);
 
   if(Source.empty) return false;
 
-  auto Node = Document.Allocator.New!SDLNode(Document);
-  scope(exit) if(Node) Document.Allocator.Delete(Node);
+  auto Node = Document.CreateNode();
 
   //
   // Parse Node Name and Namespace
@@ -605,17 +682,15 @@ bool ParseNode(SDLDocument Document,
                           OriginalSource.StartLocation.Column);
     }
 
-    if(!Document.ParseInnerNodes(ChildSource, Context, &Node.FirstChild))
+    if(!Document.ParseInnerNodes(ChildSource, Context, &Node._FirstChild))
     {
       // TODO(Manu): What to do if there are no inner nodes? Ignore it?
     }
   }
 
   if(OutNode)
-  {
     *OutNode = Node;
-    Node = null;
-  }
+
   OriginalSource = Source;
   return true;
 }
@@ -963,7 +1038,7 @@ unittest
   Document.ParseDocumentFromString(`foo "bar"`, Context);
 
   auto Node = Document.FirstChild;
-  assert(Node);
+  assert(Node.IsValid);
   assert(Node.Name == "foo");
   assert(Node.Values.length == 1);
   assert(Node.Values[0].Type == SDLLiteralType.String);
@@ -984,7 +1059,7 @@ unittest
   Document.ParseDocumentFromString(`foo "bar" baz="qux"`, Context);
 
   auto Node = Document.FirstChild;
-  assert(Node);
+  assert(Node.IsValid);
   assert(Node.Name == "foo");
   assert(Node.Values.length == 1);
   assert(Node.Values[0].Type == SDLLiteralType.String);
@@ -1013,14 +1088,14 @@ unittest
   Document.ParseDocumentFromString(Source, Context);
 
   auto Node = Document.FirstChild;
-  assert(Node);
+  assert(Node.IsValid);
   assert(Node.Name == "foo");
   assert(Node.Values.length == 1);
   assert(Node.Values[0].Type == SDLLiteralType.String);
   assert(Node.Values[0].String == "bar", Node.Values[0].String);
 
   Node = Node.Next;
-  assert(Node);
+  assert(Node.IsValid);
   assert(Node.Name == "baz");
   assert(Node.Values.length == 1);
   assert(Node.Values[0].Type == SDLLiteralType.String);
@@ -1048,21 +1123,21 @@ unittest
   Document.ParseDocumentFromString(Source, Context);
 
   auto Node = Document.FirstChild;
-  assert(Node);
+  assert(Node.IsValid);
   assert(Node.Name == "foo");
   assert(Node.Values.length == 1);
   assert(Node.Values[0].Type == SDLLiteralType.String);
   assert(Node.Values[0].String == "bar", Node.Values[0].String);
 
   Node = Node.FirstChild;
-  assert(Node);
+  assert(Node.IsValid);
   assert(Node.Name == "baz");
   assert(Node.Values.length == 1);
   assert(Node.Values[0].Type == SDLLiteralType.String);
   assert(Node.Values[0].String == "qux", Node.Values[0].String);
 
   Node = Node.FirstChild;
-  assert(Node);
+  assert(Node.IsValid);
   assert(Node.Name == "baaz");
   assert(Node.Values.length == 1);
   assert(Node.Values[0].Type == SDLLiteralType.String);
@@ -1082,7 +1157,7 @@ unittest
   Document.ParseDocumentFromString(`answer 42`, Context);
 
   auto Node = Document.FirstChild;
-  assert(Node);
+  assert(Node.IsValid);
   assert(Node.Name == "answer");
   assert(Node.Values.length == 1);
   assert(Node.Values[0].Type == SDLLiteralType.Number);
@@ -1092,6 +1167,186 @@ unittest
 /// Parse document from file.
 unittest
 {
+  void TheActualTest(SDLDocument Document)
+  {
+    // foo "bar"
+    auto Node = Document.FirstChild;
+    assert(Node.IsValid);
+    assert(Node.Name == "foo");
+    assert(Node.Values.Count == 1);
+    assert(cast(string)Node.Values[0] == "bar");
+    assert(Node.Attributes.IsEmpty);
+
+    // foo "bar" "baz"
+    Node = Node.Next;
+    assert(Node.IsValid);
+    assert(Node.Name == "foo");
+    assert(Node.Values.Count == 2);
+    assert(cast(string)Node.Values[0] == "bar");
+    assert(cast(string)Node.Values[1] == "baz");
+    assert(Node.Attributes.IsEmpty);
+
+    // foo "bar" baz="qux"
+    Node = Node.Next;
+    assert(Node.IsValid);
+    assert(Node.Name == "foo");
+    assert(Node.Values.Count == 1);
+    assert(cast(string)Node.Values[0] == "bar");
+    assert(Node.Attributes.Count == 1);
+    assert(Node.Attributes[0].Name == "baz");
+    assert(cast(string)Node.Attributes[0].Value == "qux");
+
+    // foo "bar" baz="qux" baaz="quux"
+    Node = Node.Next;
+    assert(Node.IsValid);
+    assert(Node.Name == "foo");
+    assert(Node.Values.Count == 1);
+    assert(cast(string)Node.Values[0] == "bar");
+    assert(Node.Attributes.Count == 2);
+    assert(Node.Attributes[0].Name == "baz");
+    assert(cast(string)Node.Attributes[0].Value == "qux");
+    assert(Node.Attributes[1].Name == "baaz");
+    assert(cast(string)Node.Attributes[1].Value == "quux");
+
+    // foo bar="baz"
+    Node = Node.Next;
+    assert(Node.IsValid);
+    assert(Node.Name == "foo");
+    assert(Node.Values.IsEmpty);
+    assert(Node.Attributes.Count == 1);
+    assert(Node.Attributes[0].Name == "bar");
+    assert(cast(string)Node.Attributes[0].Value == "baz");
+
+    // "foo"
+    Node = Node.Next;
+    assert(Node.IsValid);
+    assert(Node.IsAnonymous);
+    assert(Node.Name == "content");
+    assert(Node.Values.Count == 1);
+    assert(cast(string)Node.Values[0] == "foo");
+    assert(Node.Attributes.IsEmpty == 1);
+
+    // "foo" bar="baz"
+    Node = Node.Next;
+    assert(Node.IsValid);
+    assert(Node.IsAnonymous);
+    assert(Node.Name == "content");
+    assert(Node.Values.Count == 1);
+    assert(cast(string)Node.Values[0] == "foo");
+    assert(Node.Attributes.Count == 1);
+    assert(Node.Attributes[0].Name == "bar");
+    assert(cast(string)Node.Attributes[0].Value == "baz");
+
+    /*
+      foo {
+        baz "baz"
+      }
+    */
+    Node = Node.Next;
+    assert(Node.IsValid);
+    assert(Node.Name == "foo");
+    assert(Node.Values.IsEmpty);
+    assert(Node.Attributes.IsEmpty);
+    {
+      auto Child = Node.FirstChild;
+      assert(Child.IsValid);
+      assert(Child.Name == "bar");
+      assert(Child.Values.Count == 1);
+      assert(cast(string)Child.Values[0] == "baz");
+      assert(Child.Attributes.IsEmpty == 1);
+    }
+
+    /+
+      foo /*
+      This is
+      what you get
+      when you support multi-line comments
+      in a whitespace sensitive language. */ bar="baz"
+    +/
+    Node = Node.Next;
+    assert(Node.IsValid);
+    assert(Node.Name == "foo");
+    assert(Node.Values.IsEmpty);
+    assert(Node.Attributes.length == 1);
+    assert(Node.Attributes[0].Name == "answer");
+    assert(cast(int)Node.Attributes[0].Value == 42);
+
+    /+
+      foo 1 2 "bar" baz="qux" {
+        inner { 0 1 2 }
+        "anon value"
+        "anon value with nesting" {
+          another-foo "bar" 1337 -92 "baz" qux="baaz"
+        }
+      }
+    +/
+    Node = Node.Next;
+    assert(Node.IsValid);
+    assert(Node.Name == "foo");
+    assert(Node.Values.Count == 3);
+    assert(cast(int)Node.Values[0] == 1);
+    assert(cast(int)Node.Values[1] == 2);
+    assert(cast(string)Node.Values[2] == "bar");
+    assert(Node.Attributes.Count == 1);
+    assert(Node.Attributes[0].Name == "baz");
+    assert(cast(string)Node.Attributes[0].Value == "qux");
+    {
+      // inner { 0 1 2 }
+      auto Child = Node.FirstChild;
+      assert(Child.IsValid);
+      assert(Child.Name == "inner");
+      assert(Child.Values.Count == 0);
+      assert(Child.Attributes.Count == 0);
+      {
+        auto ChildsChild = Child.FirstChild;
+        assert(ChildsChild.IsValid);
+        assert(ChildsChild.IsAnonymous);
+        assert(ChildsChild.Values.Count == 3);
+        assert(cast(int)ChildsChild.Values[0] == 0);
+        assert(cast(int)ChildsChild.Values[1] == 1);
+        assert(cast(int)ChildsChild.Values[2] == 2);
+        assert(ChildsChild.Attributes.IsEmpty);
+      }
+
+      // "anon value"
+      Child = Child.Next;
+      assert(Child.IsValid);
+      assert(Child.IsAnonymous);
+      assert(Child.Values.Count == 1);
+      assert(cast(string)Child.Values[0] == "anon value");
+      assert(Child.Attributes.IsEmpty);
+
+      /+
+        "anon value with nesting" {
+          another-foo "bar" 1337 -92 "baz" qux="baaz"
+        }
+      +/
+      Child = Child.Next;
+      assert(Child.IsValid);
+      assert(Child.IsAnonymous);
+      assert(Child.Name == "content");
+      assert(Child.Values.Count == 1);
+      assert(cast(string)Child.Values[0] == "anon value with nesting");
+      assert(Child.Attributes.IsEmpty);
+      {
+        // another-foo "bar" 1337 -92 "baz" qux="baaz"
+        auto ChildsChild = Child.FirstChild;
+        assert(ChildsChild.IsValid);
+        assert(ChildsChild.Name == "another-foo");
+        assert(ChildsChild.Values.Count == 4);
+        assert(cast(string)ChildsChild.Values[0] == "bar");
+        assert(cast(int)ChildsChild.Values[1] == 1337);
+        assert(cast(int)ChildsChild.Values[2] == -92);
+        assert(cast(string)ChildsChild.Values[3] == "baz");
+        assert(ChildsChild.Attributes.Count == 1);
+        assert(ChildsChild.Attributes[0].Name == "qux");
+        assert(cast(string)ChildsChild.Attributes[0].Value == "baaz");
+      }
+    }
+
+    assert(!Node.Next.IsValid);
+  }
+
   SystemMemory System;
   auto Stack = StackMemory(System.Allocate(2.MiB, 1));
   scope(exit) System.Deallocate(Stack.Memory);
@@ -1105,186 +1360,17 @@ unittest
   // as context.
   auto Context = ParsingContext("Full", .Log);
   auto Document = StackAllocator.New!SDLDocument(StackAllocator);
+
+  scope(exit) StackAllocator.Delete(Document);
   auto SourceString = StackAllocator.NewArray!char(File.Size);
   auto BytesRead = File.Read(SourceString);
   assert(BytesRead == SourceString.length);
   assert(Document.ParseDocumentFromString(cast(string)SourceString, Context), SourceString);
 
+  TheActualTest(Document);
 
-  // foo "bar"
-  auto Node = Document.FirstChild;
-  assert(Node);
-  assert(Node.Name == "foo");
-  assert(Node.Values.Count == 1);
-  assert(cast(string)Node.Values[0] == "bar");
-  assert(Node.Attributes.IsEmpty);
+  // Force a reallocation of all nodes to see whether the SDLNodeRefs work as intended.
+  Document.AllNodes.Reserve(Document.AllNodes.Capacity + 1);
 
-  // foo "bar" "baz"
-  Node = Node.Next;
-  assert(Node);
-  assert(Node.Name == "foo");
-  assert(Node.Values.Count == 2);
-  assert(cast(string)Node.Values[0] == "bar");
-  assert(cast(string)Node.Values[1] == "baz");
-  assert(Node.Attributes.IsEmpty);
-
-  // foo "bar" baz="qux"
-  Node = Node.Next;
-  assert(Node);
-  assert(Node.Name == "foo");
-  assert(Node.Values.Count == 1);
-  assert(cast(string)Node.Values[0] == "bar");
-  assert(Node.Attributes.Count == 1);
-  assert(Node.Attributes[0].Name == "baz");
-  assert(cast(string)Node.Attributes[0].Value == "qux");
-
-  // foo "bar" baz="qux" baaz="quux"
-  Node = Node.Next;
-  assert(Node);
-  assert(Node.Name == "foo");
-  assert(Node.Values.Count == 1);
-  assert(cast(string)Node.Values[0] == "bar");
-  assert(Node.Attributes.Count == 2);
-  assert(Node.Attributes[0].Name == "baz");
-  assert(cast(string)Node.Attributes[0].Value == "qux");
-  assert(Node.Attributes[1].Name == "baaz");
-  assert(cast(string)Node.Attributes[1].Value == "quux");
-
-  // foo bar="baz"
-  Node = Node.Next;
-  assert(Node);
-  assert(Node.Name == "foo");
-  assert(Node.Values.IsEmpty);
-  assert(Node.Attributes.Count == 1);
-  assert(Node.Attributes[0].Name == "bar");
-  assert(cast(string)Node.Attributes[0].Value == "baz");
-
-  // "foo"
-  Node = Node.Next;
-  assert(Node);
-  assert(Node.IsAnonymous);
-  assert(Node.Name == "content");
-  assert(Node.Values.Count == 1);
-  assert(cast(string)Node.Values[0] == "foo");
-  assert(Node.Attributes.IsEmpty == 1);
-
-  // "foo" bar="baz"
-  Node = Node.Next;
-  assert(Node);
-  assert(Node.IsAnonymous);
-  assert(Node.Name == "content");
-  assert(Node.Values.Count == 1);
-  assert(cast(string)Node.Values[0] == "foo");
-  assert(Node.Attributes.Count == 1);
-  assert(Node.Attributes[0].Name == "bar");
-  assert(cast(string)Node.Attributes[0].Value == "baz");
-
-  /*
-    foo {
-      baz "baz"
-    }
-  */
-  Node = Node.Next;
-  assert(Node);
-  assert(Node.Name == "foo");
-  assert(Node.Values.IsEmpty);
-  assert(Node.Attributes.IsEmpty);
-  {
-    auto Child = Node.FirstChild;
-    assert(Child);
-    assert(Child.Name == "bar");
-    assert(Child.Values.Count == 1);
-    assert(cast(string)Child.Values[0] == "baz");
-    assert(Child.Attributes.IsEmpty == 1);
-  }
-
-  /+
-    foo /*
-    This is
-    what you get
-    when you support multi-line comments
-    in a whitespace sensitive language. */ bar="baz"
-  +/
-  Node = Node.Next;
-  assert(Node);
-  assert(Node.Name == "foo");
-  assert(Node.Values.IsEmpty);
-  assert(Node.Attributes.length == 1);
-  assert(Node.Attributes[0].Name == "answer");
-  assert(cast(int)Node.Attributes[0].Value == 42);
-
-  /+
-    foo 1 2 "bar" baz="qux" {
-      inner { 0 1 2 }
-      "anon value"
-      "anon value with nesting" {
-        another-foo "bar" 1337 -92 "baz" qux="baaz"
-      }
-    }
-  +/
-  Node = Node.Next;
-  assert(Node);
-  assert(Node.Name == "foo");
-  assert(Node.Values.Count == 3);
-  assert(cast(int)Node.Values[0] == 1);
-  assert(cast(int)Node.Values[1] == 2);
-  assert(cast(string)Node.Values[2] == "bar");
-  assert(Node.Attributes.Count == 1);
-  assert(Node.Attributes[0].Name == "baz");
-  assert(cast(string)Node.Attributes[0].Value == "qux");
-  {
-    // inner { 0 1 2 }
-    auto Child = Node.FirstChild;
-    assert(Child);
-    assert(Child.Name == "inner");
-    assert(Child.Values.Count == 0);
-    assert(Child.Attributes.Count == 0);
-    {
-      auto ChildsChild = Child.FirstChild;
-      assert(ChildsChild);
-      assert(ChildsChild.IsAnonymous);
-      assert(ChildsChild.Values.Count == 3);
-      assert(cast(int)ChildsChild.Values[0] == 0);
-      assert(cast(int)ChildsChild.Values[1] == 1);
-      assert(cast(int)ChildsChild.Values[2] == 2);
-      assert(ChildsChild.Attributes.IsEmpty);
-    }
-
-    // "anon value"
-    Child = Child.Next;
-    assert(Child);
-    assert(Child.IsAnonymous);
-    assert(Child.Values.Count == 1);
-    assert(cast(string)Child.Values[0] == "anon value");
-    assert(Child.Attributes.IsEmpty);
-
-    /+
-      "anon value with nesting" {
-        another-foo "bar" 1337 -92 "baz" qux="baaz"
-      }
-    +/
-    Child = Child.Next;
-    assert(Child);
-    assert(Child.IsAnonymous);
-    assert(Child.Name == "content");
-    assert(Child.Values.Count == 1);
-    assert(cast(string)Child.Values[0] == "anon value with nesting");
-    assert(Child.Attributes.IsEmpty);
-    {
-      // another-foo "bar" 1337 -92 "baz" qux="baaz"
-      auto ChildsChild = Child.FirstChild;
-      assert(ChildsChild);
-      assert(ChildsChild.Name == "another-foo");
-      assert(ChildsChild.Values.Count == 4);
-      assert(cast(string)ChildsChild.Values[0] == "bar");
-      assert(cast(int)ChildsChild.Values[1] == 1337);
-      assert(cast(int)ChildsChild.Values[2] == -92);
-      assert(cast(string)ChildsChild.Values[3] == "baz");
-      assert(ChildsChild.Attributes.Count == 1);
-      assert(ChildsChild.Attributes[0].Name == "qux");
-      assert(cast(string)ChildsChild.Attributes[0].Value == "baaz");
-    }
-  }
-
-  assert(Node.Next is null);
+  TheActualTest(Document);
 }
