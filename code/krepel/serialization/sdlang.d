@@ -19,7 +19,7 @@ class SDLDocument
   IAllocator Allocator;
 
   /// The first node in the SDL document.
-  SDLNode FirstChild;
+  SDLNode* FirstChild;
 
   this(IAllocator Allocator)
   {
@@ -27,7 +27,7 @@ class SDLDocument
   }
 }
 
-class SDLNode
+struct SDLNode
 {
   /// The document this node belongs to.
   SDLDocument Document;
@@ -35,14 +35,14 @@ class SDLNode
   //
   // Siblings
   //
-  SDLNode Next;
-  SDLNode Previous;
+  SDLNode* Next;
+  SDLNode* Previous;
 
   //
   // Parents and Children
   //
-  SDLNode Parent;
-  SDLNode FirstChild;
+  SDLNode* Parent;
+  SDLNode* FirstChild;
 
   //
   // Node properties
@@ -406,7 +406,7 @@ bool ParseDocumentFromSource(SDLDocument Document, ref SourceData Source, ref Pa
 }
 
 bool ParseInnerNodes(SDLDocument Document, ref SourceData Source, ref ParsingContext Context,
-                     SDLNode* FirstNode)
+                     SDLNode** FirstNode)
 {
   if(FirstNode is null)
   {
@@ -419,8 +419,8 @@ bool ParseInnerNodes(SDLDocument Document, ref SourceData Source, ref ParsingCon
     return false;
   }
 
-  SDLNode PreviousNode = *FirstNode;
-  SDLNode NewNode;
+  SDLNode* PreviousNode = *FirstNode;
+  SDLNode* NewNode;
   while(Document.ParseNode(Source, Context, &NewNode))
   {
     PreviousNode.Next = NewNode;
@@ -504,7 +504,7 @@ bool ParseIdentifier(SDLDocument Document,
 bool ParseNode(SDLDocument Document,
                ref SourceData OriginalSource,
                ref ParsingContext Context,
-               SDLNode* OutNode)
+               SDLNode** OutNode)
 {
   auto Source = OriginalSource;
   Source.SkipWhiteSpaceAndComments(Context, Yes.ConsumeNewLine);
