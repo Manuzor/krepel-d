@@ -269,19 +269,19 @@ struct SourceData
   alias CurrentValue this;
 }
 
-bool IsAtWhiteSpace(ref SourceData Source, ref ParsingContext Context)
+bool IsAtWhiteSpace(ref SourceData Source, ref SDLParsingContext Context)
 {
   auto String = Source[];
   return String.length && String.front.IsWhite;
 }
 
-bool IsAtNewLine(ref SourceData Source, ref ParsingContext Context)
+bool IsAtNewLine(ref SourceData Source, ref SDLParsingContext Context)
 {
   auto String = Source[];
   return String.length && String.StartsWith("\n");
 }
 
-SourceData SkipWhiteSpace(ref SourceData OriginalSource, ref ParsingContext Context,
+SourceData SkipWhiteSpace(ref SourceData OriginalSource, ref SDLParsingContext Context,
                           Flag!"ConsumeNewLine" ConsumeNewLine)
 {
   auto Source = OriginalSource;
@@ -296,7 +296,7 @@ SourceData SkipWhiteSpace(ref SourceData OriginalSource, ref ParsingContext Cont
   return OriginalSource.AdvanceBy(NumToAdvance);
 }
 
-bool IsAtLineComment(ref SourceData Source, ref ParsingContext Context)
+bool IsAtLineComment(ref SourceData Source, ref SDLParsingContext Context)
 {
   auto String = Source[];
   return String.StartsWith("//") ||
@@ -304,18 +304,18 @@ bool IsAtLineComment(ref SourceData Source, ref ParsingContext Context)
          String.StartsWith("--");
 }
 
-bool IsAtMultiLineComment(ref SourceData Source, ref ParsingContext Context)
+bool IsAtMultiLineComment(ref SourceData Source, ref SDLParsingContext Context)
 {
   auto String = Source[];
   return String.StartsWith("/*");
 }
 
-bool IsAtComment(ref SourceData Source, ref ParsingContext Context)
+bool IsAtComment(ref SourceData Source, ref SDLParsingContext Context)
 {
   return Source.IsAtLineComment(Context) || Source.IsAtMultiLineComment(Context);
 }
 
-SourceData SkipComments(ref SourceData OriginalSource, ref ParsingContext Context)
+SourceData SkipComments(ref SourceData OriginalSource, ref SDLParsingContext Context)
 {
   auto Source = OriginalSource;
 
@@ -342,7 +342,7 @@ SourceData SkipComments(ref SourceData OriginalSource, ref ParsingContext Contex
   return OriginalSource.AdvanceBy(NumToSkip);
 }
 
-SourceData SkipWhiteSpaceAndComments(ref SourceData OriginalSource, ref ParsingContext Context,
+SourceData SkipWhiteSpaceAndComments(ref SourceData OriginalSource, ref SDLParsingContext Context,
                                      Flag!"ConsumeNewLine" ConsumeNewLine)
 {
   auto Source = OriginalSource;
@@ -369,12 +369,12 @@ SourceData SkipWhiteSpaceAndComments(ref SourceData OriginalSource, ref ParsingC
 }
 
 /// Basically a new-line character or a semi-colon
-bool IsAtSemanticLineDelimiter(ref SourceData Source, ref ParsingContext Context)
+bool IsAtSemanticLineDelimiter(ref SourceData Source, ref SDLParsingContext Context)
 {
   return Source.length && Source.IsAtNewLine(Context) || Source.front == ';';
 }
 
-SourceData ParseUntil(alias Predicate)(ref SourceData Source, ref ParsingContext Context,)
+SourceData ParseUntil(alias Predicate)(ref SourceData Source, ref SDLParsingContext Context,)
 {
   const MaxNum = Source.length;
   size_t NumToAdvance;
@@ -392,7 +392,7 @@ SourceData ParseUntil(alias Predicate)(ref SourceData Source, ref ParsingContext
   return Source.AdvanceBy(NumToAdvance);
 }
 
-SourceData ParseNested(ref SourceData Source, ref ParsingContext Context,
+SourceData ParseNested(ref SourceData Source, ref SDLParsingContext Context,
                        string OpeningSequence, string ClosingSequence,
                        bool* OutFoundClosingSequence = null, int Depth = 1)
 {
@@ -428,7 +428,7 @@ SourceData ParseNested(ref SourceData Source, ref ParsingContext Context,
   return Result;
 }
 
-SourceData ParseEscaped(ref SourceData Source, ref ParsingContext Context,
+SourceData ParseEscaped(ref SourceData Source, ref SDLParsingContext Context,
                         dchar EscapeDelimiter, string DelimiterSequence, Flag!"ConsumeNewLine" ConsumeNewLine)
 {
   const MaxNum = Source.length;
@@ -458,7 +458,7 @@ SourceData ParseEscaped(ref SourceData Source, ref ParsingContext Context,
   return Result;
 }
 
-struct ParsingContext
+struct SDLParsingContext
 {
   /// An identifier for the string source, e.g. a file name. Used in log
   /// messages.
@@ -468,7 +468,7 @@ struct ParsingContext
 }
 
 /// Convenience overload to accept a plain string instead of SourceData.
-bool ParseDocumentFromString(SDLDocument Document, string SourceString, ref ParsingContext Context)
+bool ParseDocumentFromString(SDLDocument Document, string SourceString, ref SDLParsingContext Context)
 {
   auto Source = SourceData(SourceString);
   with(Source.StartLocation) { Line = 1; Column = 1; SourceIndex = 0; }
@@ -477,12 +477,12 @@ bool ParseDocumentFromString(SDLDocument Document, string SourceString, ref Pars
   return Document.ParseDocumentFromSource(Source, Context);
 }
 
-bool ParseDocumentFromSource(SDLDocument Document, ref SourceData Source, ref ParsingContext Context)
+bool ParseDocumentFromSource(SDLDocument Document, ref SourceData Source, ref SDLParsingContext Context)
 {
   return Document.ParseInnerNodes(Source, Context, &Document._FirstChild);
 }
 
-bool ParseInnerNodes(SDLDocument Document, ref SourceData Source, ref ParsingContext Context,
+bool ParseInnerNodes(SDLDocument Document, ref SourceData Source, ref SDLParsingContext Context,
                      SDLNodeRef* FirstNode)
 {
   if(FirstNode is null)
@@ -544,7 +544,7 @@ bool ParseInnerNodes(SDLDocument Document, ref SourceData Source, ref ParsingCon
 
 bool ParseIdentifier(SDLDocument Document,
                      ref SourceData OriginalSource,
-                     ref ParsingContext Context,
+                     ref SDLParsingContext Context,
                      SDLIdentifier* Result)
 {
   auto Source = OriginalSource;
@@ -581,7 +581,7 @@ bool ParseIdentifier(SDLDocument Document,
 
 bool ParseNode(SDLDocument Document,
                ref SourceData OriginalSource,
-               ref ParsingContext Context,
+               ref SDLParsingContext Context,
                SDLNodeRef* OutNode)
 {
   auto Source = OriginalSource;
@@ -697,7 +697,7 @@ bool ParseNode(SDLDocument Document,
 
 bool ParseLiteral(SDLDocument Document,
                   ref SourceData OriginalSource,
-                  ref ParsingContext Context,
+                  ref SDLParsingContext Context,
                   SDLLiteral* OutLiteral)
 {
   auto Source = OriginalSource;
@@ -780,7 +780,7 @@ bool ParseLiteral(SDLDocument Document,
 
 bool ParseAttribute(SDLDocument Document,
                     ref SourceData OriginalSource,
-                    ref ParsingContext Context,
+                    ref SDLParsingContext Context,
                     SDLAttribute* OutAttribute)
 {
   auto Source = OriginalSource;
@@ -848,7 +848,7 @@ MalformedAttribute:
 
 bool ParseNamespaceAndName(SDLDocument Document,
                            ref SourceData OriginalSource,
-                           ref ParsingContext Context,
+                           ref SDLParsingContext Context,
                            SDLIdentifier* OutNamespace,
                            SDLIdentifier* OutName)
 {
@@ -921,7 +921,7 @@ version(unittest) private auto MakeSourceDataForTesting(string Value, size_t Off
 // SkipWhiteSpaceAndComments
 unittest
 {
-  auto Context = ParsingContext("SDL Test 1", .Log);
+  auto Context = SDLParsingContext("SDL Test 1", .Log);
 
   {
     auto Source = MakeSourceDataForTesting("// hello\nworld", 0);
@@ -960,7 +960,7 @@ text)", 0);
 // ParseUntil
 unittest
 {
-  auto Context = ParsingContext("SDL Test 2", .Log);
+  auto Context = SDLParsingContext("SDL Test 2", .Log);
 
   {
     auto Source = MakeSourceDataForTesting(`foo "bar"`, 0);
@@ -976,7 +976,7 @@ unittest
 // ParseNested
 unittest
 {
-  auto Context = ParsingContext("SDL Test 3", .Log);
+  auto Context = SDLParsingContext("SDL Test 3", .Log);
 
   {
     auto Source = MakeSourceDataForTesting(`foo { bar }; baz`, 5);
@@ -1001,7 +1001,7 @@ unittest
 // ParseEscaped
 unittest
 {
-  auto Context = ParsingContext("SDL Test 4", .Log);
+  auto Context = SDLParsingContext("SDL Test 4", .Log);
 
   {
     auto Source = MakeSourceDataForTesting(`foo "bar" "baz"`, 5);
@@ -1032,7 +1032,7 @@ unittest
   scope(exit) System.Deallocate(Stack.Memory);
   auto StackAllocator = Wrap(Stack);
 
-  auto Context = ParsingContext("SDL Test 5", .Log);
+  auto Context = SDLParsingContext("SDL Test 5", .Log);
 
   auto Document = StackAllocator.New!SDLDocument(StackAllocator);
   Document.ParseDocumentFromString(`foo "bar"`, Context);
@@ -1053,7 +1053,7 @@ unittest
   scope(exit) System.Deallocate(Stack.Memory);
   auto StackAllocator = Wrap(Stack);
 
-  auto Context = ParsingContext("SDL Test 6", .Log);
+  auto Context = SDLParsingContext("SDL Test 6", .Log);
 
   auto Document = StackAllocator.New!SDLDocument(StackAllocator);
   Document.ParseDocumentFromString(`foo "bar" baz="qux"`, Context);
@@ -1078,7 +1078,7 @@ unittest
   scope(exit) System.Deallocate(Stack.Memory);
   auto StackAllocator = Wrap(Stack);
 
-  auto Context = ParsingContext("SDL Test 7", .Log);
+  auto Context = SDLParsingContext("SDL Test 7", .Log);
 
   auto Document = StackAllocator.New!SDLDocument(StackAllocator);
   auto Source = q"(
@@ -1110,7 +1110,7 @@ unittest
   scope(exit) System.Deallocate(Stack.Memory);
   auto StackAllocator = Wrap(Stack);
 
-  auto Context = ParsingContext("SDL Test 8", .Log);
+  auto Context = SDLParsingContext("SDL Test 8", .Log);
 
   auto Document = StackAllocator.New!SDLDocument(StackAllocator);
   auto Source = q"(
@@ -1151,7 +1151,7 @@ unittest
   scope(exit) System.Deallocate(Stack.Memory);
   auto StackAllocator = Wrap(Stack);
 
-  auto Context = ParsingContext("SDL Test 9", .Log);
+  auto Context = SDLParsingContext("SDL Test 9", .Log);
 
   auto Document = StackAllocator.New!SDLDocument(StackAllocator);
   Document.ParseDocumentFromString(`answer 42`, Context);
@@ -1164,7 +1164,7 @@ unittest
   assert(cast(int)Node.Values[0] == 42, Node.Values[0].NumberSource);
 }
 
-/// Parse document from file.
+// Parse document from file.
 unittest
 {
   void TheActualTest(SDLDocument Document)
@@ -1358,7 +1358,7 @@ unittest
 
   // TODO(Manu): Once we have WString => UString conversion, use the filename
   // as context.
-  auto Context = ParsingContext("Full", .Log);
+  auto Context = SDLParsingContext("Full", .Log);
   auto Document = StackAllocator.New!SDLDocument(StackAllocator);
 
   scope(exit) StackAllocator.Delete(Document);
