@@ -50,8 +50,8 @@ struct Array(T)
     {
       auto NewMemory = Allocator.NewUnconstructedArray!ElementType(Capacity);
       NewMemory[0..Count] = Data[0..Count];
-      Data = NewMemory;
-      AvailableMemory = Data;
+      Data = NewMemory[0..Count];
+      AvailableMemory = NewMemory;
     }
   }
 
