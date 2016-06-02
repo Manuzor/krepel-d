@@ -250,6 +250,10 @@ class ForwardRenderer
       RenderDevice.DrawIndexed(Command.Mesh.GetIndexCount);
     }
 
+  }
+
+  void Present()
+  {
     RenderDevice.Present();
   }
 }

@@ -19,6 +19,7 @@ import krepel.scene;
 import krepel.forward_renderer;
 import krepel.physics;
 import krepel.engine;
+import krepel.color;
 
 version(Windows):
 import std.string : toStringz, fromStringz;
@@ -241,10 +242,8 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
         //
         // Apply Input
         //
-        auto Transform = SpherePhysicsChild.GetLocalTransform();
-        Transform.Translation += Vector3.UpVector * User1Input["ObjZ"].AxisValue * GlobalEngine.FrameTimeData.ElapsedTime;
-        SpherePhysicsChild.SetLocalTransform(Transform);
 
+        GlobalEngine.DebugHelper.AddBox(Transform(Vector3(0,0,0), Quaternion.Identity, Vector3.UnitScaleVector), Vector3(10,10,10), Color_Green());
         GlobalRunning = GlobalEngine.Update();
 
 

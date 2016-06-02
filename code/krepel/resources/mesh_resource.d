@@ -11,7 +11,7 @@ struct Vertex
   Vector3 Normal;
   Vector4 Tangent;
   Vector3 Binormal;
-  ColorLinear VertexColor;
+  ColorLinear Color;
 }
 
 class SubMesh

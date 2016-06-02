@@ -105,21 +105,23 @@ class DebugRenderHelper
 
   void Draw(IRenderDevice RenderDevice)
   {
-    IRenderConstantBuffer ConstantBuffer;
+
     WorldConstantBuffer WorldData;
-    ConstantBuffer = RenderDevice.CreateConstantBuffer(WorldData.AsVoidRange);
-    RenderDevice.SetVertexShaderConstantBuffer(ConstantBuffer, 0);
     foreach(RenderData; DataToRender)
     {
+      IRenderConstantBuffer ConstantBuffer;
       WorldData.ModelMatrix = RenderData.Transformation.ToMatrix;
       WorldData.ModelViewProjectionMatrix = WorldData.ModelMatrix * GlobalEngine.Renderer.GetViewProjectionMatrix();
       WorldData.ModelMatrix = WorldData.ModelMatrix.GetTransposed;
       WorldData.ModelViewProjectionMatrix = WorldData.ModelViewProjectionMatrix.GetTransposed;
-      RenderDevice.UpdateConstantBuffer(ConstantBuffer, WorldData.AsVoidRange);
+      WorldData.Color = RenderData.Mesh.Vertices[0].Color;
+      ConstantBuffer = RenderDevice.CreateConstantBuffer(WorldData.AsVoidRange);
+      RenderDevice.SetVertexShaderConstantBuffer(ConstantBuffer, 0);
       auto VertexBuffer = RenderDevice.CreateVertexBuffer(RenderData.Mesh.Vertices[]);
       scope(exit)
       {
         RenderDevice.ReleaseVertexBuffer(VertexBuffer);
+        RenderDevice.ReleaseConstantBuffer(ConstantBuffer);
       }
       RenderDevice.SetVertexBuffer(VertexBuffer);
       RenderDevice.SetPrimitiveTopology(RenderData.Mesh.Mode);
