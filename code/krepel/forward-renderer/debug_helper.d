@@ -10,7 +10,6 @@ import krepel.engine;
 struct DebugRenderMesh
 {
   Array!Vertex Vertices;
-  Array!uint Indices;
   RenderPrimitiveTopology Mode = RenderPrimitiveTopology.LineList;
 }
 
@@ -93,9 +92,61 @@ class DebugRenderHelper
     return Data;
   }
 
+  DebugRenderMesh CreateSphere(float Radius, ColorLinear Color,uint Subdivisions = 16)
+  {
+
+    DebugRenderMesh Data;
+    Data.Vertices.Allocator = Allocator;
+    Data.Mode = RenderPrimitiveTopology.LineList;
+
+    float Angle = (2 * PI) / Subdivisions;
+    Array!Vector3 Positions;
+    Positions.Allocator = Allocator;
+    struct SphereData
+    {
+      Vector3 StartVector;
+      Quaternion Rotator;
+    }
+    SphereData[3] CircleDatas;
+    CircleDatas[0] = SphereData(Vector3.ForwardVector * Radius, Quaternion(Vector3.UpVector, Angle));
+    CircleDatas[1] = SphereData(Vector3.UpVector * Radius, Quaternion(Vector3.RightVector, Angle));
+    CircleDatas[2] = SphereData(Vector3.RightVector * Radius, Quaternion(Vector3.ForwardVector, Angle));
+    foreach(CircleData; CircleDatas)
+    {
+      Vector3 CurrentPosition = CircleData.StartVector;
+      auto Rotator = CircleData.Rotator;
+      foreach(uint Index; 0..Subdivisions)
+      {
+        Positions ~= CurrentPosition;
+        CurrentPosition = Rotator.TransformDirection(CurrentPosition);
+        Positions ~= CurrentPosition;
+      }
+    }
+
+    foreach(Position; Positions)
+    {
+      Data.Vertices.PushBack(
+        Vertex(
+          Position,
+          Vector2.ZeroVector,
+          Vector3.ZeroVector,
+          Vector4.ZeroVector,
+          Vector3.ZeroVector,
+          Color)
+      );
+    }
+
+    return Data;
+  }
+
   void AddBox(Transform Transformation, Vector3 HalfDimensions, ColorLinear Color)
   {
     AddData(Transformation, CreateBox(HalfDimensions, Color));
+  }
+
+  void AddSphere(Transform Transformation, float Radius, ColorLinear Color, uint Subdivisions = 16)
+  {
+    AddData(Transformation, CreateSphere(Radius, Color, Subdivisions));
   }
 
   void AddData(Transform Transformation, DebugRenderMesh Data)

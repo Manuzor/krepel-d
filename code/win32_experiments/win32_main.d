@@ -243,7 +243,7 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
         // Apply Input
         //
 
-        GlobalEngine.DebugHelper.AddBox(Transform(Vector3(0,0,0), Quaternion.Identity, Vector3.UnitScaleVector), Vector3(10,10,10), Color_Green());
+        GlobalEngine.DebugHelper.AddSphere(Transform(Vector3(0,0,3), Quaternion.Identity, Vector3.UnitScaleVector), 2, Color_Green());
         GlobalRunning = GlobalEngine.Update();
 
 
