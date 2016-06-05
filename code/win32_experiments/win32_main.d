@@ -170,7 +170,8 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
 
       auto Plane = Graph.CreateDefaultGameObject(UString("Plane", MainAllocator));
       auto PlanePhysicsChild = Plane.ConstructChild!PhysicsComponent(UString("PlanePhysics", MainAllocator));
-      PlanePhysicsChild.ComponentBody.Shape.SetPlane(PlaneShapeData(Vector4(0,0,1,0)));
+      PlaneShapeData ShapeData = PlaneShapeData(Vector4(0,0,1,0));
+      PlanePhysicsChild.ComponentBody.Shape.SetPlane(ShapeData);
       PlanePhysicsChild.ComponentBody.BodyMovability = Movability.Static;
       PlanePhysicsChild.RegisterComponent();
       auto RenderChild = Plane.ConstructChild!PrimitiveRenderComponent(UString("PlaneRender", MainAllocator), PlanePhysicsChild);
@@ -180,7 +181,8 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
 
       auto Sphere = Graph.CreateDefaultGameObject(UString("Sphere", MainAllocator));
       auto SpherePhysicsChild = Sphere.ConstructChild!PhysicsComponent(UString("SpherePhysics", MainAllocator));
-      SpherePhysicsChild.ComponentBody.Shape.SetSphere(SphereShapeData(1.0f));
+      auto SphereData = SphereShapeData(1.0f);
+      SpherePhysicsChild.ComponentBody.Shape.SetSphere(SphereData);
       SpherePhysicsChild.ComponentBody.Restitution = 0.9f;
       SpherePhysicsChild.ComponentBody.Mass = 1.0f;
       SpherePhysicsChild.RegisterComponent();
@@ -192,7 +194,7 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
 
       auto Sphere2 = Graph.CreateDefaultGameObject(UString("Sphere2", MainAllocator));
       auto Sphere2PhysicsChild = Sphere2.ConstructChild!PhysicsComponent(UString("Sphere2Physics", MainAllocator));
-      Sphere2PhysicsChild.ComponentBody.Shape.SetSphere(SphereShapeData(1.0f));
+      Sphere2PhysicsChild.ComponentBody.Shape.SetSphere(SphereData);
       Sphere2PhysicsChild.RegisterComponent();
       RenderChild = Sphere2.ConstructChild!PrimitiveRenderComponent(UString("Sphere2Render", MainAllocator), Sphere2PhysicsChild);
       Sphere2.RootComponent.SetWorldTransform(Transform(Vector3(0.0f,0.5f,5), Quaternion.Identity, Vector3.UnitScaleVector));

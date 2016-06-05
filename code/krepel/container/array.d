@@ -90,7 +90,14 @@ struct Array(T)
   ref inout(ElementType) opIndex(IndexType)(IndexType Index) inout
    if(Meta.IsIntegral!IndexType)
   {
-    return Data[Index];
+    if(Index >= 0)
+    {
+      return Data[Index];
+    }
+    else
+    {
+      return Data[$+Index];
+    }
   }
 
   /// Makes sure AvailableMemory is big enough to hold RequiredCapacity
@@ -555,4 +562,6 @@ unittest
   assert(Array[8] == 3);
   assert(Array[9] == 4);
   assert(Array[10] == 200);
+  assert(Array[-1] == 200);
+  assert(Array[-2] == 4);
 }
