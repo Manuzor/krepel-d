@@ -23,8 +23,8 @@ class CollisionDetection
     {
       case ShapeType.Sphere:
         return CheckCollisionSphereAny(Body1, Body2);
-      case ShapeType.Box:
-        return CheckCollisionBoxAny(Body1, Body2);
+      case ShapeType.Poly:
+        return CheckCollisionPolyAny(Body1, Body2);
       case ShapeType.Plane:
         return CheckCollisionPlaneAny(Body1, Body2);
     }
@@ -36,25 +36,25 @@ class CollisionDetection
     {
       case ShapeType.Sphere:
         return CheckCollisionSphereSphere(Sphere, Body2);
-      case ShapeType.Box:
-        return CheckCollisionSphereBox(Sphere, Body2);
+      case ShapeType.Poly:
+        return CheckCollisionSpherePoly(Sphere, Body2);
       case ShapeType.Plane:
         return CheckCollisionSpherePlane(Sphere, Body2);
     }
   }
 
-  static CollisionResult CheckCollisionBoxAny(RigidBody Box, RigidBody Body2)
+  static CollisionResult CheckCollisionPolyAny(RigidBody Poly, RigidBody Body2)
   {
     final switch(Body2.Shape.Type)
     {
       case ShapeType.Sphere:
-        auto Result = CheckCollisionSphereBox(Body2, Box);
+        auto Result = CheckCollisionSpherePoly(Body2, Poly);
         FixupCollisionDirection(Result);
         return Result;
-      case ShapeType.Box:
-        return CheckCollisionBoxBox(Box, Body2);
+      case ShapeType.Poly:
+        return CheckCollisionPolyPoly(Poly, Body2);
       case ShapeType.Plane:
-        return CheckCollisionBoxPlane(Box, Body2);
+        return CheckCollisionPolyPlane(Poly, Body2);
     }
   }
 
@@ -66,8 +66,8 @@ class CollisionDetection
         auto Result = CheckCollisionSpherePlane(Body2, Plane);
         FixupCollisionDirection(Result);
         return Result;
-      case ShapeType.Box:
-        auto Result = CheckCollisionBoxPlane(Body2, Plane);
+      case ShapeType.Poly:
+        auto Result = CheckCollisionPolyPlane(Body2, Plane);
         FixupCollisionDirection(Result);
         return Result;
       case ShapeType.Plane:
@@ -75,7 +75,7 @@ class CollisionDetection
     }
   }
 
-  static CollisionResult CheckCollisionSphereBox(RigidBody Sphere, RigidBody Box)
+  static CollisionResult CheckCollisionSpherePoly(RigidBody Sphere, RigidBody Poly)
   {
     return CollisionResult.EmptyResult;
   }
@@ -114,12 +114,12 @@ class CollisionDetection
     return CollisionResult.EmptyResult;
   }
 
-  static CollisionResult CheckCollisionBoxPlane(RigidBody Box, RigidBody Plane)
+  static CollisionResult CheckCollisionPolyPlane(RigidBody Poly, RigidBody Plane)
   {
     return CollisionResult.EmptyResult;
   }
 
-  static CollisionResult CheckCollisionBoxBox(RigidBody Box1, RigidBody Box2)
+  static CollisionResult CheckCollisionPolyPoly(RigidBody Poly1, RigidBody Poly2)
   {
     return CollisionResult.EmptyResult;
   }

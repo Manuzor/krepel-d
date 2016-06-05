@@ -5,13 +5,32 @@ import krepel;
 enum ShapeType
 {
   Sphere,
-  Box,
+  Poly,
   Plane
 }
 
-struct BoxShapeData
+struct HalfEdge
 {
-  Vector3 HalfDimensions;
+  byte NextIndex; //Next Edge Index
+  byte TwinIndex; //The Index of the Edge Twin
+  byte OriginIndex; // The Vertex Index it belongs to
+  byte FaceIndex; // The face Index the Edge belongs to
+}
+
+struct PolyShapeData
+{
+  Array!Vector3 Vertices;
+  Array!byte Faces; // Faces as Index of one of the surrounding Edges
+  Array!HalfEdge Edges;
+  Array!Vector4 Planes; // Planes of the Faces
+
+  void Initialize(IAllocator Allocator)
+  {
+    Vertices.Allocator = Allocator;
+    Faces.Allocator = Allocator;
+    Edges.Allocator = Allocator;
+    Planes.Allocator = Allocator;
+  }
 }
 
 struct SphereShapeData
@@ -24,20 +43,83 @@ struct PlaneShapeData
   Vector4 Plane;
 }
 
-
-void SetBox(PhysicsShape Shape, BoxShapeData Data)
+struct Polygon
 {
-  Shape.Type = ShapeType.Box;
-  Shape.Box = Data;
+  Array!Vector3 Vertices; // CCW List of Vertices surrouding the polygon
 }
 
-void SetSphere(PhysicsShape Shape, SphereShapeData Data)
+PolyShapeData CreatePolyShapeFromPolygons(IAllocator Allocator, Polygon[] Polys)
+{
+  PolyShapeData Data;
+  Data.Initialize(Allocator);
+  with(Data)
+  {
+    foreach(Polygon; Polys)
+    {
+      Vector3 LastVertex = Polygon.Vertices[0];
+      byte LastIndex = cast(byte)Vertices[].CountUntil(LastVertex);
+      if (LastIndex < 0)
+      {
+        Vertices ~= LastVertex;
+        LastIndex = cast(byte)(Vertices.Count - 1);
+      }
+      byte FaceIndex = cast(byte)(Faces.Count);
+      Faces ~= cast(byte)Edges.Count;
+      auto FirstEdgeIndex = cast(byte)Edges.Count;
+      foreach(Vertex; Polygon.Vertices[1..$])
+      {
+        byte CurIndex = cast(byte)Vertices[].CountUntil(Vertex);
+        if (CurIndex < 0)
+        {
+          Vertices ~= Vertex;
+          CurIndex = cast(byte)(Vertices.Count - 1);
+        }
+        HalfEdge NewEdge = void;
+        NewEdge.OriginIndex = LastIndex;
+        NewEdge.FaceIndex = FaceIndex;
+        NewEdge.TwinIndex = -1;
+        if(Edges.Count > 0)
+        {
+          Edges[-1].NextIndex = cast(byte)Edges.Count;
+        }
+        Edges ~= NewEdge;
+      }
+      Edges[-1].NextIndex = FirstEdgeIndex;
+    }
+
+    // Find twins
+    foreach(Index, Edge; Edges)
+    {
+      Vector3 FirstDirection = Vertices[Edges[Edge.NextIndex].OriginIndex] - Vertices[Edge.OriginIndex];
+      if(Edge.TwinIndex != -1)
+      {
+        auto TwinIndex = Edges[Index+1..$].CountUntil!( (ref HalfEdge TwinEdge)
+          {
+            Vector3 SecondDirection = Vertices[TwinEdge.OriginIndex] - Vertices[Edges[Edge.NextIndex].OriginIndex];
+            return NearlyEquals(FirstDirection, SecondDirection);
+          });
+        assert(TwinIndex >= 0);
+        Edge.TwinIndex = cast(byte)TwinIndex;
+        Edges[TwinIndex].TwinIndex = cast(byte)Index;
+      }
+    }
+  }
+  return Data;
+}
+
+void SetPoly(PhysicsShape Shape, ref PolyShapeData Data)
+{
+  Shape.Type = ShapeType.Poly;
+  Shape.Poly = Data;
+}
+
+void SetSphere(PhysicsShape Shape, ref SphereShapeData Data)
 {
   Shape.Type = ShapeType.Sphere;
   Shape.Sphere = Data;
 }
 
-void SetPlane(PhysicsShape Shape, PlaneShapeData Data)
+void SetPlane(PhysicsShape Shape, ref PlaneShapeData Data)
 {
   Shape.Type = ShapeType.Plane;
 
@@ -49,9 +131,9 @@ class PhysicsShape
   ShapeType Type;
   union
   {
-    BoxShapeData Box;
     SphereShapeData Sphere;
     PlaneShapeData Plane;
   }
+  PolyShapeData Poly;
 
 }
