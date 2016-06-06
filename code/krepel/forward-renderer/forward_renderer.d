@@ -82,13 +82,14 @@ class ForwardRenderer
                                                     UString("VSMain", Allocator),
                                                     UString("vs_5_0", Allocator));
 
-    RenderInputLayoutDescription[5] Layout =
+    RenderInputLayoutDescription[6] Layout =
     [
       RenderInputLayoutDescription(UString("POSITION", Allocator), 0, InputDescriptionDataType.Float, 3, true),
       RenderInputLayoutDescription(UString("UV", Allocator), 0, InputDescriptionDataType.Float, 2, true),
       RenderInputLayoutDescription(UString("NORMAL", Allocator), 0, InputDescriptionDataType.Float, 3, true),
       RenderInputLayoutDescription(UString("TANGENT", Allocator), 0, InputDescriptionDataType.Float, 4, true),
       RenderInputLayoutDescription(UString("BINORMAL", Allocator), 0, InputDescriptionDataType.Float, 3, true),
+      RenderInputLayoutDescription(UString("VERT_COLOR", Allocator), 0, InputDescriptionDataType.Float, 4, true),
     ];
     DefaultInputLayoutDescription = RenderDevice.CreateInputLayoutDescription(Layout);
 

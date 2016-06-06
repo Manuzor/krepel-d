@@ -1,12 +1,9 @@
 module krepel.resources.wavefront_resource_loader;
 
-import krepel.resources;
-import krepel.system;
-import krepel.memory;
-import krepel.math;
-import krepel.container;
+import krepel;
 import krepel.conversion;
-import krepel.string;
+import krepel.system;
+import krepel.resources;
 import krepel.log;
 
 enum WavefrontLineType
@@ -299,6 +296,7 @@ class WavefrontResourceLoader : IResourceLoader
               {
                 NewVertex.TextureCoordinate = TempMesh.TextureCoordinates[VertexDefinition.TextureIndex];
               }
+              NewVertex.Color = Color_White();
               NewSubMesh.Indices.PushBack(cast(int)NewSubMesh.Vertices.Count);
               DefinedVertices[VertexDefinition] = cast(int)NewSubMesh.Vertices.Count;
               NewSubMesh.Vertices.PushBack(NewVertex);
