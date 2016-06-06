@@ -30,6 +30,39 @@ class DebugRenderHelper
     DataToRender.Allocator = Allocator;
   }
 
+  import krepel.physics;
+
+  DebugRenderMesh CreateFromPolyShape(PolyShapeData ShapeData, ColorLinear[] PolyColors, float ExplodeDistance = 0.1f)
+  {
+    assert(PolyColors.length > 0);
+    DebugRenderMesh Data;
+    Data.Vertices.Allocator = Allocator;
+    Data.Mode = RenderPrimitiveTopology.LineList;
+
+    foreach(Edge; ShapeData.Edges)
+    {
+      Vertex Vert = Vertex(
+        ShapeData.Vertices[Edge.OriginIndex] + ShapeData.Planes[Edge.FaceIndex].XYZ * ExplodeDistance,
+        Vector2.ZeroVector,
+        Vector3.ZeroVector,
+        Vector4.ZeroVector,
+        Vector3.ZeroVector,
+        PolyColors[Edge.FaceIndex % PolyColors.length]
+      );
+      Data.Vertices ~= Vert;
+      Vert.Position = ShapeData.Vertices[ShapeData.Edges[Edge.NextIndex].OriginIndex]
+         + ShapeData.Planes[Edge.FaceIndex].XYZ * ExplodeDistance;
+      Data.Vertices ~= Vert;
+    }
+
+    return Data;
+  }
+
+  void AddPolyShape(Transform Transformation, PolyShapeData ShapeData, ColorLinear[] PolyColors, float ExplodeDistance = 0.0f)
+  {
+    AddData(Transformation, CreateFromPolyShape(ShapeData, PolyColors, ExplodeDistance));
+  }
+
   DebugRenderMesh CreateBox(Vector3 HalfDimensions, ColorLinear Color)
   {
     DebugRenderMesh Data;
