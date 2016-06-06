@@ -32,6 +32,36 @@ class DebugRenderHelper
 
   import krepel.physics;
 
+  void AddLineAsArrow(Vector3 StartPosition, Vector3 Direction, ColorLinear Color, ref DebugRenderMesh Mesh)
+  {
+    Vertex Vert = Vertex(
+      StartPosition,
+      Vector2.ZeroVector,
+      Direction.SafeNormalizedCopy,
+      Vector4.ZeroVector,
+      Vector3.ZeroVector,
+      Color
+    );
+    Mesh.Vertices ~= Vert;
+    Vert.Position += Direction;
+    Vector3 ArrowHeadStartPosition = Vert.Position;
+    Mesh.Vertices ~= Vert;
+
+    auto PlaneVector1 = Direction.SafeNormalizedCopy ^
+      (Direction.UnsafeNormalizedCopy.GetAbs.NearlyEquals(Vector3.UpVector) ?  Vector3.RightVector : Vector3.UpVector);
+    auto PlaneVector2 = PlaneVector1 ^ Direction.SafeNormalizedCopy;
+    float Length = Direction.Length;
+    foreach(Index; 0..4)
+    {
+      Vert.Position = ArrowHeadStartPosition;
+      Mesh.Vertices ~= Vert;
+      Vector3 TargetPosition = PlaneVector1 * 0.02f * Length * (Index.IsEven ? 1 : -1) + PlaneVector2 * 0.02f * Length * (Index>=2 ? 1 : -1);
+      TargetPosition += ArrowHeadStartPosition - Direction * 0.05f;
+      Vert.Position = TargetPosition;
+      Mesh.Vertices ~= Vert;
+    }
+  }
+
   DebugRenderMesh CreateFromPolyShape(PolyShapeData ShapeData, ColorLinear[] PolyColors, float ExplodeDistance = 0.1f)
   {
     assert(PolyColors.length > 0);
@@ -41,18 +71,34 @@ class DebugRenderHelper
 
     foreach(Edge; ShapeData.Edges)
     {
-      Vertex Vert = Vertex(
+      AddLineAsArrow(
         ShapeData.Vertices[Edge.OriginIndex] + ShapeData.Planes[Edge.FaceIndex].XYZ * ExplodeDistance,
-        Vector2.ZeroVector,
-        Vector3.ZeroVector,
-        Vector4.ZeroVector,
-        Vector3.ZeroVector,
-        PolyColors[Edge.FaceIndex % PolyColors.length]
-      );
-      Data.Vertices ~= Vert;
-      Vert.Position = ShapeData.Vertices[ShapeData.Edges[Edge.NextIndex].OriginIndex]
-         + ShapeData.Planes[Edge.FaceIndex].XYZ * ExplodeDistance;
-      Data.Vertices ~= Vert;
+        (ShapeData.Vertices[ShapeData.Edges[Edge.NextIndex].OriginIndex]
+           + ShapeData.Planes[Edge.FaceIndex].XYZ * ExplodeDistance) - (ShapeData.Vertices[Edge.OriginIndex] + ShapeData.Planes[Edge.FaceIndex].XYZ * ExplodeDistance),
+        PolyColors[Edge.FaceIndex % PolyColors.length],
+        Data
+        );
+    }
+
+    foreach(PlaneIndex, Plane; ShapeData.Planes)
+    {
+      Vector3 StartPosition = Vector3.ZeroVector;
+      byte PositionCount = 0;
+      foreach(Edge; ShapeData.Edges)
+      {
+        if (Edge.FaceIndex == PlaneIndex)
+        {
+          StartPosition += ShapeData.Vertices[Edge.OriginIndex];
+          PositionCount++;
+        }
+      }
+      StartPosition /= PositionCount;
+      AddLineAsArrow(
+        StartPosition + Plane.XYZ * ExplodeDistance,
+        Plane.XYZ,
+        PolyColors[PlaneIndex % PolyColors.length],
+        Data
+        );
     }
 
     return Data;
@@ -115,7 +161,7 @@ class DebugRenderHelper
         Vertex(
           Position,
           Vector2.ZeroVector,
-          Vector3.ZeroVector,
+          Vector3.UpVector,
           Vector4.ZeroVector,
           Vector3.ZeroVector,
           Color)
@@ -162,7 +208,7 @@ class DebugRenderHelper
         Vertex(
           Position,
           Vector2.ZeroVector,
-          Vector3.ZeroVector,
+          Position.SafeNormalizedCopy,
           Vector4.ZeroVector,
           Vector3.ZeroVector,
           Color)

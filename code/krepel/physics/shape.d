@@ -57,54 +57,48 @@ PolyShapeData CreatePolyShapeFromBox(IAllocator Allocator, Vector3 HalfDimension
   CurrentPoly.Vertices.Allocator = Allocator;
 
   CurrentPoly.Vertices ~= Vector3(-HalfDimensions.X, -HalfDimensions.Y, -HalfDimensions.Z);
-  CurrentPoly.Vertices ~= Vector3(HalfDimensions.X, -HalfDimensions.Y, -HalfDimensions.Z);
+  CurrentPoly.Vertices ~= Vector3(-HalfDimensions.X, -HalfDimensions.Y, HalfDimensions.Z);
   CurrentPoly.Vertices ~= Vector3(HalfDimensions.X, -HalfDimensions.Y, HalfDimensions.Z);
-  CurrentPoly.Vertices ~= Vector3(-HalfDimensions.X, -HalfDimensions.Y, HalfDimensions.Z);
-  CurrentPoly.Vertices ~= CurrentPoly.Vertices[0];
-  Polygons ~= CurrentPoly;
-  CurrentPoly.Vertices.Clear();
-
-  CurrentPoly.Vertices ~= Vector3(-HalfDimensions.X, -HalfDimensions.Y, -HalfDimensions.Z);
-  CurrentPoly.Vertices ~= Vector3(-HalfDimensions.X, -HalfDimensions.Y, HalfDimensions.Z);
-  CurrentPoly.Vertices ~= Vector3(-HalfDimensions.X, HalfDimensions.Y, HalfDimensions.Z);
-  CurrentPoly.Vertices ~= Vector3(-HalfDimensions.X, HalfDimensions.Y, -HalfDimensions.Z);
-  CurrentPoly.Vertices ~= CurrentPoly.Vertices[0];
-
+  CurrentPoly.Vertices ~= Vector3(HalfDimensions.X, -HalfDimensions.Y, -HalfDimensions.Z);
   Polygons ~= CurrentPoly;
   CurrentPoly.Vertices.Clear();
 
   CurrentPoly.Vertices ~= Vector3(-HalfDimensions.X, -HalfDimensions.Y, -HalfDimensions.Z);
   CurrentPoly.Vertices ~= Vector3(-HalfDimensions.X, HalfDimensions.Y, -HalfDimensions.Z);
-  CurrentPoly.Vertices ~= Vector3(HalfDimensions.X, HalfDimensions.Y, -HalfDimensions.Z);
+  CurrentPoly.Vertices ~= Vector3(-HalfDimensions.X, HalfDimensions.Y, HalfDimensions.Z);
+  CurrentPoly.Vertices ~= Vector3(-HalfDimensions.X, -HalfDimensions.Y, HalfDimensions.Z);
+
+  Polygons ~= CurrentPoly;
+  CurrentPoly.Vertices.Clear();
+
+  CurrentPoly.Vertices ~= Vector3(-HalfDimensions.X, -HalfDimensions.Y, -HalfDimensions.Z);
   CurrentPoly.Vertices ~= Vector3(HalfDimensions.X, -HalfDimensions.Y, -HalfDimensions.Z);
-  CurrentPoly.Vertices ~= CurrentPoly.Vertices[0];
+  CurrentPoly.Vertices ~= Vector3(HalfDimensions.X, HalfDimensions.Y, -HalfDimensions.Z);
+  CurrentPoly.Vertices ~= Vector3(-HalfDimensions.X, HalfDimensions.Y, -HalfDimensions.Z);
 
   Polygons ~= CurrentPoly;
   CurrentPoly.Vertices.Clear();
 
   CurrentPoly.Vertices ~= Vector3(-HalfDimensions.X, HalfDimensions.Y, -HalfDimensions.Z);
-  CurrentPoly.Vertices ~= Vector3(-HalfDimensions.X, HalfDimensions.Y, HalfDimensions.Z);
-  CurrentPoly.Vertices ~= Vector3(HalfDimensions.X, HalfDimensions.Y, HalfDimensions.Z);
   CurrentPoly.Vertices ~= Vector3(HalfDimensions.X, HalfDimensions.Y, -HalfDimensions.Z);
-  CurrentPoly.Vertices ~= CurrentPoly.Vertices[0];
+  CurrentPoly.Vertices ~= Vector3(HalfDimensions.X, HalfDimensions.Y, HalfDimensions.Z);
+  CurrentPoly.Vertices ~= Vector3(-HalfDimensions.X, HalfDimensions.Y, HalfDimensions.Z);
 
   Polygons ~= CurrentPoly;
   CurrentPoly.Vertices.Clear();
 
   CurrentPoly.Vertices ~= Vector3(HalfDimensions.X, -HalfDimensions.Y, -HalfDimensions.Z);
-  CurrentPoly.Vertices ~= Vector3(HalfDimensions.X, HalfDimensions.Y, -HalfDimensions.Z);
-  CurrentPoly.Vertices ~= Vector3(HalfDimensions.X, HalfDimensions.Y, HalfDimensions.Z);
   CurrentPoly.Vertices ~= Vector3(HalfDimensions.X, -HalfDimensions.Y, HalfDimensions.Z);
-  CurrentPoly.Vertices ~= CurrentPoly.Vertices[0];
+  CurrentPoly.Vertices ~= Vector3(HalfDimensions.X, HalfDimensions.Y, HalfDimensions.Z);
+  CurrentPoly.Vertices ~= Vector3(HalfDimensions.X, HalfDimensions.Y, -HalfDimensions.Z);
 
   Polygons ~= CurrentPoly;
   CurrentPoly.Vertices.Clear();
 
   CurrentPoly.Vertices ~= Vector3(-HalfDimensions.X, -HalfDimensions.Y, HalfDimensions.Z);
-  CurrentPoly.Vertices ~= Vector3(HalfDimensions.X, -HalfDimensions.Y, HalfDimensions.Z);
-  CurrentPoly.Vertices ~= Vector3(HalfDimensions.X, HalfDimensions.Y, HalfDimensions.Z);
   CurrentPoly.Vertices ~= Vector3(-HalfDimensions.X, HalfDimensions.Y, HalfDimensions.Z);
-  CurrentPoly.Vertices ~= CurrentPoly.Vertices[0];
+  CurrentPoly.Vertices ~= Vector3(HalfDimensions.X, HalfDimensions.Y, HalfDimensions.Z);
+  CurrentPoly.Vertices ~= Vector3(HalfDimensions.X, -HalfDimensions.Y, HalfDimensions.Z);
 
   Polygons ~= CurrentPoly;
   CurrentPoly.Vertices.Clear();
@@ -129,7 +123,7 @@ PolyShapeData CreatePolyShapeFromPolygons(IAllocator Allocator, Polygon[] Polys)
       }
       byte FaceIndex = cast(byte)(Faces.Count);
       Faces ~= cast(byte)Edges.Count;
-      Vector3 Normal = (Polygon.Vertices[2] - Polygon.Vertices[1]) ^ (Polygon.Vertices[0] - Polygon.Vertices[1]);
+      Vector3 Normal =  (Polygon.Vertices[0] - Polygon.Vertices[1]) ^ (Polygon.Vertices[2] - Polygon.Vertices[1]);
       Planes ~= CreatePlaneFromNormalAndPoint(Normal, Polygon.Vertices[0]);
       auto FirstEdgeIndex = cast(byte)Edges.Count;
       foreach(Index, Vertex; Polygon.Vertices[1..$])
@@ -151,11 +145,24 @@ PolyShapeData CreatePolyShapeFromPolygons(IAllocator Allocator, Polygon[] Polys)
         Edges ~= NewEdge;
         LastIndex = CurIndex;
       }
-      Edges[-1].NextIndex = FirstEdgeIndex;
+      byte CurIndex = cast(byte)Vertices[].CountUntil(Polygon.Vertices.Back);
+      if (CurIndex < 0)
+      {
+        Vertices ~= Polygon.Vertices.Back;
+        CurIndex = cast(byte)(Vertices.Count - 1);
+      }
+      HalfEdge NewEdge = void;
+      NewEdge.OriginIndex = LastIndex;
+      NewEdge.FaceIndex = FaceIndex;
+      NewEdge.TwinIndex = -1;
+      NewEdge.NextIndex = FirstEdgeIndex;
+      Edges[-1].NextIndex = cast(byte)Edges.Count;
+      Edges ~= NewEdge;
+      LastIndex = CurIndex;
     }
 
     // Find twins
-    foreach(Index, Edge; Edges)
+    foreach(Index, ref Edge; Edges)
     {
       Vector3 FirstDirection = Vertices[Edges[Edge.NextIndex].OriginIndex] - Vertices[Edge.OriginIndex];
       if(Edge.TwinIndex != -1)
