@@ -31,6 +31,23 @@ struct PolyShapeData
     Edges.Allocator = Allocator;
     Planes.Allocator = Allocator;
   }
+
+  Vector3 GetSupport(Vector3 Direction) const
+  {
+    float MaxDistance = float.min_normal;
+    int MaxIndex = -1;
+    foreach(Index, Vertex; Vertices)
+    {
+      float Projection = Vertex.Dot(Direction);
+      if (Projection > MaxDistance)
+      {
+        MaxDistance = Projection;
+        MaxIndex = cast(int)Index;
+      }
+    }
+    assert(MaxIndex > 0);
+    return Vertices[MaxIndex];
+  }
 }
 
 struct SphereShapeData
