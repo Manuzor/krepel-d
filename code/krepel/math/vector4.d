@@ -94,6 +94,12 @@ Vector4 ProjectOntoPlane(Vector4 Vec, Vector4 Normal)
   return Vec - Vec.ProjectOntoNormal(Normal);
 }
 
+/// Calculates the distance between a plane and a point (plane normal needs to be normalized)
+float DistancePlaneToPoint(Vector4 Plane, Vector3 Normal)
+{
+  return (Normal | Plane.XYZ) - Plane.W;
+}
+
 Vector4 CreatePlaneFromNormalAndPoint(Vector3 Normal, Vector3 Point)
 {
   auto NormalizedNormal = krepel.math.vector3.SafeNormalizedCopy(Normal);
@@ -698,5 +704,20 @@ struct Vector4
     auto Result = CreatePlaneFromNormalAndPoint(Normal, Point);
     assert(krepel.math.vector3.NearlyEquals(Result.XYZ,Normal));
     assert(krepel.math.math.NearlyEquals(Result.W, 1));
+  }
+
+  unittest
+  {
+    Vector4 Plane = Vector4(0,0,1,0);
+    Vector3 Position = Vector3.UpVector;
+    assert(krepel.math.math.NearlyEquals(Plane.DistancePlaneToPoint(Position), 1.0f));
+    Plane = Vector4(0,0,1,5);
+    assert(krepel.math.math.NearlyEquals(Plane.DistancePlaneToPoint(Position), -4.0f));
+    Plane = Vector4(0,0,1,5);
+    Position = Vector3.UnitScaleVector;
+    assert(krepel.math.math.NearlyEquals(Plane.DistancePlaneToPoint(Position), -4.0f));
+    Plane = Vector4(1,0,0,5);
+    Position = Vector3.UpVector;
+    assert(krepel.math.math.NearlyEquals(Plane.DistancePlaneToPoint(Position), -5.0f));
   }
 }
