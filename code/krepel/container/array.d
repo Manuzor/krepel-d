@@ -62,9 +62,9 @@ struct Array(T)
 
   void ClearMemory()
   {
-    Clear();
     if(Allocator)
     {
+      Clear();
       Allocator.DeleteUndestructed(AvailableMemory);
     }
     AvailableMemory = null;
@@ -191,8 +191,14 @@ struct Array(T)
       static assert(Meta.IsConvertibleTo!(typeof(Arg), ElementType),
                     Format("Expected something that is convertible to %s, got %s",
                            ElementType.stringof, typeof(Arg).stringof));
-
-      NewData[InsertionIndex++] = Arg;
+      static if(is(typeof(Arg) == struct))
+      {
+        Construct(&NewData[InsertionIndex++], Arg);
+      }
+      else
+      {
+        NewData[InsertionIndex++] = Arg;
+      }
     }
   }
 
