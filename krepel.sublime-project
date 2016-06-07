@@ -53,7 +53,7 @@
           }
         },
         {
-          "name": "Win32 Experiments, Build and Run Tests",
+          "name": "Win32 Experiments, Build and Run",
 
           "windows":
           {
