@@ -4,10 +4,23 @@ import build;
 
 immutable thisDir = dirName(__FILE__);
 
-mixin AddBuildRule!("krepel_tests", Tests);
+mixin AddBuildRule!("krepel_tests", BuildAndRun);
+mixin AddBuildRule!("krepel_tests_build_only", Build);
 
+void Build(ref BuildContext Context)
+{
+  DoBuild(Context);
+}
 
-void Tests(ref BuildContext Context)
+void BuildAndRun(ref BuildContext Context)
+{
+  if(DoBuild(Context))
+  {
+    Run(Context);
+  }
+}
+
+bool DoBuild(ref BuildContext Context)
 {
   with(Context)
   {
@@ -32,8 +45,5 @@ void Tests(ref BuildContext Context)
     BuildArgs ~= "-main";
   }
 
-  if(Compile(Context).CompilerStatus == 0)
-  {
-    Run(Context);
-  }
+  return Compile(Context).CompilerStatus == 0;
 }
