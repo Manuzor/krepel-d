@@ -699,6 +699,11 @@ int main(string[] Args)
     // Make a copy.
     auto Context = BaseBuildContext;
 
+    if(BaseBuildContext.Verbosity > 0)
+    {
+      logf("Build rule: %s", buildRuleName);
+    }
+
     final switch(Context.Platform)
     {
       case PlatformKind.Win32:
