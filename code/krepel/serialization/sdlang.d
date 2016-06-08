@@ -922,6 +922,239 @@ bool ParseNamespaceAndName(SDLDocument Document,
 }
 
 //
+// Query
+//
+
+private static struct SpecData
+{
+  string NodeName;
+  int NodeIndex; // Is always available. Defaults to 0.
+  string AttributeName; // Is only available for "leaf node specs".
+  int ValueIndex = -1; // Is only available for "leaf node specs".
+}
+
+private SpecData QueryParseNodeSpec(ref SourceData Source, ref SDLParsingContext Context, bool* Success)
+{
+  import krepel.conversion.parse_integer;
+
+  if(Success)
+    *Success = true;
+  SpecData Result;
+
+  if(Source.empty)
+    return Result;
+
+  auto Origin = Context.Origin;
+  auto Line = Source.StartLocation.Line;
+  auto Column = Source.StartLocation.Column;
+
+  int NodeIndexSpecBeginIndex  = cast(int)Source[].CountUntil('[');
+  int AttributeSpecIndex       = cast(int)Source[].CountUntil('@');
+  int ValueIndexSpecIndex      = cast(int)Source[].CountUntil('#');
+
+  //
+  // Validate
+  //
+  if(ValueIndexSpecIndex >= 0 && AttributeSpecIndex >= 0)
+  {
+    if(Success)
+      *Success = false;
+    .Log.Failure("%s(%d,%d): Both a value index and attribute spec were given, when only one of them is allowed to exist at once.",
+                 Origin, Line, Column);
+    return Result;
+  }
+
+  if(NodeIndexSpecBeginIndex >= 0)
+  {
+    if(ValueIndexSpecIndex >= 0 && ValueIndexSpecIndex < NodeIndexSpecBeginIndex ||
+       AttributeSpecIndex  >= 0 && AttributeSpecIndex  < NodeIndexSpecBeginIndex)
+    {
+      if(Success)
+        *Success = false;
+      .Log.Failure("%s(%d,%d): The node index spec is expected to come first, not the value index or attribute spec.",
+                   Origin, Line, Column);
+      return Result;
+    }
+  }
+
+  //
+  // Extract the actual data.
+  //
+  Result.NodeName = Source.ParseUntil!(Str => Str.front == '[' || Str.front == '@' || Str.front == '#')(Context);
+
+  if(!Source.empty && Source.front == '[')
+  {
+    Source.AdvanceBy(1);
+    bool FoundClosingBracket;
+    auto NodeIndexSource = Source.ParseNested(Context, "[", "]", &FoundClosingBracket);
+    if(NodeIndexSource.empty)
+    {
+      if(Success)
+        *Success = false;
+      .Log.Failure("%s(%d,%d): Empty node index spec is not allowed.",
+                   Origin, NodeIndexSource.StartLocation.Line, NodeIndexSource.StartLocation.Column);
+      return Result;
+    }
+    if(!FoundClosingBracket)
+    {
+      if(Success)
+        *Success = false;
+      .Log.Failure("%s(%d,%d): Missing closing bracket for node index spec.",
+                   Origin, NodeIndexSource.StartLocation.Line, NodeIndexSource.StartLocation.Column);
+      return Result;
+    }
+
+    auto NodeIndexString = NodeIndexSource[];
+    auto ParseResult = ParseInteger!(typeof(Result.NodeIndex))(NodeIndexString);
+    if(!ParseResult.Success)
+    {
+      if(Success)
+        *Success = false;
+      .Log.Failure("%s(%d,%d): Failed to parse integer.",
+                   Origin, NodeIndexSource.StartLocation.Line, NodeIndexSource.StartLocation.Column);
+      return Result;
+    }
+
+    Result.NodeIndex = cast(typeof(Result.NodeIndex))ParseResult;
+  }
+
+  if(!Source.empty)
+  {
+    if(Source.front == '@')
+    {
+      Source.AdvanceBy(1);
+      if(Source.empty)
+      {
+        if(Success)
+          *Success = false;
+        .Log.Failure("%s(%d,%d): Empty attribute spec is not allowed.",
+                     Origin, Source.StartLocation.Line, Source.StartLocation.Column);
+        return Result;
+      }
+
+      Result.AttributeName = Source;
+    }
+    else if(Source.front == '#')
+    {
+      Source.AdvanceBy(1);
+      if(Source.empty)
+      {
+        if(Success)
+          *Success = false;
+        .Log.Failure("%s(%d,%d): Empty value index spec is not allowed.",
+                     Origin, Source.StartLocation.Line, Source.StartLocation.Column);
+        return Result;
+      }
+
+      auto ValueIndexString = Source[];
+      auto ParseResult = ParseInteger!(typeof(Result.ValueIndex))(ValueIndexString);
+      if(!ParseResult.Success)
+      {
+        if(Success)
+          *Success = false;
+        .Log.Failure("%s(%d,%d): Failed to parse integer.",
+                     Origin, Source.StartLocation.Line, Source.StartLocation.Column);
+        return Result;
+      }
+
+      Result.ValueIndex = cast(typeof(Result.ValueIndex))ParseResult;
+    }
+  }
+
+  return Result;
+}
+
+ReturnType Query(ReturnType)(SDLDocument Document, string QueryString, bool* Success = null, LogData* Log = .Log)
+{
+  if(Success)
+    *Success = true;
+  typeof(return) Result;
+
+  auto Source = SourceData(QueryString);
+  with(Source.StartLocation) { Line = 1; Column = 1; SourceIndex = 0; }
+  with(Source.EndLocation)   { Line = 0; Column = 0; SourceIndex = Source.Value.length; }
+  auto Context = SDLParsingContext("Query");
+
+  auto Node = Document.Root;
+
+  // Only one of the following may be set at a given time.
+  int ValueIndex = -1;
+  string AttributeName;
+
+  while(true)
+  {
+    auto NodeSpec = Source.ParseUntil!(Str => Str.front == '/')(Context);
+    if(NodeSpec.empty)
+      break;
+
+    bool IsValidNodeSpec;
+    auto Spec = QueryParseNodeSpec(NodeSpec, Context, &IsValidNodeSpec);
+
+    if(!IsValidNodeSpec)
+    {
+      if(Success)
+        *Success = false;
+      // Note(Manu): QueryParseNodeSpec logs when there are errors, so there's
+      // no need to log something here as well.
+      return Result;
+    }
+
+    assert(Spec.NodeName);
+    Node = Node.Nodes[Spec.NodeName][Spec.NodeIndex];
+
+    if(Source.empty)
+    {
+      ValueIndex = Spec.ValueIndex;
+      AttributeName = Spec.AttributeName;
+
+      // We are at the end of the query string.
+      break;
+    }
+    else
+    {
+      assert(Source.front == '/');
+
+      if(Spec.ValueIndex >= 0)
+      {
+        if(Success)
+          *Success = false;
+        .Log.Failure("%s(%d,%d): Value index spec is only allowed at the end of the query string.",
+                     Context.Origin, NodeSpec.StartLocation.Line, NodeSpec.StartLocation.Column);
+        return Result;
+      }
+
+      Source.AdvanceBy(1);
+
+      if(Source.empty)
+      {
+        if(Success)
+          *Success = false;
+        .Log.Failure("%s(%d,%d): Expected more content after the '/' but found none.",
+                     Context.Origin, Source.StartLocation.Line, Source.StartLocation.Column);
+        return Result;
+      }
+    }
+  }
+
+  static if(is(ReturnType == SDLNodeHandle))
+  {
+    if(AttributeName)
+    {
+      if(Success)
+        *Success = false;
+      .Log.Failure("%s: Result type is requested to be a SDLNodeHandle, but the query string contained a attribute spec.", Context.Origin);
+      return Result;
+    }
+    return Node;
+  }
+  else
+  {
+    if(AttributeName) return cast(ReturnType)Node.Attribute(AttributeName);
+    else              return cast(ReturnType)Node.Values[Max(0, ValueIndex)];
+  }
+}
+
+//
 // Unit Tests
 //
 
@@ -1421,4 +1654,52 @@ unittest
   assert(!Document.Root.Nodes["foo"][0].Attribute("bar").IsValid);
   assert(cast(string)Document.Root.Nodes["foo"][0].Nodes["baz"][0].Attribute("key") == "value");
   assert(cast(int)Document.Root.Nodes["foo"][0].Nodes["baz"][0].Nodes["baaz"][0].Attribute("answer") == 42);
+}
+
+// Query
+unittest
+{
+  auto TestAllocator = CreateTestAllocator!StackMemory();
+
+  auto Context = SDLParsingContext("Query Test 1", .Log);
+
+  auto Document = TestAllocator.New!SDLDocument(TestAllocator);
+  auto Source = q"(
+    Foo "Bar" "Bar?" "Bar!" Key="Value" {
+      Baz "Qux" {
+        Baaz "Quux" 1337 answer=42
+        Baaz "Fuux" 123  answer=43
+      }
+
+      Baz "Sup" {
+        Baaz "Quux, again"
+      }
+    }
+  )";
+  Document.ParseDocumentFromString(Source, Context);
+
+  assert(Document.Query!string("Foo") == "Bar");
+  assert(Document.Query!string("Foo#0") == "Bar");
+  assert(Document.Query!string("Foo#1") == "Bar?");
+  assert(Document.Query!string("Foo#2") == "Bar!");
+  assert(Document.Query!string("Foo[0]") == "Bar");
+  assert(Document.Query!string("Foo[0]#0") == "Bar");
+  assert(Document.Query!string("Foo[0]#1") == "Bar?");
+  assert(Document.Query!string("Foo[0]#2") == "Bar!");
+  assert(Document.Query!string("Foo@Key") == "Value");
+  assert(Document.Query!string("Foo/Baz") == "Qux");
+  assert(Document.Query!string("Foo/Baz[1]") == "Sup");
+  assert(Document.Query!string("Foo/Baz/Baaz") == "Quux");
+  assert(Document.Query!string("Foo/Baz[1]/Baaz") == "Quux, again");
+  assert(Document.Query!int("Foo/Baz/Baaz#1") == 1337);
+  assert(Document.Query!int("Foo/Baz/Baaz@answer") == 42);
+  assert(Document.Query!string("Foo/Baz/Baaz[1]") == "Fuux");
+  assert(Document.Query!int("Foo/Baz/Baaz[1]#1") == 123);
+  assert(Document.Query!int("Foo/Baz/Baaz[1]@answer") == 43);
+
+  auto Foo = Document.Query!SDLNodeHandle("Foo");
+  assert(Foo.IsValidHandle);
+  assert(Foo.Values.length == 3);
+  assert(Foo.Attributes.length == 1);
+  assert(cast(string)Foo.Attribute("Key") == "Value");
 }
