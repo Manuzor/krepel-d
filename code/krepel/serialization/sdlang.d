@@ -11,16 +11,18 @@ class SDLDocument
   /// The flat list of all nodes that you should never have to access directly.
   Array!SDLNode AllNodes;
 
-  /// The first node in the SDL document.
+  /// The root node of this document.
   ///
-  /// Note: In XML this would be the first child of the root node.
-  SDLNodeHandle FirstChild;
+  /// Only serves as a container for all top-level nodes within the document.
+  SDLNodeHandle Root;
 
   @property IAllocator Allocator() { return this.AllNodes.Allocator; }
 
   this(IAllocator Allocator)
   {
     this.AllNodes.Allocator = Allocator;
+    this.AllNodes.Reserve(32);
+    this.Root = CreateNode();
   }
 
   SDLNodeHandle CreateNode()
@@ -52,7 +54,7 @@ struct SDLNodeHandle
       return this.Document is null ? null : &this.Document.AllNodes[this.Index];
     }
 
-    bool IsValidHandle() { return this._Ptr !is null; }
+    bool IsValidHandle() const { return this._Ptr !is null; }
   }
 
   alias _Ptr this;
@@ -425,7 +427,7 @@ bool ParseDocumentFromString(SDLDocument Document, string SourceString, ref SDLP
 
 bool ParseDocumentFromSource(SDLDocument Document, ref SourceData Source, ref SDLParsingContext Context)
 {
-  return Document.ParseInnerNodes(Source, Context, &Document.FirstChild);
+  return Document.ParseInnerNodes(Source, Context, &Document.Root.FirstChild);
 }
 
 bool ParseInnerNodes(SDLDocument Document, ref SourceData Source, ref SDLParsingContext Context,
@@ -980,7 +982,7 @@ unittest
   auto Document = TestAllocator.New!SDLDocument(TestAllocator);
   Document.ParseDocumentFromString(`foo "bar"`, Context);
 
-  auto Node = Document.FirstChild;
+  auto Node = Document.Root.FirstChild;
   assert(Node.IsValidHandle);
   assert(Node.Name == "foo");
   assert(Node.Values.length == 1);
@@ -998,7 +1000,7 @@ unittest
   auto Document = TestAllocator.New!SDLDocument(TestAllocator);
   Document.ParseDocumentFromString(`foo "bar" baz="qux"`, Context);
 
-  auto Node = Document.FirstChild;
+  auto Node = Document.Root.FirstChild;
   assert(Node.IsValidHandle);
   assert(Node.Name == "foo");
   assert(Node.Values.length == 1);
@@ -1024,7 +1026,7 @@ unittest
   )";
   Document.ParseDocumentFromString(Source, Context);
 
-  auto Node = Document.FirstChild;
+  auto Node = Document.Root.FirstChild;
   assert(Node.IsValidHandle);
   assert(Node.Name == "foo");
   assert(Node.Values.length == 1);
@@ -1056,7 +1058,7 @@ unittest
   )";
   Document.ParseDocumentFromString(Source, Context);
 
-  auto Node = Document.FirstChild;
+  auto Node = Document.Root.FirstChild;
   assert(Node.IsValidHandle);
   assert(Node.Name == "foo");
   assert(Node.Values.length == 1);
@@ -1087,7 +1089,7 @@ unittest
   auto Document = TestAllocator.New!SDLDocument(TestAllocator);
   Document.ParseDocumentFromString(`answer 42`, Context);
 
-  auto Node = Document.FirstChild;
+  auto Node = Document.Root.FirstChild;
   assert(Node.IsValidHandle);
   assert(Node.Name == "answer");
   assert(Node.Values.length == 1);
@@ -1101,7 +1103,7 @@ unittest
   void TheActualTest(SDLDocument Document)
   {
     // foo "bar"
-    auto Node = Document.FirstChild;
+    auto Node = Document.Root.FirstChild;
     assert(Node.IsValidHandle);
     assert(Node.Name == "foo");
     assert(Node.Values.Count == 1);
