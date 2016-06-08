@@ -973,14 +973,11 @@ unittest
 // Parse simple document
 unittest
 {
-  SystemMemory System;
-  auto Stack = StackMemory(System.Allocate(2.MiB, 1));
-  scope(exit) System.Deallocate(Stack.Memory);
-  auto StackAllocator = Wrap(Stack);
+  auto TestAllocator = CreateTestAllocator!StackMemory();
 
   auto Context = SDLParsingContext("SDL Test 5", .Log);
 
-  auto Document = StackAllocator.New!SDLDocument(StackAllocator);
+  auto Document = TestAllocator.New!SDLDocument(TestAllocator);
   Document.ParseDocumentFromString(`foo "bar"`, Context);
 
   auto Node = Document.FirstChild;
@@ -994,14 +991,11 @@ unittest
 // Parse simple document with attributes
 unittest
 {
-  SystemMemory System;
-  auto Stack = StackMemory(System.Allocate(2.MiB, 1));
-  scope(exit) System.Deallocate(Stack.Memory);
-  auto StackAllocator = Wrap(Stack);
+  auto TestAllocator = CreateTestAllocator!StackMemory();
 
   auto Context = SDLParsingContext("SDL Test 6", .Log);
 
-  auto Document = StackAllocator.New!SDLDocument(StackAllocator);
+  auto Document = TestAllocator.New!SDLDocument(TestAllocator);
   Document.ParseDocumentFromString(`foo "bar" baz="qux"`, Context);
 
   auto Node = Document.FirstChild;
@@ -1019,14 +1013,11 @@ unittest
 // Parse document with multiple nodes
 unittest
 {
-  SystemMemory System;
-  auto Stack = StackMemory(System.Allocate(2.MiB, 1));
-  scope(exit) System.Deallocate(Stack.Memory);
-  auto StackAllocator = Wrap(Stack);
+  auto TestAllocator = CreateTestAllocator!StackMemory();
 
   auto Context = SDLParsingContext("SDL Test 7", .Log);
 
-  auto Document = StackAllocator.New!SDLDocument(StackAllocator);
+  auto Document = TestAllocator.New!SDLDocument(TestAllocator);
   auto Source = q"(
     foo "bar"
     baz "qux"
@@ -1051,14 +1042,11 @@ unittest
 // Parse document with child nodes
 unittest
 {
-  SystemMemory System;
-  auto Stack = StackMemory(System.Allocate(2.MiB, 1));
-  scope(exit) System.Deallocate(Stack.Memory);
-  auto StackAllocator = Wrap(Stack);
+  auto TestAllocator = CreateTestAllocator!StackMemory();
 
   auto Context = SDLParsingContext("SDL Test 8", .Log);
 
-  auto Document = StackAllocator.New!SDLDocument(StackAllocator);
+  auto Document = TestAllocator.New!SDLDocument(TestAllocator);
   auto Source = q"(
     foo "bar" {
       baz "qux" {
@@ -1092,14 +1080,11 @@ unittest
 
 unittest
 {
-  SystemMemory System;
-  auto Stack = StackMemory(System.Allocate(2.MiB, 1));
-  scope(exit) System.Deallocate(Stack.Memory);
-  auto StackAllocator = Wrap(Stack);
+  auto TestAllocator = CreateTestAllocator!StackMemory();
 
   auto Context = SDLParsingContext("SDL Test 9", .Log);
 
-  auto Document = StackAllocator.New!SDLDocument(StackAllocator);
+  auto Document = TestAllocator.New!SDLDocument(TestAllocator);
   Document.ParseDocumentFromString(`answer 42`, Context);
 
   auto Node = Document.FirstChild;
@@ -1293,22 +1278,19 @@ unittest
     assert(!Node.Next.IsValidHandle);
   }
 
-  SystemMemory System;
-  auto Stack = StackMemory(System.Allocate(2.MiB, 1));
-  scope(exit) System.Deallocate(Stack.Memory);
-  auto StackAllocator = Wrap(Stack);
+  auto TestAllocator = CreateTestAllocator!StackMemory();
 
   auto FileName = "../unittest/sdlang/full.sdl"w;
-  auto File = OpenFile(StackAllocator, FileName);
-  scope(exit) CloseFile(StackAllocator, File);
+  auto File = OpenFile(TestAllocator, FileName);
+  scope(exit) CloseFile(TestAllocator, File);
 
   // TODO(Manu): Once we have WString => UString conversion, use the filename
   // as context.
   auto Context = SDLParsingContext("Full", .Log);
-  auto Document = StackAllocator.New!SDLDocument(StackAllocator);
+  auto Document = TestAllocator.New!SDLDocument(TestAllocator);
 
-  scope(exit) StackAllocator.Delete(Document);
-  auto SourceString = StackAllocator.NewArray!char(File.Size);
+  scope(exit) TestAllocator.Delete(Document);
+  auto SourceString = TestAllocator.NewArray!char(File.Size);
   auto BytesRead = File.Read(SourceString);
   assert(BytesRead == SourceString.length);
   assert(Document.ParseDocumentFromString(cast(string)SourceString, Context), SourceString);
@@ -1324,7 +1306,7 @@ unittest
 version(none)
 unittest
 {
-  auto TestAllocator = CreateTestAllocator();
+  auto TestAllocator = CreateTestAllocator!StackMemory();
 
   const SourceString = q"(
     foo "bar" {

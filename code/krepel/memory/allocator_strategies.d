@@ -183,37 +183,40 @@ struct HybridAllocator(P, S)
 
 version(unittest)
 {
-  /// Returns a struct that wraps a AutoAllocator with HeapMemory that
-  /// automatically uses SystemMemory to allocate heaps.
-  auto CreateTestAllocator(size_t HeapSize = 1.MiB)
+  /// Returns a struct that wraps a AutoAllocator (using HeapMemory by
+  /// default) that automatically uses SystemMemory to allocate heaps.
+  template CreateTestAllocator(MemoryType = HeapMemory)
   {
-    static struct TestAllocatorData
+    auto CreateTestAllocator(size_t HeapSize = 1.MiB)
     {
-      // Note(Manu): I've prefixed stuff with an underscore '_' so they may
-      // never conflict with anything in the IAllocator interface (due to the
-      // 'alias this' thing).
-
-      SystemMemory _Sys;
-      AutoAllocator!HeapMemory _AutoHeap;
-
-      this(this)
+      static struct TestAllocatorData
       {
-        // Ensure the pointer is correct.
-        _AutoHeap.Allocator = Wrap(_Sys);
+        // Note(Manu): I've prefixed stuff with an underscore '_' so they may
+        // never conflict with anything in the IAllocator interface (due to the
+        // 'alias this' thing).
+
+        SystemMemory _Sys;
+        AutoAllocator!MemoryType _AutoAllocator;
+
+        this(this)
+        {
+          // Ensure the pointer is correct.
+          _AutoAllocator.Allocator = Wrap(_Sys);
+        }
+
+        @property IAllocator _Allocator() { return Wrap(_AutoAllocator); }
+
+        mixin CommonMemoryImplementation;
+
+        alias _Allocator this;
       }
 
-      @property IAllocator _Allocator() { return Wrap(_AutoHeap); }
 
-      mixin CommonMemoryImplementation;
-
-      alias _Allocator this;
+      TestAllocatorData Result;
+      Result._AutoAllocator.BlockSize = HeapSize;
+      Result._AutoAllocator.Allocator = Wrap(Result._Sys);
+      return Result;
     }
-
-
-    TestAllocatorData Result;
-    Result._AutoHeap.BlockSize = HeapSize;
-    Result._AutoHeap.Allocator = Wrap(Result._Sys);
-    return Result;
   }
 }
 
