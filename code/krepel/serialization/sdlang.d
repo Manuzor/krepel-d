@@ -61,9 +61,9 @@ struct SDLNodeHandle
 }
 
 // TODO(Manu): Allow for some kind of patterns.
-bool SDLNodeNameMatchesFilter(const(char)[] NodeName, string Filter)
+bool SDLIdentifierMatchesFilter(SDLIdentifier Identifier, string Filter)
 {
-  return Filter.empty || NodeName == Filter;
+  return Filter.empty || Identifier.Value == Filter;
 }
 
 // TODO(Manu): It feels like this iterator performs terribly. So, try to optimize it some time.
@@ -80,7 +80,7 @@ struct SDLNodeIterator
     typeof(return) NumMatches;
     while(Node.IsValidHandle)
     {
-      if(SDLNodeNameMatchesFilter(Node.Name, this.Filter))
+      if(SDLIdentifierMatchesFilter(Node.Name, this.Filter))
       {
         NumMatches++;
       }
@@ -108,7 +108,7 @@ struct SDLNodeIterator
     auto RemainingMatchesToFind = Index;
     while(Node.IsValidHandle)
     {
-      if(SDLNodeNameMatchesFilter(Node.Name, this.Filter))
+      if(SDLIdentifierMatchesFilter(Node.Name, this.Filter))
       {
         if(RemainingMatchesToFind == 0)
           return Node;
@@ -148,13 +148,28 @@ struct SDLNode
   bool IsAnonymous;
   SDLIdentifier Namespace;
   SDLIdentifier Name;
+
+  /// Note: In the same order as they appear in the file.
   Array!SDLLiteral Values;
+
+  /// Note: In the same order as they appear in the file.
   Array!SDLAttribute Attributes;
 
   //
   // Data Access
   //
   @property SDLNodeIterator Nodes() { return SDLNodeIterator(this.FirstChild); }
+
+  SDLLiteral Attribute(string Key)
+  {
+    foreach(ref Attr; this.Attributes)
+    {
+      if(SDLIdentifierMatchesFilter(Attr.Name, Key))
+        return Attr.Value;
+    }
+
+    return SDLLiteral();
+  }
 }
 
 struct SDLIdentifier
@@ -168,6 +183,16 @@ struct SDLAttribute
   SDLIdentifier Namespace;
   SDLIdentifier Name;
   SDLLiteral Value;
+}
+
+enum SDLLiteralType
+{
+  INVALID,
+
+  String,
+  Number,
+  Boolean,
+  Binary,
 }
 
 struct SDLLiteral
@@ -225,16 +250,8 @@ struct SDLLiteral
       static assert(0, "Cannot convert an SDL literal to " ~ To.stringof);
     }
   }
-}
 
-enum SDLLiteralType
-{
-  INVALID,
-
-  String,
-  Number,
-  Boolean,
-  Binary,
+  @property bool IsValid() const { return this.Type != SDLLiteralType.INVALID; }
 }
 
 //
@@ -1379,8 +1396,8 @@ unittest
 
   const SourceString = q"(
     foo "bar" {
-      baz "qux" {
-        baaz "quux"
+      baz "qux" key="value" {
+        baaz "quux" answer=42
       }
     }
   )";
@@ -1400,4 +1417,8 @@ unittest
   {
     assert(cast(string)Node.Values[0] == "bar");
   }
+
+  assert(!Document.Root.Nodes["foo"][0].Attribute("bar").IsValid);
+  assert(cast(string)Document.Root.Nodes["foo"][0].Nodes["baz"][0].Attribute("key") == "value");
+  assert(cast(int)Document.Root.Nodes["foo"][0].Nodes["baz"][0].Nodes["baaz"][0].Attribute("answer") == 42);
 }
