@@ -60,6 +60,69 @@ struct SDLNodeHandle
   alias _Ptr this;
 }
 
+// TODO(Manu): Allow for some kind of patterns.
+bool SDLNodeNameMatchesFilter(const(char)[] NodeName, string Filter)
+{
+  return Filter.empty || NodeName == Filter;
+}
+
+// TODO(Manu): It feels like this iterator performs terribly. So, try to optimize it some time.
+struct SDLNodeIterator
+{
+  SDLNodeHandle Current;
+  string Filter;
+
+  @property bool empty() const { return !Current.IsValidHandle; }
+
+  @property size_t length()
+  {
+    auto Node = this.Current;
+    typeof(return) NumMatches;
+    while(Node.IsValidHandle)
+    {
+      if(SDLNodeNameMatchesFilter(Node.Name, this.Filter))
+      {
+        NumMatches++;
+      }
+      Node = Node.Next;
+    }
+
+    return NumMatches;
+  }
+
+  alias opDollar = length;
+
+  @property inout(SDLNodeHandle) front() inout { return this.Current; }
+
+  void popFront() { assert(this.Current.IsValidHandle); this.Current = this.Current.Next; }
+
+  SDLNodeIterator opIndex(string ChildFilter)
+  {
+    return SDLNodeIterator(this.Current, ChildFilter);
+  }
+
+  SDLNodeHandle opIndex(IndexType)(IndexType Index)
+    if(Meta.IsNumeric!IndexType)
+  {
+    auto Node = this.Current;
+    auto RemainingMatchesToFind = Index;
+    while(Node.IsValidHandle)
+    {
+      if(SDLNodeNameMatchesFilter(Node.Name, this.Filter))
+      {
+        if(RemainingMatchesToFind == 0)
+          return Node;
+        RemainingMatchesToFind--;
+      }
+      Node = Node.Next;
+    }
+
+    .Log.Failure("Out of bounds in SDLNodeIterator.");
+    debug assert(false);
+    else return SDLNodeHandle();
+  }
+}
+
 struct SDLNode
 {
   /// The document this node belongs to.
@@ -87,6 +150,11 @@ struct SDLNode
   SDLIdentifier Name;
   Array!SDLLiteral Values;
   Array!SDLAttribute Attributes;
+
+  //
+  // Data Access
+  //
+  @property SDLNodeIterator Nodes() { return SDLNodeIterator(this.FirstChild); }
 }
 
 struct SDLIdentifier
@@ -1305,7 +1373,6 @@ unittest
   TheActualTest(Document);
 }
 
-version(none)
 unittest
 {
   auto TestAllocator = CreateTestAllocator!StackMemory();
@@ -1323,4 +1390,14 @@ unittest
 
   auto ParsingContext = SDLParsingContext("Convenience", .Log);
   Document.ParseDocumentFromString(SourceString, ParsingContext);
+
+  assert(cast(string)Document.Root.Nodes["foo"][0].Values[0] == "bar");
+  assert(cast(string)Document.Root.Nodes["foo"][0].Nodes["baz"][0].Values[0] == "qux");
+  assert(cast(string)Document.Root.Nodes["foo"][0].Nodes["baz"][0].Nodes["baaz"][0].Values[0] == "quux");
+  assert(Document.Root.Nodes["baz"].length == 0);
+
+  foreach(Node; Document.Root.Nodes)
+  {
+    assert(cast(string)Node.Values[0] == "bar");
+  }
 }
