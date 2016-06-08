@@ -37,6 +37,14 @@
           }
         },
         {
+          "name": "Krepel Tests, Run Only",
+
+          "windows":
+          {
+            "cmd": [ "${folder}\\build.bat", "krepel_tests_run_only" ]
+          }
+        },
+        {
           "name": "Krepel Tests, Build and Run",
 
           "windows":
