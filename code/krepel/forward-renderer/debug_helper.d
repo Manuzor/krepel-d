@@ -17,6 +17,11 @@ struct DebugRenderData
 {
   DebugRenderMesh Mesh;
   Transform Transformation;
+
+  ~this()
+  {
+    Mesh.Vertices.ClearMemory();
+  }
 }
 
 class DebugRenderHelper
@@ -62,7 +67,7 @@ class DebugRenderHelper
     }
   }
 
-  DebugRenderMesh CreateFromPolyShape(PolyShapeData ShapeData, ColorLinear[] PolyColors, float ExplodeDistance = 0.1f)
+  DebugRenderMesh CreateFromPolyShape(ref const(PolyShapeData) ShapeData, ColorLinear[] PolyColors, float ExplodeDistance = 0.1f)
   {
     assert(PolyColors.length > 0);
     DebugRenderMesh Data;
@@ -104,7 +109,7 @@ class DebugRenderHelper
     return Data;
   }
 
-  void AddPolyShape(Transform Transformation, PolyShapeData ShapeData, ColorLinear[] PolyColors, float ExplodeDistance = 0.0f)
+  void AddPolyShape(Transform Transformation, ref const(PolyShapeData) ShapeData, ColorLinear[] PolyColors, float ExplodeDistance = 0.0f)
   {
     AddData(Transformation, CreateFromPolyShape(ShapeData, PolyColors, ExplodeDistance));
   }
@@ -239,6 +244,7 @@ class DebugRenderHelper
     WorldConstantBuffer WorldData;
     foreach(RenderData; DataToRender)
     {
+      assert(RenderData.Mesh.Vertices.Count > 0);
       IRenderConstantBuffer ConstantBuffer;
       WorldData.ModelMatrix = RenderData.Transformation.ToMatrix;
       WorldData.ModelViewProjectionMatrix = WorldData.ModelMatrix * GlobalEngine.Renderer.GetViewProjectionMatrix();

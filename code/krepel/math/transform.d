@@ -47,7 +47,7 @@ Transform Concatenate(in ref Transform A, in ref Transform B)
   return Result;
 }
 
-Transform InversedCopy(in ref Transform InputTransform)
+Transform InversedCopy(Transform InputTransform)
 {
   Transform Result = void;
   with(InputTransform)

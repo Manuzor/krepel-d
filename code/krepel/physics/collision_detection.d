@@ -134,7 +134,28 @@ class CollisionDetection
 
   static CollisionResult CheckCollisionPolyPoly(RigidBody Poly1, RigidBody Poly2)
   {
-    return CollisionResult.EmptyResult;
+    FaceQueryResult FaceResult;
+    FaceQuery(FaceResult, Poly1, Poly2);
+    if (FaceResult.Distance > 0.0f)
+    {
+      return CollisionResult.EmptyResult;
+    }
+    FaceQuery(FaceResult, Poly2, Poly1);
+    if (FaceResult.Distance > 0.0f)
+    {
+      return CollisionResult.EmptyResult;
+    }
+    EdgeQueryResult EdgeResult;
+    QueryEdgeDirections(EdgeResult, Poly1, Poly2);
+    if(EdgeResult.Distance > 0.0f)
+    {
+      return CollisionResult.EmptyResult;
+    }
+
+    CollisionResult Collision;
+    Collision.DoesCollide = true;
+
+    return Collision;
   }
 
   static void FaceQuery(ref FaceQueryResult Result, RigidBody Poly1, RigidBody Poly2)
@@ -178,10 +199,10 @@ class CollisionDetection
     return CBA * DBA < 0.0f && ADC * BDC < 0.0f && CBA * BDC > 0.0f;
   }
 
-  static void QueryEdgeDirections( ref EdgeQueryResult Out, ref const(Transform) Transform1, ref const (RigidBody) RigidBody1, ref const (Transform) Transform2, ref const (RigidBody) RigidBody2 )
+  static void QueryEdgeDirections( ref EdgeQueryResult Out, ref const (RigidBody) RigidBody1, ref const (RigidBody) RigidBody2 )
   {
     // We perform all computations in local space of the second RigidBody
-    Transform Transformation = RigidBody1.Owner.GetWorldTransform * RigidBody2.Owner.GetWorldTransform;
+    Transform Transformation = RigidBody2.Owner.GetWorldTransform * RigidBody1.Owner.GetWorldTransform;
 
     // Find axis of minimum penetration
     int MaxIndex1 = -1;

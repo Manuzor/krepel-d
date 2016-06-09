@@ -45,7 +45,7 @@ struct PolyShapeData
         MaxIndex = cast(int)Index;
       }
     }
-    assert(MaxIndex > 0);
+    assert(MaxIndex >= 0);
     return Vertices[MaxIndex];
   }
 }

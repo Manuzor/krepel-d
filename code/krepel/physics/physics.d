@@ -3,8 +3,7 @@ module krepel.physics.system;
 import krepel;
 import krepel.engine;
 import krepel.game_framework;
-import krepel.physics.rigid_body;
-import krepel.physics.collision_detection;
+import krepel.physics;
 import krepel.input;
 
 class PhysicsSystem : Subsystem
@@ -57,7 +56,7 @@ class PhysicsSystem : Subsystem
         if (Body.BodyMovability == Movability.Dynamic)
         {
           Body.Velocity += DeltaGravity;
-          Body.Owner.MoveWorld(Body.Velocity * Tick.ElapsedTime);
+          //Body.Owner.MoveWorld(Body.Velocity * Tick.ElapsedTime);
         }
       }
       foreach(Index1, Body1; RigidBodies)
@@ -69,6 +68,16 @@ class PhysicsSystem : Subsystem
             auto CollisionResult = CollisionDetection.CheckCollision(Body1, Body2);
             if (CollisionResult.DoesCollide)
             {
+              ColorLinear[1] DebugColor = [CollisionResult.DoesCollide ? Colors.Red : Colors.Lime];
+
+              if (Body1.Shape.Type == ShapeType.Poly)
+              {
+                GlobalEngine.DebugHelper.AddPolyShape(Body1.Owner.GetWorldTransform, Body1.Shape.Poly, DebugColor);
+              }
+              if (Body2.Shape.Type == ShapeType.Poly)
+              {
+                GlobalEngine.DebugHelper.AddPolyShape(Body2.Owner.GetWorldTransform, Body2.Shape.Poly, DebugColor );
+              }
               Vector3 ResolvanceVector = CollisionResult.PenetrationDepth * CollisionResult.CollisionNormal;
               float Body1ResolvanceFactor = 1.0f;
               float Body2ResolvanceFactor = 0.0f;
@@ -93,6 +102,7 @@ class PhysicsSystem : Subsystem
                 Body2.Owner.MoveWorld(-ResolvanceVector * Body2ResolvanceFactor);
               }
             }
+
           }
         }
       }

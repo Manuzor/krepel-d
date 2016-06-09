@@ -48,6 +48,7 @@ struct MemoryVerifier
     AllocationInfo Info;
     Info.Region = NewMemory;
     Info.Trace = InternalDebugAllocator.New!StackTrace(2, null);
+    long OverallSize = 0;
     foreach(Region; AllocatedMemory)
     {
       auto MaxStartAddress = Max(NewMemory.ptr, Region.Region.ptr);
@@ -66,7 +67,10 @@ struct MemoryVerifier
           DebugBreak();
         assert(0, "Overlapping memory detected");
       }
+      OverallSize += Region.Region.length;
     }
+    static AllocCount = 0;
+    Log.Info("Allocation Size: %d byte [%d]", OverallSize, AllocCount++);
     AllocatedMemory ~= Info;
     return NewMemory;
   }
