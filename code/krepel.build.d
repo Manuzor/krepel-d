@@ -4,10 +4,33 @@ import build;
 
 immutable thisDir = dirName(__FILE__);
 
-mixin AddBuildRule!("krepel_tests", Tests);
+mixin AddBuildRule!("krepel_tests", KrepelTests_BuildAndRun);
+mixin AddBuildRule!("krepel_tests_build_only", KrepelTests_BuildOnly);
+mixin AddBuildRule!("krepel_tests_run_only", KrepelTests_RunOnly);
 
+void KrepelTests_BuildAndRun(ref BuildContext Context)
+{
+  Prepare(Context);
 
-void Tests(ref BuildContext Context)
+  if(Compile(Context).CompilerStatus == 0)
+  {
+    Run(Context);
+  }
+}
+
+void KrepelTests_BuildOnly(ref BuildContext Context)
+{
+  Prepare(Context);
+  Compile(Context);
+}
+
+void KrepelTests_RunOnly(ref BuildContext Context)
+{
+  Prepare(Context);
+  Run(Context);
+}
+
+private void Prepare(ref BuildContext Context)
 {
   with(Context)
   {
@@ -24,16 +47,11 @@ void Tests(ref BuildContext Context)
     //
     // Set runtime linking versions of DirectX
     //
-    BuildArgs ~= "-version=DXGI_RuntimeLinking";
-    BuildArgs ~= "-version=D3D11_RuntimeLinking";
+    //BuildArgs ~= "-version=DXGI_RuntimeLinking";
+    //BuildArgs ~= "-version=D3D11_RuntimeLinking";
     BuildArgs ~= "-version=XInput_RuntimeLinking";
 
     BuildArgs ~= "-unittest";
     BuildArgs ~= "-main";
-  }
-
-  if(Compile(Context).CompilerStatus == 0)
-  {
-    Run(Context);
   }
 }

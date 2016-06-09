@@ -3,6 +3,7 @@ module krepel.win32.directx.d3d11;
 public import core.sys.windows.windows;
 public import directx.d3d11_1;
 public import directx.d3dcompiler;
+public import directx.d3d11sdklayers;
 
 version(D3D11_RuntimeLinking)
 {
@@ -64,5 +65,3 @@ version(D3D11_RuntimeLinking)
     return false;
   }
 }
-
-

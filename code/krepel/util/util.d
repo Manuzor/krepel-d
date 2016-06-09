@@ -13,6 +13,12 @@ struct ByteSwapUnion
   }
 }
 
+void[] AsVoidRange(Type)(ref Type Instance)
+  if(is(Type == struct))
+{
+  return (cast(void*)(&Instance))[0..Type.sizeof];
+}
+
 ushort ByteSwapUShort(ushort Short)
 {
   ByteSwapUnion Tmp = void;

@@ -19,12 +19,12 @@ class SceneComponent : GameComponent
     Transformation = Transform.Identity;
   }
 
-  Transform GetLocalTransform()
+  Transform GetLocalTransform() const
   {
     return Transformation;
   }
 
-  Transform GetWorldTransform()
+  Transform GetWorldTransform() const
   {
     if (Parent)
     {
@@ -47,8 +47,20 @@ class SceneComponent : GameComponent
     Transformation = NewTransform;
   }
 
+  void MoveWorld(Vector3 Delta)
+  {
+    auto WorldTransform = GetWorldTransform();
+    WorldTransform.Translation += Delta;
+    SetWorldTransform(WorldTransform);
+  }
+
+  void MoveLocal(Vector3 Delta)
+  {
+    Transformation.Translation += Delta;
+  }
+
 
 
 private:
-  Transform Transformation;
+  Transform Transformation = Transform();
 }

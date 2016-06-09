@@ -77,6 +77,12 @@ Vector3 SafeNormalizedCopy(Vector3 Vec, float Epsilon = 1e-4f)
   return Copy;
 }
 
+/// Returns the component wise absolute values of the vector
+Vector3 GetAbs(Vector3 Vec)
+{
+  return Vector3(Abs(Vec.X), Abs(Vec.Y), Abs(Vec.Z));
+}
+
 /// Projects a given Vector onto a Normal (Normal needs to be Normalized)
 /// Returns the projected Vector, which will be a scaled version of the Vector
 /// Input Vectors will not be modified
@@ -243,6 +249,23 @@ struct Vector3
         "X" ~ Operator ~ "Rhs,"
         "Y" ~ Operator ~ "Rhs,"
         "Z" ~ Operator ~ "Rhs)");
+      Data[] = Result.Data[];
+      return this;
+    }
+    else
+    {
+      static assert(false, "Operator " ~ Operator ~ " not implemented.");
+    }
+  }
+
+  Vector3 opOpAssign(string Operator)(Vector3 Rhs)
+  {
+    static if(Operator == "+" || Operator == "-")
+    {
+      auto Result = mixin("Vector3("~
+        "X" ~ Operator ~ "Rhs.X,"
+        "Y" ~ Operator ~ "Rhs.Y,"
+        "Z" ~ Operator ~ "Rhs.Z)");
       Data[] = Result.Data[];
       return this;
     }

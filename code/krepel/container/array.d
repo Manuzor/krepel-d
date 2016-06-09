@@ -46,12 +46,12 @@ struct Array(T)
 
   this(this)
   {
-    if(Allocator && Count)
+    if(Allocator && Capacity)
     {
-      auto NewMemory = Allocator.NewUnconstructedArray!ElementType(Count);
-      NewMemory[] = Data[];
-      Data = NewMemory;
-      AvailableMemory = Data;
+      auto NewMemory = Allocator.NewUnconstructedArray!ElementType(Capacity);
+      NewMemory[0..Count] = Data[0..Count];
+      Data = NewMemory[0..Count];
+      AvailableMemory = NewMemory;
     }
   }
 
@@ -62,9 +62,9 @@ struct Array(T)
 
   void ClearMemory()
   {
-    Clear();
     if(Allocator)
     {
+      Clear();
       Allocator.DeleteUndestructed(AvailableMemory);
     }
     AvailableMemory = null;
@@ -90,7 +90,14 @@ struct Array(T)
   ref inout(ElementType) opIndex(IndexType)(IndexType Index) inout
    if(Meta.IsIntegral!IndexType)
   {
-    return Data[Index];
+    if(Index >= 0)
+    {
+      return Data[Index];
+    }
+    else
+    {
+      return Data[$+Index];
+    }
   }
 
   /// Makes sure AvailableMemory is big enough to hold RequiredCapacity
@@ -184,8 +191,14 @@ struct Array(T)
       static assert(Meta.IsConvertibleTo!(typeof(Arg), ElementType),
                     Format("Expected something that is convertible to %s, got %s",
                            ElementType.stringof, typeof(Arg).stringof));
-
-      NewData[InsertionIndex++] = Arg;
+      static if(is(typeof(Arg) == struct))
+      {
+        Construct(&NewData[InsertionIndex++], Arg);
+      }
+      else
+      {
+        NewData[InsertionIndex++] = Arg;
+      }
     }
   }
 
@@ -555,4 +568,6 @@ unittest
   assert(Array[8] == 3);
   assert(Array[9] == 4);
   assert(Array[10] == 200);
+  assert(Array[-1] == 200);
+  assert(Array[-2] == 4);
 }

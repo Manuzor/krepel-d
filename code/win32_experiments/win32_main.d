@@ -16,6 +16,10 @@ import krepel.d3d11_render_device;
 import krepel.render_device;
 import krepel.resources;
 import krepel.scene;
+import krepel.forward_renderer;
+import krepel.physics;
+import krepel.engine;
+import krepel.color;
 
 version(Windows):
 import std.string : toStringz, fromStringz;
@@ -79,7 +83,7 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
   //MessageBoxA(null, "Hello World?", "Hello", MB_OK);
 
   const MemorySize = 6.GiB;
-  auto RawMemory = VirtualAlloc(null,
+  auto RawMemory = VirtualAlloc(cast(void*)0x0000010000000000,
                                 MemorySize,
                                 MEM_RESERVE | MEM_COMMIT,
                                 PAGE_READWRITE);
@@ -89,9 +93,20 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
   }
   assert(RawMemory);
   auto Heap = HeapMemory((cast(ubyte*)RawMemory)[0 .. MemorySize]);
-  IAllocator MainAllocator = Heap.Wrap();
+  debug
+  {
+    MemoryVerifier Verifier = MemoryVerifier(Heap.Wrap());
+    IAllocator MainAllocator = Verifier.Wrap();
+  }
+  else
+  {
+    IAllocator MainAllocator = Heap.Wrap();
+  }
 
-  Log = MainAllocator.New!LogData(MainAllocator);
+  StaticStackMemory!(10.KiB) LogMemory;
+
+  Log = MainAllocator.New!LogData(Heap.Wrap);
+  Log.MessageBuffer.Reserve(10.KiB);
   scope(success)
   {
     MainAllocator.Delete(Log);
@@ -105,8 +120,7 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
 
   Log.Info("=== Beginning of Log");
   scope(exit) Log.Info("=== End of Log");
-  D3D11RenderDevice Device = MainAllocator.New!D3D11RenderDevice(MainAllocator);
-  Device.DeviceState.ProcessInstance = Instance;
+
 
   WNDCLASSA WindowClass;
   with(WindowClass)
@@ -130,112 +144,86 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
                                         Instance,
                                         null);
 
-    Device.DeviceState.WindowHandle = WindowHandle;
+    EngineCreationInformation Info;
+    Info.Instance = Instance;
+    Info.WindowHandle = WindowHandle;
+    SetupGobalEngine(MainAllocator, Info);
 
-    if(Device.DeviceState.WindowHandle)
+    if(WindowHandle)
     {
-
-      Device.InitDevice();
-
-      auto VertexShader = Device.LoadVertexShader(WString("../data/shader/first.hlsl", Device.DeviceState.Allocator),
-                                                      UString("VSMain", Device.DeviceState.Allocator),
-                                                      UString("vs_5_0", Device.DeviceState.Allocator));
+      MeshResource UnitPlane = GlobalEngine.Resources.LoadMesh(WString("../data/mesh/UnitPlane.obj", MainAllocator));
+      MeshResource UnitSphere = GlobalEngine.Resources.LoadMesh(WString("../data/mesh/UnitSphere.obj", MainAllocator));
       scope(exit)
       {
-        if (VertexShader)
-        {
-          Device.ReleaseVertexShader(VertexShader);
-        }
+        GlobalEngine.Resources.DestroyResource(UnitPlane);
       }
 
-      RenderInputLayoutDescription[5] Layout =
-      [
-        RenderInputLayoutDescription(UString("POSITION", MainAllocator), 0, InputDescriptionDataType.Float, 3, true),
-        RenderInputLayoutDescription(UString("UV", MainAllocator), 0, InputDescriptionDataType.Float, 2, true),
-        RenderInputLayoutDescription(UString("NORMAL", MainAllocator), 0, InputDescriptionDataType.Float, 3, true),
-        RenderInputLayoutDescription(UString("TANGENT", MainAllocator), 0, InputDescriptionDataType.Float, 4, true),
-        RenderInputLayoutDescription(UString("BINORMAL", MainAllocator), 0, InputDescriptionDataType.Float, 3, true),
-      ];
-      auto InputLayoutDescription = Device.CreateInputLayoutDescription(Layout);
-      scope(exit) Device.DestroyInputLayoutDescription(InputLayoutDescription);
-      auto InputLayout = Device.CreateVertexShaderInputLayoutFromDescription(VertexShader, InputLayoutDescription);
-      scope(exit) Device.DestroyInputLayout(InputLayout);
-      Device.SetInputLayout(InputLayout);
 
 
-      auto PixelShader = Device.LoadPixelShader(WString("../data/shader/first.hlsl", Device.DeviceState.Allocator),
-                                                UString("PSMain", Device.DeviceState.Allocator),
-                                                UString("ps_5_0", Device.DeviceState.Allocator));
-      scope(exit)
-      {
-        if (PixelShader)
-        {
-          Device.ReleasePixelShader(PixelShader);
-        }
-      }
-
-      ResourceManager Manager = MainAllocator.New!ResourceManager(MainAllocator);
-      auto WaveFrontLoader = MainAllocator.New!WavefrontResourceLoader();
-      Manager.RegisterLoader(WaveFrontLoader, WString(".obj", MainAllocator));
-      MeshResource Mesh = Manager.LoadMesh(WString("../data/mesh/Suzanne.obj", MainAllocator));
-
-      IRenderMesh RenderMesh = Device.CreateRenderMesh(Mesh.Meshes[0]);
-      scope(exit)
-      {
-        Device.ReleaseRenderMesh(RenderMesh);
-        Manager.DestroyResource(Mesh);
-        MainAllocator.Delete(WaveFrontLoader);
-        MainAllocator.Delete(Manager);
-      }
 
       SceneGraph Graph = MainAllocator.New!(SceneGraph)(MainAllocator);
-      auto CameraObject= Graph.CreateDefaultGameObject(UString("Camera", MainAllocator));
-      auto CameraComponent = CameraObject.ConstructChild!CameraComponent(UString("CameraComponent", MainAllocator), CameraObject.RootComponent);
-      CameraComponent.FieldOfView = PI/2;
-      CameraComponent.Width = 1280;
-      CameraComponent.Height = 720;
-      CameraComponent.NearPlane = 0.1f;
-      CameraComponent.FarPlane = 10.0f;
-      CameraComponent.SetWorldTransform(Transform(Vector3(0,0,2), Quaternion.Identity, Vector3.UnitScaleVector));
+      GlobalEngine.RegisterScene(Graph);
+      auto CameraObject= Graph.CreateGameObject!HorizonCamera(UString("Camera", MainAllocator));
+      auto CameraComponent = cast(CameraComponent)CameraObject.RootComponent;
+      CameraComponent.SetWorldTransform(Transform(Vector3(-5,0,3), Quaternion.Identity, Vector3.UnitScaleVector));
       Matrix4 Mat = CameraComponent.GetViewProjectionMatrix().GetTransposed;
-      auto ConstantBuffer = Device.CreateConstantBuffer((cast(void*)&Mat)[0..Matrix4.sizeof]);
-      scope(exit) Device.ReleaseConstantBuffer(ConstantBuffer);
+
+      auto Plane = Graph.CreateDefaultGameObject(UString("Plane", MainAllocator));
+      auto PlanePhysicsChild = Plane.ConstructChild!PhysicsComponent(UString("PlanePhysics", MainAllocator));
+      PlaneShapeData ShapeData = PlaneShapeData(Vector4(0,0,1,0));
+      PlanePhysicsChild.ComponentBody.Shape.SetPlane(ShapeData);
+      PlanePhysicsChild.ComponentBody.BodyMovability = Movability.Static;
+      PlanePhysicsChild.RegisterComponent();
+      auto RenderChild = Plane.ConstructChild!PrimitiveRenderComponent(UString("PlaneRender", MainAllocator), PlanePhysicsChild);
+      Plane.RootComponent.SetWorldTransform(Transform(Vector3.ZeroVector, Quaternion.Identity, Vector3.UnitScaleVector* 100));
+      RenderChild.SetMesh(UnitPlane);
+      RenderChild.RegisterComponent();
+
+      auto Sphere = Graph.CreateDefaultGameObject(UString("Sphere", MainAllocator));
+      auto SpherePhysicsChild = Sphere.ConstructChild!PhysicsComponent(UString("SpherePhysics", MainAllocator));
+      auto SphereData = SphereShapeData(1.0f);
+      SpherePhysicsChild.ComponentBody.Shape.SetSphere(SphereData);
+      SpherePhysicsChild.ComponentBody.Restitution = 0.9f;
+      SpherePhysicsChild.ComponentBody.Mass = 1.0f;
+      SpherePhysicsChild.RegisterComponent();
+      RenderChild = Sphere.ConstructChild!PrimitiveRenderComponent(UString("SphereRender", MainAllocator), SpherePhysicsChild);
+      RenderChild.SetWorldTransform(Transform(Vector3(0,0,0), Quaternion.Identity, Vector3.UnitScaleVector));
+      RenderChild.SetMesh(UnitSphere);
+      RenderChild.RegisterComponent();
+      Sphere.RootComponent.SetWorldTransform(Transform(Vector3(0,0,1.0f), Quaternion.Identity, Vector3.UnitScaleVector));
+
+      auto Sphere2 = Graph.CreateDefaultGameObject(UString("Sphere2", MainAllocator));
+      auto Sphere2PhysicsChild = Sphere2.ConstructChild!PhysicsComponent(UString("Sphere2Physics", MainAllocator));
+      Sphere2PhysicsChild.ComponentBody.Shape.SetSphere(SphereData);
+      Sphere2PhysicsChild.RegisterComponent();
+      RenderChild = Sphere2.ConstructChild!PrimitiveRenderComponent(UString("Sphere2Render", MainAllocator), Sphere2PhysicsChild);
+      Sphere2.RootComponent.SetWorldTransform(Transform(Vector3(0.0f,0.5f,5), Quaternion.Identity, Vector3.UnitScaleVector));
+
+
+
+      RenderChild.SetMesh(UnitSphere);
+      RenderChild.RegisterComponent();
+      GlobalEngine.Renderer.ActiveCamera = CameraComponent;
+
+
 
       version(XInput_RuntimeLinking) LoadXInput();
 
-      auto SystemInput = MainAllocator.New!Win32InputContext(MainAllocator);
-      scope(exit) MainAllocator.Delete(SystemInput);
 
-      // Note(Manu): Let's pretend the system is user 0 for now.
-      SystemInput.UserIndex = 0;
+      auto User1Input = cast(Win32InputContext)GlobalEngine.InputContexts[0];
 
-      Win32RegisterAllKeyboardSlots(SystemInput);
-      Win32RegisterAllMouseSlots(SystemInput);
-      Win32RegisterAllXInputSlots(SystemInput);
+      User1Input.RegisterInputSlot(InputType.Button, "Quit");
+      User1Input.AddSlotMapping(Keyboard.Escape, "Quit");
+      User1Input.AddSlotMapping(XInput.Start, "Quit");
 
-      SystemInput.RegisterInputSlot(InputType.Button, "Quit");
-      SystemInput.AddTrigger("Quit", Keyboard.Escape);
-      SystemInput.AddTrigger("Quit", XInput.Start);
-
-      SystemInput.RegisterInputSlot(InputType.Axis, "CameraX");
-      //SystemInput.AddTrigger("CameraX", XInput.XLeftStick);
-      SystemInput.AddTrigger("CameraX", Keyboard.A);
-
-      SystemInput.RegisterInputSlot(InputType.Axis, "CameraY");
-      //SystemInput.AddTrigger("CameraY", XInput.YLeftStick);
-      SystemInput.AddTrigger("CameraY", Keyboard.W);
-
-      SystemInput.RegisterInputSlot(InputType.Axis, "CameraZ");
-      //SystemInput.AddTrigger("CameraZ", XInput.YRightStick);
-      SystemInput.AddTrigger("CameraZ", Keyboard.Space);
+      User1Input.RegisterInputSlot(InputType.Axis, "ObjX");
+      User1Input.RegisterInputSlot(InputType.Axis, "ObjY");
+      User1Input.RegisterInputSlot(InputType.Axis, "ObjZ");
+      User1Input.AddSlotMapping(Keyboard.Up, "ObjZ");
+      User1Input.AddSlotMapping(Keyboard.Down, "ObjZ", -1);
 
 
-      //SystemInput.ChangeEvent.Add = (Id, Slot)
-      //{
-      //  Log.Info("Input change '%s': %s %s", Id, Slot.Type, Slot.Value);
-      //};
-
-      auto Window = MainAllocator.New!WindowData(SystemInput);
+      auto Window = MainAllocator.New!WindowData(User1Input);
       scope(exit) MainAllocator.Delete(Window);
 
       SetWindowLongPtrA(WindowHandle, GWLP_USERDATA, *cast(LONG_PTR*)&Window);
@@ -245,14 +233,9 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
 
       while(GlobalRunning)
       {
-        SystemInput.BeginInputFrame();
-        {
-          Win32MessagePump();
-          Win32PollXInput(SystemInput);
-        }
-        SystemInput.EndInputFrame();
 
-        if(SystemInput["Quit"].ButtonIsDown)
+
+        if(User1Input["Quit"].ButtonIsDown)
         {
           .GlobalRunning = false;
           break;
@@ -261,52 +244,19 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
         //
         // Apply Input
         //
-        Device.ReleaseConstantBuffer(ConstantBuffer);
-        Transform WorldTransform = CameraComponent.GetWorldTransform();
-        WorldTransform.Translation.X += SystemInput["CameraX"].AxisValue * (1 / 3000.0f);
-        WorldTransform.Translation.Y += SystemInput["CameraY"].AxisValue * (1 / 3000.0f);
-        WorldTransform.Translation.Z += SystemInput["CameraZ"].AxisValue * (1 / 3000.0f);
-        CameraComponent.SetWorldTransform(WorldTransform);
-        Mat = CameraComponent.GetViewProjectionMatrix().GetTransposed;
-        ConstantBuffer = Device.CreateConstantBuffer((cast(void*)&Mat)[0..Matrix4.sizeof]);
+        ColorLinear[6] Colors = [Colors.Lime, Colors.Red, Colors.Blue, Colors.Pink, Colors.Orange, Colors.Yellow ];
+        PolyShapeData BoxShape = CreatePolyShapeFromBox(MainAllocator, Vector3.UnitScaleVector * 0.5f);
+        GlobalEngine.DebugHelper.AddPolyShape(Transform(Vector3(0,0,3), Quaternion.Identity, Vector3.UnitScaleVector), BoxShape, Colors, 0.1f);
+        GlobalRunning = GlobalEngine.Update();
 
-        //
-        // Do the rendering
-        //
-        auto CornflowerBlue = Vector4(100 / 255.0f, 149 / 255.0f, 237 / 255.0f, 1.0f);
-        Device.ClearRenderTarget(CornflowerBlue);
-        Device.SetVertexShader(VertexShader);
-        Device.SetPixelShader(PixelShader);
-        Device.SetVertexShaderConstantBuffer(ConstantBuffer, 0);
-        Device.SetMesh(RenderMesh);
-        Device.DrawIndexed(RenderMesh.GetIndexCount());
-        Device.Present();
+
       }
+
+
     }
   }
-
+  DestroyGlobalEngine();
   return 0;
-}
-
-void Win32MessagePump()
-{
-  MSG Message;
-  while(PeekMessageA(&Message, null, 0, 0, PM_REMOVE))
-  {
-    switch(Message.message)
-    {
-      case WM_QUIT:
-      {
-        GlobalRunning = false;
-      } break;
-
-      default:
-      {
-        TranslateMessage(&Message);
-        DispatchMessageA(&Message);
-      } break;
-    }
-  }
 }
 
 extern(Windows)
@@ -325,13 +275,13 @@ LRESULT Win32MainWindowCallback(HWND WindowHandle, UINT Message,
     case WM_CLOSE:
     {
       // TODO: Handle this with a message to the user?
-      GlobalRunning = false;
+      GlobalEngine.RunEngine = false;
     } break;
 
     case WM_DESTROY:
     {
       // TODO: Handle this as an error - recreate Window?
-      GlobalRunning = false;
+      GlobalEngine.RunEngine = false;
     } break;
 
     case WM_KEYFIRST:   .. case WM_KEYLAST:   goto case; // fallthrough

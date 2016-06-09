@@ -59,11 +59,33 @@ Transform InversedCopy(in ref Transform InputTransform)
   return Result;
 }
 
+Vector3 ForwardVector(in Transform InputTransform)
+{
+  return InputTransform.TransformDirection(Vector3.ForwardVector);
+}
+
+Vector3 RightVector(in Transform InputTransform)
+{
+  return InputTransform.TransformDirection(Vector3.RightVector);
+}
+
+Vector3 UpVector(in Transform InputTransform)
+{
+  return InputTransform.TransformDirection(Vector3.UpVector);
+}
+
 struct Transform
 {
   Vector3 Translation;
   Quaternion Rotation;
   Vector3 Scale;
+
+  this(Vector3 Translation, Quaternion Rotation = Quaternion.Identity, Vector3 Scale = Vector3.UnitScaleVector)
+  {
+    this.Translation = Translation;
+    this.Rotation = Rotation;
+    this.Scale = Scale;
+  }
 
   Matrix4 ToMatrix()
   {
@@ -80,12 +102,12 @@ struct Transform
     Rotation = InverseRotation * Rotation;
   }
 
-  Transform opBinary(string Operator : "*")(in ref Transform Other)
+  Transform opBinary(string Operator : "*")(in Transform Other)
   {
     return Concatenate(this, Other);
   }
 
-  void opOpAssign(string Operator : "*")(in ref Transform Other)
+  void opOpAssign(string Operator : "*")(in Transform Other)
   {
     this = Concatenate(this, Other);
   }

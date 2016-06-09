@@ -15,9 +15,9 @@ private static import std.utf;
 private static import std.typecons;
 
 
-alias Find = std.algorithm.find;
+alias FindInCharArray = std.algorithm.find;
+alias StartsWithCharArray = std.algorithm.startsWith;
 
-alias StartsWith = std.algorithm.startsWith;
 alias CountUntil = std.algorithm.countUntil;
 alias CopyTo     = std.algorithm.copy;
 

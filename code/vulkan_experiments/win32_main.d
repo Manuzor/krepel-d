@@ -9,7 +9,10 @@ import krepel.container;
 import krepel.string;
 import krepel.math;
 import krepel.image;
-
+import krepel.input;
+import krepel.color;
+import krepel.scene;
+import krepel.chrono;
 
 import std.string : toStringz, fromStringz;
 
@@ -139,8 +142,26 @@ struct WindowConstructionData
   Optional!int WindowY;
 }
 
-HWND CreateWindow(IAllocator Allocator, WindowConstructionData Args,
-                  LogData* Log = null)
+class WindowData
+{
+  //
+  // These are set by CreateWindow.
+  //
+  HWND Handle;
+  int PositionX;
+  int PositionY;
+  int ClientWidth;
+  int ClientHeight;
+
+  //
+  // These are set by the user.
+  //
+  Win32InputContext Input;
+  VulkanData Vulkan;
+}
+
+WindowData CreateWindow(IAllocator Allocator, WindowConstructionData Args,
+                        LogData* Log = null)
 {
   if(!Args.ProcessHandle.IsSet)
   {
@@ -228,14 +249,30 @@ HWND CreateWindow(IAllocator Allocator, WindowConstructionData Args,
   if(WindowHandle is null)
   {
     Log.Failure("Failed to create window.");
+    return null;
   }
 
-  return WindowHandle;
+  auto Window = Allocator.New!WindowData();
+  Window.Handle = WindowHandle;
+  Window.PositionX = WindowX;
+  Window.PositionY = WindowY;
+  Window.ClientWidth = Args.ClientWidth.Value;
+  Window.ClientHeight = Args.ClientHeight.Value;
+
+  SetWindowLongPtr(Window.Handle, GWLP_USERDATA, cast(LONG_PTR)Window.AsPointerTo!void);
+
+  return Window;
 }
 
-void DestroyWindow(HWND WindowHandle)
+void DestroyWindow(IAllocator Allocator, WindowData Window)
 {
-  // TODO(Manu): Implement?
+  if(Window is null) return;
+
+  SetWindowLongPtr(Window.Handle, GWLP_USERDATA, cast(LONG_PTR)null);
+
+  // TODO(Manu): Close window using Window.Handle.
+
+  Allocator.Delete(Window);
 }
 
 int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
@@ -258,16 +295,94 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
     ClientWidth: 768,
     ClientHeight: 768,
   };
-  HWND Window = CreateWindow(.Allocator, WindowArgs,
-                             .Log);
+  WindowData Window = CreateWindow(.Allocator, WindowArgs,
+                                   .Log);
 
   if(Window)
   {
+    assert(Window.Handle);
+    scope(success) DestroyWindow(.Allocator, Window);
+
+    //
+    // Input
+    //
+    auto SystemInput = .Allocator.New!Win32InputContext(.Allocator);
+    scope(exit) .Allocator.Delete(SystemInput);
+
+    Window.Input = SystemInput;
+
+    // Note(Manu): Let's pretend the system is user 0 for now.
+    SystemInput.UserIndex = 0;
+
+    Win32RegisterAllKeyboardSlots(SystemInput);
+    Win32RegisterAllMouseSlots(SystemInput);
+    Win32RegisterAllXInputSlots(SystemInput);
+
+    // Input mappings.
+    {
+      SystemInput.RegisterInputSlot(InputType.Button, "Quit");
+      SystemInput.AddSlotMapping(Keyboard.Escape, "Quit");
+      SystemInput.AddSlotMapping(XInput.Start, "Quit");
+
+      SystemInput.RegisterInputSlot(InputType.Axis, "Depth");
+      SystemInput.AddSlotMapping(Keyboard.Up,   "Depth", -1);
+      SystemInput.AddSlotMapping(Keyboard.Down, "Depth",  1);
+      with(SystemInput.ValueProperties.GetOrCreate("Depth"))
+      {
+        Sensitivity = 0.005f;
+      }
+
+      // Adjust mouse sensitivity.
+      foreach(SlotProperty; Only(SystemInput.ValueProperties.GetOrCreate(Mouse.XDelta),
+                                 SystemInput.ValueProperties.GetOrCreate(Mouse.YDelta)))
+      {
+          SlotProperty.Sensitivity = 1.0f;
+      }
+
+      SystemInput.RegisterInputSlot(InputType.Axis, "Camera.MoveForward");
+      SystemInput.AddSlotMapping(XInput.YLeftStick, "Camera.MoveForward");
+      SystemInput.AddSlotMapping(Keyboard.W, "Camera.MoveForward",  1);
+      SystemInput.AddSlotMapping(Keyboard.S, "Camera.MoveForward", -1);
+
+      SystemInput.RegisterInputSlot(InputType.Axis, "Camera.MoveRight");
+      SystemInput.AddSlotMapping(XInput.XLeftStick, "Camera.MoveRight");
+      SystemInput.AddSlotMapping(Keyboard.D, "Camera.MoveRight",  1);
+      SystemInput.AddSlotMapping(Keyboard.A, "Camera.MoveRight", -1);
+
+      SystemInput.RegisterInputSlot(InputType.Axis, "Camera.MoveUp");
+      SystemInput.AddSlotMapping(XInput.LeftTrigger,  "Camera.MoveUp",  1);
+      SystemInput.AddSlotMapping(XInput.RightTrigger, "Camera.MoveUp", -1);
+      SystemInput.AddSlotMapping(Keyboard.E, "Camera.MoveUp",  1);
+      SystemInput.AddSlotMapping(Keyboard.Q, "Camera.MoveUp", -1);
+      with(SystemInput.ValueProperties.GetOrCreate("Camera.MoveUp"))
+      {
+        Exponent = 3.0f;
+      }
+
+      SystemInput.RegisterInputSlot(InputType.Axis, "Camera.RelYaw");
+      SystemInput.AddSlotMapping(XInput.XRightStick, "Camera.RelYaw");
+
+      SystemInput.RegisterInputSlot(InputType.Axis, "Camera.RelPitch");
+      SystemInput.AddSlotMapping(XInput.YRightStick, "Camera.RelPitch");
+
+      // TODO(Manu): Enable the slot mappings below once action input works
+      // properly (issue #33).
+
+      SystemInput.RegisterInputSlot(InputType.Axis, "Camera.AbsYaw");
+      //SystemInput.AddSlotMapping(Mouse.YDelta, "Camera.AbsYaw");
+
+      SystemInput.RegisterInputSlot(InputType.Axis, "Camera.AbsPitch");
+      //SystemInput.AddSlotMapping(Mouse.XDelta, "Camera.AbsPitch");
+    }
+
+    //
+    // Vulkan
+    //
     bool VulkanInitialized;
 
     {
       Log.BeginScope("Initializing Vulkan.");
-      VulkanInitialized = Vulkan.Initialize(Instance, Window);
+      VulkanInitialized = Vulkan.Initialize(Instance, Window.Handle);
       if(VulkanInitialized) Log.EndScope("Vulkan initialized successfully.");
       else                  Log.EndScope("Failed to initialize Vulkan.");
     }
@@ -279,8 +394,8 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
     {
       scope(success) Vulkan.Cleanup();
 
-      SetWindowLongPtr(Window, GWLP_USERDATA, cast(LONG_PTR)Vulkan.AsPointerTo!void);
-      scope(exit) SetWindowLongPtr(Window, GWLP_USERDATA, cast(LONG_PTR)null);
+      Window.Vulkan = Vulkan;
+      scope(success) Window.Vulkan = null;
 
       {
         Log.BeginScope("Preparing Swapchain for the first time.");
@@ -291,28 +406,97 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
 
       if(Vulkan.IsPrepared)
       {
+        CameraData Camera;
+        with(Camera)
+        {
+          FieldOfView = PI / 2;
+          Width = 1280;
+          Height = 720;
+          NearPlane = 0.1f;
+          FarPlane = 1000.0f;
+        }
+        // Note(Manu): Setting the rotation here is pointless, since it gets
+        // overwritten in the main loop by a combination of CameraYaw and
+        // CameraPitch.
+        auto CameraTransform = Transform(Vector3(2, 0, 0),
+                                         Quaternion.Identity,
+                                         Vector3.UnitScaleVector);
+
+        // TODO(Manu): Investigate why the camera needs to have this weird initial transform.
+        float CameraYaw   = PI;
+        float CameraPitch = 0;
+
         //
         // Main Loop
         //
         Vulkan.DepthStencilValue = 1.0f;
-        Vulkan.DepthStencilIncrement = 0.0f;
         .Running = true;
+
+        Timer FrameTimer;
+        FrameTimer.Start();
+        float DeltaSeconds = 0.016f; // Assume 16 milliseconds for the first frame.
+
         while(.Running)
         {
-          Win32ProcessPendingMessages();
-
-          Vulkan.DepthStencilValue = Clamp(Vulkan.DepthStencilValue + Vulkan.DepthStencilIncrement, 0.8f, 1.0f);
-
-          if(Vulkan.DepthStencilValue == 1.0f)
+          scope(exit)
           {
-            Vulkan.DepthStencilIncrement = -0.001;
-          }
-          else if(Vulkan.DepthStencilValue == 0.8f)
-          {
-            Vulkan.DepthStencilIncrement = 0.001;
+            FrameTimer.Stop();
+            DeltaSeconds = cast(float)FrameTimer.TotalElapsedSeconds();
+            FrameTimer.Start();
           }
 
-          //Log.Info("Depth Stencil Value Sample: %f", Vulkan.DepthStencilValue);
+          SystemInput.BeginInputFrame();
+          {
+            Win32MessagePump();
+            Win32PollXInput(SystemInput);
+          }
+          SystemInput.EndInputFrame();
+
+          if(SystemInput["Quit"].ButtonIsDown)
+          {
+            .Running = false;
+            break;
+          }
+
+          Vulkan.DepthStencilValue = Clamp(Vulkan.DepthStencilValue + SystemInput["Depth"].AxisValue, 0.8f, 1.0f);
+
+          enum CameraMovementSpeed = 7.0f; // Units per second.
+          enum CameraRotationSpeed = 3.0f; // Units per second.
+
+          //
+          // Update camera transform.
+          //
+          CameraTransform.Translation += CameraMovementSpeed * DeltaSeconds * (
+            CameraTransform.ForwardVector * SystemInput["Camera.MoveForward"].AxisValue +
+            CameraTransform.RightVector   * SystemInput["Camera.MoveRight"  ].AxisValue +
+            CameraTransform.UpVector      * SystemInput["Camera.MoveUp"     ].AxisValue
+          );
+
+          CameraYaw   += (SystemInput["Camera.RelYaw"  ].AxisValue * CameraRotationSpeed * DeltaSeconds) + SystemInput["Camera.AbsYaw"  ].AxisValue;
+          CameraPitch += (SystemInput["Camera.RelPitch"].AxisValue * CameraRotationSpeed * DeltaSeconds) + SystemInput["Camera.AbsPitch"].AxisValue;
+          CameraTransform.Rotation = Quaternion(Vector3.UpVector, CameraYaw) *
+                                     Quaternion(Vector3.RightVector, CameraPitch);
+          CameraTransform.Rotation.SafeNormalize();
+
+          const ViewProjectionMatrix = ViewProjectionMatrix(Camera, CameraTransform);
+
+          //
+          // Upload shader globals
+          //
+          {
+            void* RawData;
+            vkMapMemory(Vulkan.Device.Handle,
+                        Vulkan.GlobalUBO_MemoryHandle,
+                        0, // offset
+                        VK_WHOLE_SIZE,
+                        0, // flags
+                        &RawData).Verify;
+            scope(exit) vkUnmapMemory(Vulkan.Device.Handle, Vulkan.GlobalUBO_MemoryHandle);
+
+            RawData[0 .. ViewProjectionMatrix.sizeof] = (cast(void*)&ViewProjectionMatrix)[0 .. ViewProjectionMatrix.sizeof];
+          }
+
+          //Log.Info("Camera world transform: %s", CameraTransform);
 
           if(.IsResizeRequested)
           {
@@ -322,7 +506,7 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
             .IsResizeRequested = false;
           }
 
-          RedrawWindow(Window, null, null, RDW_INTERNALPAINT);
+          RedrawWindow(Window.Handle, null, null, RDW_INTERNALPAINT);
         }
       }
     }
@@ -331,7 +515,7 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
   return 0;
 }
 
-void Win32ProcessPendingMessages()
+void Win32MessagePump()
 {
   MSG Message;
   while(PeekMessageA(&Message, null, 0, 0, PM_REMOVE))
@@ -341,24 +525,6 @@ void Win32ProcessPendingMessages()
       case WM_QUIT:
       {
         .Running = false;
-      } break;
-
-      case WM_SYSKEYDOWN: goto case; // fallthrough
-      case WM_SYSKEYUP:   goto case; // fallthrough
-      case WM_KEYDOWN:    goto case; // fallthrough
-      case WM_KEYUP:
-      {
-        auto VKCode = Message.wParam;
-
-        if(VKCode == VK_SPACE)
-        {
-          Log.Info("Space");
-        }
-        else if(VKCode == VK_ESCAPE)
-        {
-          PostQuitMessage(0);
-        }
-
       } break;
 
       default:
@@ -375,38 +541,38 @@ __gshared uint ResizeRequest_Width;
 __gshared uint ResizeRequest_Height;
 
 extern(Windows)
-LRESULT Win32MainWindowCallback(HWND Window, UINT Message,
+LRESULT Win32MainWindowCallback(HWND WindowHandle, UINT Message,
                                 WPARAM WParam, LPARAM LParam)
 {
-  enum RESIZE_EVENT_ID = 1337;
-  enum MILLISECONDS_TO_WAIT_BEFORE_RESIZING = 200;
+  auto Window = cast(WindowData)cast(void*)GetWindowLongPtr(WindowHandle, GWLP_USERDATA);
+  if(Window is null) return DefWindowProcA(WindowHandle, Message, WParam, LParam);
 
-  LRESULT Result;
+  assert(Window.Handle == WindowHandle);
 
-  auto Vulkan = cast(VulkanData)cast(void*)GetWindowLongPtr(Window, GWLP_USERDATA);
+  auto Vulkan = Window.Vulkan;
 
+
+  LRESULT Result = 0;
   switch(Message)
   {
     case WM_CLOSE:
     {
-      // TODO: Handle this with a message to the user?
       PostQuitMessage(0);
     } break;
 
     case WM_DESTROY:
     {
-      // TODO: Handle this as an error - recreate Window?
       PostQuitMessage(0);
     } break;
 
-    case WM_SYSKEYDOWN: goto case; // fallthrough
-    case WM_SYSKEYUP:   goto case; // fallthrough
-    case WM_KEYDOWN:    goto case; // fallthrough
-    case WM_KEYUP: assert(0, "Keyboard messages are handled in the main loop.");
-
-    case WM_ACTIVATEAPP:
+    case WM_KEYFIRST:   .. case WM_KEYLAST:   goto case; // fallthrough
+    case WM_MOUSEFIRST: .. case WM_MOUSELAST: goto case; // fallthrough
+    case WM_INPUT:
     {
-      //OutputDebugStringA("WM_ACTIATEAPP\n");
+      // TODO(Manu): Deal with the return value?
+      Win32ProcessInputMessage(WindowHandle, Message, WParam, LParam,
+                               Window.Input,
+                               .Log);
     } break;
 
     case WM_SIZE:
@@ -416,8 +582,6 @@ LRESULT Win32MainWindowCallback(HWND Window, UINT Message,
         .IsResizeRequested = true;
         .ResizeRequest_Width = LParam & 0xffff;
         .ResizeRequest_Height = (LParam & 0xffff0000) >> 16;
-
-        //Vulkan.Resize(NewWidth, NewHeight);
       }
     } break;
 
@@ -426,10 +590,10 @@ LRESULT Win32MainWindowCallback(HWND Window, UINT Message,
       PAINTSTRUCT Paint;
 
       RECT Rect;
-      auto MustBeginEndPaint = cast(bool)GetUpdateRect(Window, &Rect, FALSE);
+      auto MustBeginEndPaint = cast(bool)GetUpdateRect(WindowHandle, &Rect, FALSE);
 
-      if(MustBeginEndPaint) BeginPaint(Window, &Paint);
-      scope(exit) if(MustBeginEndPaint) EndPaint(Window, &Paint);
+      if(MustBeginEndPaint) BeginPaint(WindowHandle, &Paint);
+      scope(exit) if(MustBeginEndPaint) EndPaint(WindowHandle, &Paint);
 
       if(Vulkan && Vulkan.IsPrepared)
       {
@@ -439,11 +603,37 @@ LRESULT Win32MainWindowCallback(HWND Window, UINT Message,
 
     default:
     {
-      Result = DefWindowProcA(Window, Message, WParam, LParam);
+      // OutputDebugStringA("Default\n");
+      Result = DefWindowProcA(WindowHandle, Message, WParam, LParam);
     } break;
   }
 
   return Result;
+}
+
+struct CameraData
+{
+  float FieldOfView;
+  float Width;
+  float Height;
+  float NearPlane;
+  float FarPlane;
+}
+
+@property
+Matrix4 ProjectionMatrix(CameraData Camera)
+{
+  with(Camera)
+    return CreatePerspectiveMatrix(FieldOfView/2.0f, Width, Height, NearPlane, FarPlane);
+}
+
+@property
+Matrix4 ViewProjectionMatrix(CameraData Camera, Transform WorldTransformation)
+{
+  const WorldMatrix = WorldTransformation.ToMatrix();
+  const InvWorldMatrix = WorldMatrix.SafeInvert();
+  const ViewMatrix = InvWorldMatrix * Matrix4(Vector3.UpVector, Vector3.ForwardVector, Vector3.RightVector);
+  return ViewMatrix * Camera.ProjectionMatrix;
 }
 
 struct VulkanPhysicalDeviceData
@@ -547,8 +737,10 @@ class VulkanData
 
     Array!VkFramebuffer Framebuffers;
 
+    VkBuffer GlobalUBO_BufferHandle;
+    VkDeviceMemory GlobalUBO_MemoryHandle;
+
     float DepthStencilValue = 1.0f;
-    float DepthStencilIncrement = 0.0f;
   }
 
   this(IAllocator Allocator)
@@ -1421,10 +1613,10 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
 
         assert(!UseStagingBuffer, "Not implemented.");
 
-        auto CreateLoader = cast(PFN_CreateLoader)GetProcAddress(null, "krCreateImageLoader_DDS");
+        auto CreateLoader = cast(PFN_CreateLoader)GetProcAddress(GetModuleHandle(null), "krCreateImageLoader_DDS");
         assert(CreateLoader !is null);
 
-        auto DestroyLoader = cast(PFN_DestroyLoader)GetProcAddress(null, "krDestroyImageLoader_DDS");
+        auto DestroyLoader = cast(PFN_DestroyLoader)GetProcAddress(GetModuleHandle(null), "krDestroyImageLoader_DDS");
         assert(DestroyLoader !is null);
 
         IImageLoader Loader = CreateLoader(.Allocator);
@@ -1517,10 +1709,10 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
         Vector2 TexCoord;
       }
 
-      auto TopLeft     = VertexData(Vector3(-1.0f, -1.0f,  0.25f), Vector2(0.0f, 0.0f));
-      auto TopRight    = VertexData(Vector3( 1.0f, -1.0f,  0.25f), Vector2(1.0f, 0.0f));
-      auto BottomLeft  = VertexData(Vector3(-1.0f,  1.0f,  1.00f), Vector2(0.0f, 1.0f));
-      auto BottomRight = VertexData(Vector3( 1.0f,  1.0f,  1.00f), Vector2(1.0f, 1.0f));
+      auto TopLeft     = VertexData(Vector3(0.0f, -1.0f,  1.0f) * 1.0f, Vector2(0.0f, 0.0f));
+      auto TopRight    = VertexData(Vector3(0.0f,  1.0f,  1.0f) * 1.0f, Vector2(1.0f, 0.0f));
+      auto BottomLeft  = VertexData(Vector3(0.0f, -1.0f, -1.0f) * 1.0f, Vector2(0.0f, 1.0f));
+      auto BottomRight = VertexData(Vector3(0.0f,  1.0f, -1.0f) * 1.0f, Vector2(1.0f, 1.0f));
       VertexData[4] Geometry =
       [
         /*0*/TopLeft,    /*1*/TopRight,
@@ -1530,8 +1722,8 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
 
       uint[6] IndexData =
       [
-        0, 3, 1,
         0, 2, 3,
+        3, 1, 0,
       ];
       Indices.NumIndices = IndexData.length;
 
@@ -1638,29 +1830,39 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
     }
 
     //
-    // Prepare Descriptor Layout
+    // Prepare Descriptor Set Layout
     //
     {
-      Log.BeginScope("Preparing descriptor layout.");
-      scope(exit) Log.EndScope("Finished preparing descriptor layout.");
+      Log.BeginScope("Preparing descriptor set layout.");
+      scope(exit) Log.EndScope("Finished preparing descriptor set layout.");
 
-      VkDescriptorSetLayoutBinding LayoutBinding;
-      with(LayoutBinding)
+      auto LayoutBindings = Array!VkDescriptorSetLayoutBinding(.Allocator);
+
+      with(LayoutBindings.Expand())
       {
-        binding = Vertices.BindID; // TODO: Should I do that?
+        binding = 1;
         descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         descriptorCount = TextureCount;
         stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
       }
 
-      VkDescriptorSetLayoutCreateInfo DescriptorLayoutCreateInfo;
-      with(DescriptorLayoutCreateInfo)
+      // Model View Projection matrix
+      with(LayoutBindings.Expand())
       {
-        bindingCount = 1;
-        pBindings = &LayoutBinding;
+        binding = 0;
+        descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        descriptorCount = 1;
+        stageFlags = VK_SHADER_STAGE_ALL_GRAPHICS;
       }
 
-      vkCreateDescriptorSetLayout(Device.Handle, &DescriptorLayoutCreateInfo, null, &DescriptorSetLayout).Verify;
+      VkDescriptorSetLayoutCreateInfo DescriptorSetLayoutCreateInfo;
+      with(DescriptorSetLayoutCreateInfo)
+      {
+        bindingCount = cast(uint)LayoutBindings.Count;
+        pBindings = LayoutBindings.Data.ptr;
+      }
+
+      vkCreateDescriptorSetLayout(Device.Handle, &DescriptorSetLayoutCreateInfo, null, &DescriptorSetLayout).Verify;
 
       VkPipelineLayoutCreateInfo PipelineLayoutCreateInfo;
       with(PipelineLayoutCreateInfo)
@@ -1777,6 +1979,7 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
         }
         vkCreateShaderModule(Device.Handle, &ShaderModuleCreateInfo, null, &VertexShaderStage._module).Verify;
       }
+      // Note(Manu): Can safely destroy the shader modules on our side once the pipeline was created.
       scope(exit) vkDestroyShaderModule(Device.Handle, VertexShaderStage._module, null);
 
       //
@@ -1841,6 +2044,7 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
         depthClampEnable = VK_FALSE;
         rasterizerDiscardEnable = VK_FALSE;
         depthBiasEnable = VK_FALSE;
+        lineWidth = 1.0f;
       }
 
       VkPipelineMultisampleStateCreateInfo MultisampleState;
@@ -1921,18 +2125,26 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
       Log.BeginScope("Preparing descriptor pool.");
       scope(exit) Log.EndScope("Finished preparing descriptor pool.");
 
-      VkDescriptorPoolSize TypeCount;
-      with(TypeCount)
+      auto PoolSizes = Array!VkDescriptorPoolSize(.Allocator);
+
+      with(PoolSizes.Expand())
       {
         type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         descriptorCount = TextureCount;
       }
+
+      with(PoolSizes.Expand())
+      {
+        type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        descriptorCount = 1;
+      }
+
       VkDescriptorPoolCreateInfo DescriptorPoolCreateInfo;
       with(DescriptorPoolCreateInfo)
       {
         maxSets = 1;
-        poolSizeCount = 1;
-        pPoolSizes = &TypeCount;
+        poolSizeCount = cast(uint)PoolSizes.Count;
+        pPoolSizes = PoolSizes.Data.ptr;
       }
 
       vkCreateDescriptorPool(Device.Handle, &DescriptorPoolCreateInfo, null, &DescriptorPool).Verify;
@@ -1945,6 +2157,7 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
       Log.BeginScope("Preparing descriptor set.");
       scope(exit) Log.EndScope("Finished preparing descriptor set.");
 
+
       VkDescriptorSetAllocateInfo DescriptorSetAllocateInfo;
       with(DescriptorSetAllocateInfo)
       {
@@ -1954,6 +2167,62 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
       }
       vkAllocateDescriptorSets(Device.Handle, &DescriptorSetAllocateInfo, &DescriptorSet).Verify;
 
+      auto WriteDescriptorSets = Array!VkWriteDescriptorSet(.Allocator);
+
+      //
+      // GlobalUBO
+      //
+      {
+        VkBufferCreateInfo BufferCreateInfo;
+        with(BufferCreateInfo)
+        {
+          usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+          size = Matrix4.sizeof;
+        }
+
+        vkCreateBuffer(Vulkan.Device.Handle, &BufferCreateInfo, null, &GlobalUBO_BufferHandle).Verify;
+
+        VkMemoryRequirements Temp_MemoryRequirements;
+        vkGetBufferMemoryRequirements(Vulkan.Device.Handle, GlobalUBO_BufferHandle, &Temp_MemoryRequirements);
+
+        VkMemoryAllocateInfo Temp_MemoryAllocationInfo;
+        with(Temp_MemoryAllocationInfo)
+        {
+          allocationSize = Temp_MemoryRequirements.size;
+          memoryTypeIndex = DetermineMemoryTypeIndex(Vulkan.Device.OwnerGpu.MemoryProperties,
+                                                     Temp_MemoryRequirements.memoryTypeBits,
+                                                     VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+          assert(memoryTypeIndex != cast(uint)-1);
+        }
+
+        vkAllocateMemory(Vulkan.Device.Handle, &Temp_MemoryAllocationInfo, null, &GlobalUBO_MemoryHandle).Verify;
+
+        vkBindBufferMemory(Vulkan.Device.Handle, GlobalUBO_BufferHandle, GlobalUBO_MemoryHandle, 0).Verify;
+      }
+
+      //
+      // Associate the buffer with the descriptor set.
+      //
+      VkDescriptorBufferInfo DescriptorBufferInfo;
+      with(DescriptorBufferInfo)
+      {
+        buffer = GlobalUBO_BufferHandle;
+        offset = 0;
+        range = VK_WHOLE_SIZE;
+      }
+
+      with(WriteDescriptorSets.Expand())
+      {
+        dstSet = Vulkan.DescriptorSet;
+        dstBinding = 0;
+        descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        descriptorCount = 1;
+        pBufferInfo = &DescriptorBufferInfo;
+      }
+
+      //
+      // Combined Sampler
+      //
       VkDescriptorImageInfo[TextureCount] TextureDescriptors;
       foreach(Index; 0 .. TextureCount)
       {
@@ -1962,16 +2231,17 @@ bool PrepareSwapchain(VulkanData Vulkan, uint NewWidth, uint NewHeight)
         TextureDescriptors[Index].imageLayout = VK_IMAGE_LAYOUT_GENERAL;
       }
 
-      VkWriteDescriptorSet WriteDescriptorSet;
-      with(WriteDescriptorSet)
+      with(WriteDescriptorSets.Expand())
       {
         dstSet = DescriptorSet;
+        dstBinding = 1;
         descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         descriptorCount = TextureDescriptors.length;
         pImageInfo = TextureDescriptors.ptr;
       }
-      vkUpdateDescriptorSets(Device.Handle,
-                             1, &WriteDescriptorSet,
+
+      vkUpdateDescriptorSets(Vulkan.Device.Handle,
+                             cast(uint)WriteDescriptorSets.Count, WriteDescriptorSets.Data.ptr,
                              0, null);
     }
 
@@ -2173,12 +2443,31 @@ void Draw(VulkanData Vulkan)
 
     // Assume the command buffer has been run on current_buffer before so
     // we need to set the image layout back to COLOR_ATTACHMENT_OPTIMAL
-    SetImageLayout(Vulkan.Device, Vulkan.CommandPool, Vulkan.SetupCommand,
-                   SwapchainBuffers[CurrentBufferIndex].Image,
-                   VK_IMAGE_ASPECT_COLOR_BIT,
-                   VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-                   VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                   0);
+    {
+      EnsureSetupCommandIsReady(Vulkan.Device, Vulkan.CommandPool, Vulkan.SetupCommand);
+
+      VkImageMemoryBarrier ImageMemoryBarrier;
+      with(ImageMemoryBarrier)
+      {
+        srcAccessMask = 0;
+        dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        oldLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+        newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        image = SwapchainBuffers[CurrentBufferIndex].Image;
+        subresourceRange = VkImageSubresourceRange(VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1);
+      }
+
+      VkPipelineStageFlags SourceStages = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+      VkPipelineStageFlags DestinationStages = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+
+      vkCmdPipelineBarrier(Vulkan.SetupCommand,             // commandBuffer
+                           SourceStages, DestinationStages, // dstStageMask, srcStageMask
+                           0,                               // dependencyFlags
+                           0, null,                         // memoryBarrierCount, pMemoryBarriers
+                           0, null,                         // bufferMemoryBarrierCount, pBufferMemoryBarriers
+                           1, &ImageMemoryBarrier);         // imageMemoryBarrierCount, pImageMemoryBarriers
+    }
+
     FlushSetupCommand(Vulkan.Device, Vulkan.Queue, Vulkan.CommandPool, Vulkan.SetupCommand);
 
     // Wait for the present complete semaphore to be signaled to ensure
@@ -2265,8 +2554,8 @@ void CreateDrawCommand(VulkanData Vulkan)
         VkClearValue[2] ClearValues;
         with(ClearValues[0])
         {
-          const CornflowerBlue = Vector4(100 / 255.0f, 149 / 255.0f, 237 / 255.0f, 1.0f);
-          color.float32[] = CornflowerBlue.Data[];
+          // TODO(Manu): Appears way too dark. backbuffer format has to be adjusted for it?
+          color.float32[] = Colors.CornflowerBlue.Data;
         }
         with(ClearValues[1])
         {
@@ -2452,6 +2741,8 @@ void Cleanup(VulkanData Vulkan)
   {
     Vulkan.DestroySwapchainData();
   }
+
+
 
   vkDestroySwapchainKHR(Vulkan.Device.Handle, Vulkan.Swapchain, null);
   vkDestroyDevice(Vulkan.Device.Handle, null);

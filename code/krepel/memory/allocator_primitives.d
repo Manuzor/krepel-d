@@ -10,6 +10,94 @@ import krepel.algorithm;
 import krepel.math : IsPowerOfTwo, IsEven, IsOdd;
 import Meta = krepel.meta;
 
+struct MemoryVerifier
+{
+  import core.sys.windows.stacktrace;
+
+  mixin CommonMemoryImplementation;
+
+  bool Contains(in void[] SomeRegion){return false;}
+
+  struct AllocationInfo
+  {
+    void[] Region;
+    StackTrace Trace;
+  }
+
+  SystemMemory InternalDebugMemory;
+  IAllocator InternalDebugAllocator;
+  Array!(AllocationInfo) AllocatedMemory;
+  IAllocator ChildAllocator;
+
+  this(IAllocator Child)
+  {
+    ChildAllocator = Child;
+    InternalDebugAllocator = InternalDebugMemory.Wrap();
+    AllocatedMemory.Allocator = InternalDebugAllocator;
+  }
+
+  auto Allocate(size_t RequestedBytes, size_t Alignment = 0)
+  {
+    void[] NewMemory = ChildAllocator.Allocate(RequestedBytes, Alignment);
+
+    if(NewMemory is null)
+    {
+      return null;
+    }
+
+    AllocationInfo Info;
+    Info.Region = NewMemory;
+    Info.Trace = InternalDebugAllocator.New!StackTrace(2, null);
+    foreach(Region; AllocatedMemory)
+    {
+      auto MaxStartAddress = Max(NewMemory.ptr, Region.Region.ptr);
+      auto MinEndAddress = Min(NewMemory.ptr + NewMemory.length, Region.Region.ptr + Region.Region.length);
+      if(Max(0, MinEndAddress - MaxStartAddress) > 0)
+      {
+        Log.Failure("Overlapping detected, between %x-%x and %x-%x of %d bytes\n======StackTrace first allocation:\n%s\n=====StackTrace conflicting allocation:\n%s",
+          NewMemory.ptr,
+          NewMemory.ptr + NewMemory.length,
+          Region.Region.ptr,
+          Region.Region.ptr + Region.Region.length,
+          Max(0, MinEndAddress - MaxStartAddress),
+          Region.Trace.toString(),
+          Info.Trace.toString() );
+          import core.sys.windows.windows;
+          DebugBreak();
+        assert(0, "Overlapping memory detected");
+      }
+    }
+    AllocatedMemory ~= Info;
+    return NewMemory;
+  }
+
+  /// See_Also: krepel.system.Deallocate
+  bool Deallocate(void[] MemoryToDeallocate)
+  {
+    if (MemoryToDeallocate is null)
+    {
+      return false;
+    }
+    long MemoryIndex = -1;
+    foreach(Index, Info; AllocatedMemory)
+    {
+      if (Info.Region is MemoryToDeallocate)
+      {
+        MemoryIndex = Index;
+        break;
+      }
+    }
+    if(MemoryIndex == -1 )
+    {
+      Log.Failure("Could not find allocation: %x-%x", MemoryToDeallocate.ptr, MemoryToDeallocate.ptr + MemoryToDeallocate.length);
+    }
+
+    assert(MemoryIndex > -1);
+    InternalDebugAllocator.Delete(AllocatedMemory[MemoryIndex].Trace);
+    AllocatedMemory.RemoveAtSwap(MemoryIndex);
+    return ChildAllocator.Deallocate(MemoryToDeallocate);
+  }
+}
 
 /// Forwards all calls to the appropriate krepel.system.* functions.
 struct SystemMemory
@@ -184,7 +272,9 @@ struct HeapMemory
 
     // Save padding size.
     *(UserPointer - 1) = cast(ubyte)PaddingSize;
+    assert((UserPointer - *(UserPointer - 1) - BlockOverhead) == cast(void*)Block);
     Block.IsAllocated = true;
+
 
     const RemainingAvailableSize = Block.Size - RequiredBlockSize;
     assert(RemainingAvailableSize.IsEven);
@@ -194,11 +284,10 @@ struct HeapMemory
       // We have enough space left for a new block, so we create one here.
 
       Block.Size = RequiredBlockSize;
-      auto NewBlock = NextBlock(Block);
+      auto NewBlock = cast(BlockData*)(cast(void*)Block + Block.Size);
       NewBlock.Size = RemainingAvailableSize;
       NewBlock.IsAllocated = false;
     }
-
     debug(HeapMemory)
     {
       auto DeadBeefPointer = cast(DeadBeefType*)(cast(void*)Block + Block.Size - DeadBeefType.sizeof);
@@ -215,7 +304,14 @@ struct HeapMemory
 
     ubyte PaddingSize = *cast(ubyte*)(MemoryToDeallocate.ptr - 1);
     auto Block = cast(BlockData*)(MemoryToDeallocate.ptr - PaddingSize - BlockData.sizeof);
+    assert(Block.IsAllocated);
 
+    debug(HeapMemory)
+    {
+      alias DeadBeefType = typeof(0xDeadBeef);
+      auto DeadBeefPointer = cast(DeadBeefType*)(cast(void*)Block + Block.Size - DeadBeefType.sizeof);
+      assert(*DeadBeefPointer == 0xDeadBeef, "Memory corruption detected");
+    }
     assert(IsValidBlockPointer(Block));
 
     assert(Block.Size.IsEven);
@@ -271,6 +367,16 @@ private:
   static BlockData* NextBlock(BlockData* Block)
   {
     assert(Block);
+    assert(Block.Size != 0);
+    debug(HeapMemory)
+    {
+      if(Block.IsAllocated)
+      {
+        alias DeadBeefType = typeof(0xDeadBeef);
+        auto DeadBeefPointer = cast(DeadBeefType*)(cast(void*)Block + Block.Size - DeadBeefType.sizeof);
+        assert(*DeadBeefPointer == 0xDeadBeef, "Memory corruption detected");
+      }
+    }
     return cast(BlockData*)(cast(void*)Block + Block.Size);
   }
 

@@ -3,13 +3,22 @@
 #extension GL_ARB_separate_shader_objects : enable
 #extension GL_ARB_shading_language_420pack : enable
 
-layout (binding = 0) uniform sampler2D tex;
+//
+// Uniforms
+//
+layout(binding = 1) uniform sampler2D Sampler;
 
-layout (location = 0) in vec2 texcoord;
+//
+// Input
+//
+layout(location = 0) in vec2 TextureCoordinate;
 
-layout (location = 0) out vec4 uFragColor;
+//
+// Output
+//
+layout(location = 0) out vec4 FragmentColor;
 
 void main()
 {
-  uFragColor = texture(tex, texcoord);
+  FragmentColor = texture(Sampler, TextureCoordinate);
 }

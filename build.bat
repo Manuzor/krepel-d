@@ -6,7 +6,7 @@
 @REM :: Change to repo root directory
 pushd "%ThisDir%"
 
-  @set ExtraFiles=
+  @set ExtraFiles=--extra-file="%CD%\dev\file_logger_wrapper.d"
   @for /r %%f in (*.build.d) do set ExtraFiles=!ExtraFiles! --extra-file="%%f"
 
   @set DMDArgs=-vcolumns -g -debug

@@ -53,11 +53,29 @@ float Length(Vector4 Vec)
 }
 
 /// Creates a copy of the Vector, which is Normalized in its length (has a length of 1.0)
-Vector4 NormalizedCopy(Vector4 Vec)
+/// May contain NaN if Vector is Nearly Zero
+Vector4 UnsafeNormalizedCopy(Vector4 Vec)
 {
-  Vector4 copy = Vec;
-  copy.Normalize();
-  return copy;
+  Vector4 Copy = Vec;
+  Copy.UnsafeNormalize();
+  return Copy;
+}
+
+/// Creates a copy of the Vector, which is Normalized in its length (has a length of 1.0)
+/// If the vector has no component which is bigger than Epsilon, the function returns a ZeroVector.
+Vector4 SafeNormalizedCopy(Vector4 Vec, float Epsilon = 1e-4f)
+{
+  Vector4 Copy = Vec;
+  Copy.SafeNormalize(Epsilon);
+  return Copy;
+}
+
+bool IsNearlyZero(Vector4 Vec, float Epsilon = 1e-4f)
+{
+  return krepel.math.math.NearlyEquals(Vec.X, 0.0f, Epsilon) &&
+         krepel.math.math.NearlyEquals(Vec.Y, 0.0f, Epsilon) &&
+         krepel.math.math.NearlyEquals(Vec.Z, 0.0f, Epsilon) &&
+         krepel.math.math.NearlyEquals(Vec.W, 0.0f, Epsilon);
 }
 
 /// Projects a given Vector onto a Normal (Normal needs to be Normalized)
@@ -74,6 +92,18 @@ Vector4 ProjectOntoNormal(Vector4 Vec, Vector4 Normal)
 Vector4 ProjectOntoPlane(Vector4 Vec, Vector4 Normal)
 {
   return Vec - Vec.ProjectOntoNormal(Normal);
+}
+
+/// Calculates the distance between a plane and a point (plane normal needs to be normalized)
+float DistancePlaneToPoint(Vector4 Plane, Vector3 Normal)
+{
+  return (Normal | Plane.XYZ) - Plane.W;
+}
+
+Vector4 CreatePlaneFromNormalAndPoint(Vector3 Normal, Vector3 Point)
+{
+  auto NormalizedNormal = krepel.math.vector3.SafeNormalizedCopy(Normal);
+  return Vector4(NormalizedNormal, NormalizedNormal | Point);
 }
 
 /// Reflects a Vector around a Normal (Normal needs to be Normalized)
@@ -118,7 +148,7 @@ bool NearlyEquals(Vector4 A, Vector4 B, float Epsilon = 1e-4f)
 /// Input Vector will not be modified
 Vector4 ClampSize(Vector4 Vec, float MaxSize)
 {
-  Vector4 Normal = Vec.NormalizedCopy();
+  Vector4 Normal = Vec.SafeNormalizedCopy();
   return Normal * Min(Vec.Length(), MaxSize);
 }
 
@@ -130,7 +160,7 @@ Vector4 ClampSize2D(Vector4 Vec, float MaxSize)
   Vector4 Clamped = Vec;
   Clamped.Z = 0;
   Clamped.W = 0;
-  Clamped.Normalize();
+  Clamped.SafeNormalize();
   Clamped *= Min(Vec.Length2D(), MaxSize);
   Clamped.Z = Vec.Z;
   Clamped.W = Vec.W;
@@ -208,12 +238,28 @@ struct Vector4
   }
 
   /// Normalizes the Vector (Vector will have a length of 1.0)
-  void Normalize()
+  void UnsafeNormalize()
   {
-    // Don't return Result to avoid confusion with NormalizedCopy
+    // Don't return result to avoid confusion with UnsafeNormalizedCopy
     // and stress that this operation modifies the Vector on which it is called
     float Length = this.Length();
     this /= Length;
+  }
+
+  /// Normalizes the Vector (Vector will have a length of 1.0)
+  void SafeNormalize(float Epsilon = 1e-4f)
+  {
+    if(!this.IsNearlyZero(Epsilon))
+    {
+      // Don't return result to avoid confusion with SafeNormalizedCopy
+      // and stress that this operation modifies the Vector on which it is called
+      float Length = this.Length();
+      this /= Length;
+    }
+    else
+    {
+      this.Data[] = Vector4.ZeroVector.Data[];
+    }
   }
 
   // Dot product
@@ -491,13 +537,13 @@ struct Vector4
   unittest
   {
     Vector4 Vec = Vector4(1,1,1,1);
-    Vec.Normalize();
+    Vec.SafeNormalize();
     float Expected = 1.0f/Sqrt(4);
     assert(Vec == Vector4(Expected, Expected, Expected, Expected));
 
     Vec = Vector4(1,1,1,1);
-    auto Normalized = Vec.NormalizedCopy();
-    auto NormalizedUFCS = NormalizedCopy(Vec);
+    auto Normalized = Vec.SafeNormalizedCopy();
+    auto NormalizedUFCS = SafeNormalizedCopy(Vec);
     assert(Vec == Vector4(1,1,1,1));
     assert(Normalized == Vector4(Expected, Expected, Expected, Expected));
     assert(NormalizedUFCS == Vector4(Expected, Expected, Expected, Expected));
@@ -649,5 +695,29 @@ struct Vector4
 
     static assert(!__traits(compiles, Vector4(1, 2, 3, 4).Foo), "Swizzling is only supposed to work with value members of " ~ Vector4.stringof ~ ".");
     static assert(!__traits(compiles, Vector4(1, 2, 3, 4).XXXXX), "Swizzling output dimension is limited to 4.");
+  }
+
+  unittest
+  {
+    Vector3 Normal = Vector3(0,0,1);
+    Vector3 Point = Vector3(0,0,1);
+    auto Result = CreatePlaneFromNormalAndPoint(Normal, Point);
+    assert(krepel.math.vector3.NearlyEquals(Result.XYZ,Normal));
+    assert(krepel.math.math.NearlyEquals(Result.W, 1));
+  }
+
+  unittest
+  {
+    Vector4 Plane = Vector4(0,0,1,0);
+    Vector3 Position = Vector3.UpVector;
+    assert(krepel.math.math.NearlyEquals(Plane.DistancePlaneToPoint(Position), 1.0f));
+    Plane = Vector4(0,0,1,5);
+    assert(krepel.math.math.NearlyEquals(Plane.DistancePlaneToPoint(Position), -4.0f));
+    Plane = Vector4(0,0,1,5);
+    Position = Vector3.UnitScaleVector;
+    assert(krepel.math.math.NearlyEquals(Plane.DistancePlaneToPoint(Position), -4.0f));
+    Plane = Vector4(1,0,0,5);
+    Position = Vector3.UpVector;
+    assert(krepel.math.math.NearlyEquals(Plane.DistancePlaneToPoint(Position), -5.0f));
   }
 }

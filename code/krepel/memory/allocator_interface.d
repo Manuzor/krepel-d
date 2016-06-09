@@ -61,7 +61,7 @@ void DeleteUndestructed(Type)(IAllocator Allocator, Type Instance)
 {
   if(Instance)
   {
-    Allocator.Deallocate(Instance.AsPointerTo!void[0 .. Type.sizeof]);
+    Allocator.Deallocate(Instance.AsPointerTo!void[0 .. Meta.ClassInstanceSizeOf!Type]);
   }
 }
 

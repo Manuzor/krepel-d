@@ -17,6 +17,9 @@ public import std.process;
 import io = std.stdio;
 public import std.experimental.logger;
 
+// Note(Manu): Located in "dev/file_logger_wrapper.d"
+import file_logger_wrapper;
+
 debug pragma(msg, "! Compiling build script");
 
 enum PlatformKind
@@ -349,147 +352,8 @@ void Win32Build(ref BuildContext Context, ref BuildRuleData BuildRule)
 
   Context.DMDPath = buildNormalizedPath(DmdDir, "windows", "bin", "dmd.exe");
 
-  // Copy over the sc.ini file to the build dir.
-  CopyFile(Context, buildNormalizedPath(Context.RootDir, "dev", "sc.ini"),
-                    buildNormalizedPath(Context.BuildDir, "sc.ini"));
-
-  string[] ImportPath;
-  string[] Libs;
-  string[] LibPath;
-
-  // DRuntime
-  ImportPath ~= buildNormalizedPath(DmdDir, "src", "druntime", "import");
-
-  // Phobos
-  ImportPath ~= buildNormalizedPath(DmdDir, "src", "phobos");
-
-  final switch(Context.Architecture)
-  {
-    case ArchitectureKind.x64:
-    {
-      LibPath ~= buildNormalizedPath(DmdDir, "windows", "lib64");
-      Libs ~= "phobos64.lib";
-    } break;
-
-    case ArchitectureKind.x86:
-    {
-      LibPath ~= buildNormalizedPath(DmdDir, "windows", "lib");
-      Libs ~= "phobos.lib";
-    } break;
-  }
-
-  // PlatformKind specific libraries.
-  Libs ~= "user32.lib";
-
   // We want to compile for Windows 10 only.
   Context.BuildArgs ~= "-version=Windows10";
-
-  // TODO: Maybe do this in some init.d script? Could also make some mklinks in that init script.
-  auto FindVisualStudioDir()
-  {
-    foreach(EnvVarName; ["VS140COMNTOOLS", "VS120COMNTOOLS", "VS110COMNTOOLS"])
-    {
-      auto VsToolsDir = environment.get(EnvVarName);
-      if(VsToolsDir)
-      {
-        if(Context.Verbosity > 2)
-        {
-          logf(`Found VS Tools dir in environment variable "%s": %s`, EnvVarName, VsToolsDir);
-        }
-
-        return buildNormalizedPath(VsToolsDir, "..", "..");
-      }
-      if(Context.Verbosity > 1)
-      {
-        logf(`No environment variable "%s" found.`, EnvVarName);
-      }
-    }
-
-    return null;
-  }
-
-  auto VisualStudioDir = FindVisualStudioDir();
-  assert(VisualStudioDir, "Unable to find Visual Studio directory. "
-                          "Make sure it's installed and the VSxxCOMNTOOLS "
-                          "environment variable is set (xx == a number).");
-
-  if(Context.Verbosity > 3)
-  {
-    log("Visual Studio Directory: ", VisualStudioDir);
-  }
-
-  string WindowsKitsLibSubfolder;
-  final switch(Context.Architecture)
-  {
-    case ArchitectureKind.x64:
-    {
-      LibPath ~= buildNormalizedPath(VisualStudioDir, "VC", "lib", "amd64");
-      WindowsKitsLibSubfolder = "x64";
-    } break;
-
-    case ArchitectureKind.x86:
-    {
-      LibPath ~= buildNormalizedPath(VisualStudioDir, "VC", "lib", "amd64");
-      WindowsKitsLibSubfolder = "x86";
-    } break;
-  }
-
-  auto WindowsKitsDir = [
-    buildNormalizedPath(environment.get("ProgramFiles(x86)", ""), "Windows Kits"),
-    buildNormalizedPath(environment.get("ProgramFiles", ""), "Windows Kits"),
-    buildNormalizedPath("C:", "Program Files (x86)", "Windows Kits"),
-    buildNormalizedPath("C:", "Program Files", "Windows Kits"),
-  ].find!(a => a.exists && a.isDir).front;
-
-  auto WindowsLibDirs = [
-    // Windows 10 first
-    buildNormalizedPath(WindowsKitsDir, "10", "Lib"),
-
-    // Then try Windows 8.1
-    buildNormalizedPath(WindowsKitsDir, "8.1", "Lib"),
-
-    // And finally Windows 8. We won't go below that.
-    buildNormalizedPath(WindowsKitsDir, "8.0", "Lib"),
-  ];
-
-  foreach(Path; WindowsLibDirs)
-  {
-    if(Path.exists)
-    {
-      foreach(SubPath; Path.dirEntries(SpanMode.shallow).array.sort!"b.name < a.name")
-      {
-        LibPath ~= buildNormalizedPath(SubPath, "um", WindowsKitsLibSubfolder);
-        LibPath ~= buildNormalizedPath(SubPath, "ucrt", WindowsKitsLibSubfolder);
-      }
-    }
-  }
-
-  if (Context.Verbosity > 3)
-  {
-    logf("Import Paths:%-(\n  %s%)", ImportPath.map!(a => "%s %s".format(a.exists ? " " : "!", a)));
-    logf("Lib Paths:%-(\n  %s%)", LibPath.map!(a => "%s %s".format(a.exists ? " " : "!", a)));
-  }
-
-  Context.BuildArgs ~= ImportPath.filter!(a => a.exists).map!(a => `-I"` ~ a ~ `"`).array;
-  Context.BuildArgs ~= LibPath.filter!(a => a.exists).map!(a => `-L/LIBPATH:"` ~ a ~ `"`).array;
-  Context.BuildArgs ~= Libs;
-
-  string LinkerPath;
-  final switch(Context.Architecture)
-  {
-    case ArchitectureKind.x64:
-    {
-      LinkerPath = buildNormalizedPath(VisualStudioDir, "VC", "bin", "amd64", "link.exe");
-    } break;
-
-    case ArchitectureKind.x86:
-    {
-      LinkerPath = buildNormalizedPath(VisualStudioDir, "VC", "bin", "link.exe");
-    } break;
-  }
-
-  // Set LINKCMD to tell dmd which linker executable to use.
-  environment["LINKCMD"] = LinkerPath;
 
   if(Context.Verbosity > 3)
   {
@@ -518,31 +382,6 @@ void PrintHelp()
 void PrintRules()
 {
   io.writefln("%-(%s\n%)", GlobalBuildRules.map!(a => a.Name));
-}
-
-// Override this file logger and provide a more sane output format.
-class FileLoggerWrapper : FileLogger
-{
-  import std.concurrency;
-
-  string BaseDir;
-
-
-  this(in string FileName, const LogLevel TheLogLevel = LogLevel.all) @safe { super(FileName, TheLogLevel); }
-  this(io.File TheFile, const LogLevel TheLogLevel = LogLevel.all) @safe { super(TheFile, TheLogLevel); }
-
-  override protected void beginLogMsg(string TheFile, int line, string funcName,
-                                      string prettyFuncName, string moduleName, LogLevel logLevel,
-                                      Tid threadId, SysTime timestamp, Logger logger)
-  @safe
-  {
-    auto TextWriter = this.file.lockingTextWriter();
-    TextWriter.formattedWrite("[%02u:%02u:%02u.%03d] %s(%s): ",
-                              timestamp.hour, timestamp.minute, timestamp.second, timestamp.fracSecs.split!"msecs".msecs,
-                              TheFile.drop(BaseDir.length + 1), // +1 for the trailing slash
-                              line);
-  }
-
 }
 
 int main(string[] Args)
@@ -698,6 +537,11 @@ int main(string[] Args)
 
     // Make a copy.
     auto Context = BaseBuildContext;
+
+    if(BaseBuildContext.Verbosity > 0)
+    {
+      logf("Build rule: %s", buildRuleName);
+    }
 
     final switch(Context.Platform)
     {
