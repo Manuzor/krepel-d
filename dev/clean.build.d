@@ -7,7 +7,7 @@ immutable ThisDir = dirName(__FILE__);
 mixin AddBuildRule!("clean", BuildRule);
 
 
-immutable WhiteList = [ "*build.log", "*.sln", "*.vs" ];
+immutable WhiteList = [ "*build.log", "*sc.ini", "*.sln", "*.vs" ];
 
 /// Clean out the build directory, without deleting the directory itself.
 void BuildRule(ref BuildContext Context)
