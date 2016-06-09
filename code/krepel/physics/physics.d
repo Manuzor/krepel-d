@@ -68,16 +68,7 @@ class PhysicsSystem : Subsystem
             auto CollisionResult = CollisionDetection.CheckCollision(Body1, Body2);
             if (CollisionResult.DoesCollide)
             {
-              ColorLinear[1] DebugColor = [CollisionResult.DoesCollide ? Colors.Red : Colors.Lime];
-
-              if (Body1.Shape.Type == ShapeType.Poly)
-              {
-                GlobalEngine.DebugHelper.AddPolyShape(Body1.Owner.GetWorldTransform, Body1.Shape.Poly, DebugColor);
-              }
-              if (Body2.Shape.Type == ShapeType.Poly)
-              {
-                GlobalEngine.DebugHelper.AddPolyShape(Body2.Owner.GetWorldTransform, Body2.Shape.Poly, DebugColor );
-              }
+              Log.Info("Collision");
               Vector3 ResolvanceVector = CollisionResult.PenetrationDepth * CollisionResult.CollisionNormal;
               float Body1ResolvanceFactor = 1.0f;
               float Body2ResolvanceFactor = 0.0f;
@@ -101,6 +92,16 @@ class PhysicsSystem : Subsystem
               {
                 Body2.Owner.MoveWorld(-ResolvanceVector * Body2ResolvanceFactor);
               }
+            }
+            ColorLinear[1] DebugColor = [CollisionResult.DoesCollide ? Colors.Red : Colors.Lime];
+
+            if (Body1.Shape.Type == ShapeType.Poly)
+            {
+              GlobalEngine.DebugHelper.AddPolyShape(Body1.Owner.GetWorldTransform, Body1.Shape.Poly, DebugColor);
+            }
+            if (Body2.Shape.Type == ShapeType.Poly)
+            {
+              GlobalEngine.DebugHelper.AddPolyShape(Body2.Owner.GetWorldTransform, Body2.Shape.Poly, DebugColor );
             }
 
           }

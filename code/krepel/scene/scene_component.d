@@ -59,6 +59,11 @@ class SceneComponent : GameComponent
     Transformation.Translation += Delta;
   }
 
+  void SetRotation(Quaternion Quat)
+  {
+    Transformation.Rotation = Quat;
+  }
+
 
 
 private:

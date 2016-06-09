@@ -181,18 +181,25 @@ PolyShapeData CreatePolyShapeFromPolygons(IAllocator Allocator, Polygon[] Polys)
     // Find twins
     foreach(Index, ref Edge; Edges)
     {
+      Vector3 FirstOriginVertex = Vertices[Edge.OriginIndex];
       Vector3 FirstDirection = Vertices[Edges[Edge.NextIndex].OriginIndex] - Vertices[Edge.OriginIndex];
-      if(Edge.TwinIndex != -1)
+      if(Edge.TwinIndex == -1)
       {
-        auto TwinIndex = Edges[Index+1..$].CountUntil!( (ref HalfEdge TwinEdge)
+        auto TwinIndex = Edges[0..$].CountUntil!( (ref HalfEdge TwinEdge)
           {
-            Vector3 SecondDirection = Vertices[TwinEdge.OriginIndex] - Vertices[Edges[Edge.NextIndex].OriginIndex];
-            return NearlyEquals(FirstDirection, SecondDirection);
+            Vector3 SecondOriginVertex = Vertices[TwinEdge.OriginIndex];
+            Vector3 SecondDirection = SecondOriginVertex - Vertices[Edges[TwinEdge.NextIndex].OriginIndex];
+            return NearlyEquals(FirstDirection, SecondDirection) && (SecondOriginVertex - FirstDirection).NearlyEquals(FirstOriginVertex);
           });
-        assert(TwinIndex >= 0);
         Edge.TwinIndex = cast(byte)TwinIndex;
         Edges[TwinIndex].TwinIndex = cast(byte)Index;
       }
+      assert(Edge.TwinIndex >= 0);
+      assert(Index != Edge.TwinIndex);
+      Vector3 Vertex1 = Vertices[Edge.OriginIndex];
+      Vector3 Vertex2 = Vertices[Edges[Edge.TwinIndex].OriginIndex];
+      assert((Vertex1 - Vertex2).Length.NearlyEquals(2.0f));
+
     }
   }
   return Data;
