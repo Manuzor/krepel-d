@@ -296,7 +296,7 @@ class WavefrontResourceLoader : IResourceLoader
               {
                 NewVertex.TextureCoordinate = TempMesh.TextureCoordinates[VertexDefinition.TextureIndex];
               }
-              NewVertex.Color = Color_White();
+              NewVertex.Color = Colors.White;
               NewSubMesh.Indices.PushBack(cast(int)NewSubMesh.Vertices.Count);
               DefinedVertices[VertexDefinition] = cast(int)NewSubMesh.Vertices.Count;
               NewSubMesh.Vertices.PushBack(NewVertex);

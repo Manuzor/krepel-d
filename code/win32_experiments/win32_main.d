@@ -244,7 +244,7 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
         //
         // Apply Input
         //
-        ColorLinear[6] Colors = [Color_Lime(), Color_Red(), Color_Blue(), Color_Pink(), Color_Orange(), Color_Yellow() ];
+        ColorLinear[6] Colors = [Colors.Lime, Colors.Red, Colors.Blue, Colors.Pink, Colors.Orange, Colors.Yellow ];
         PolyShapeData BoxShape = CreatePolyShapeFromBox(MainAllocator, Vector3.UnitScaleVector * 0.5f);
         GlobalEngine.DebugHelper.AddPolyShape(Transform(Vector3(0,0,3), Quaternion.Identity, Vector3.UnitScaleVector), BoxShape, Colors, 0.1f);
         GlobalRunning = GlobalEngine.Update();
