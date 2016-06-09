@@ -34,7 +34,7 @@ struct PolyShapeData
 
   Vector3 GetSupport(Vector3 Direction) const
   {
-    float MaxDistance = float.min_normal;
+    float MaxDistance = -float.infinity;
     int MaxIndex = -1;
     foreach(Index, Vertex; Vertices)
     {

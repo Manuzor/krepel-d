@@ -19,12 +19,12 @@ class SceneComponent : GameComponent
     Transformation = Transform.Identity;
   }
 
-  Transform GetLocalTransform()
+  Transform GetLocalTransform() const
   {
     return Transformation;
   }
 
-  Transform GetWorldTransform()
+  Transform GetWorldTransform() const
   {
     if (Parent)
     {

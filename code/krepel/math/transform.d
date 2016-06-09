@@ -102,12 +102,12 @@ struct Transform
     Rotation = InverseRotation * Rotation;
   }
 
-  Transform opBinary(string Operator : "*")(in ref Transform Other)
+  Transform opBinary(string Operator : "*")(in Transform Other)
   {
     return Concatenate(this, Other);
   }
 
-  void opOpAssign(string Operator : "*")(in ref Transform Other)
+  void opOpAssign(string Operator : "*")(in Transform Other)
   {
     this = Concatenate(this, Other);
   }
