@@ -119,21 +119,13 @@ void ConstructArray(Type, ArgTypes...)(Type[] Array, auto ref ArgTypes Args)
   }
 }
 
-
 void DestructArray(Type)(Type[] Array)
 {
-  // Can't destruct an array of void.
-  static if(!Meta.IsVoid!Type)
+  // Can't destruct an array of void. And don't do anything for plan old data.
+  static if(!Meta.IsVoid!Type && !Meta.IsPlainOldData!Type)
   {
-    static if(Meta.IsPlainOldData!Type)
-    {
-      BlitInitialData(Array);
-    }
-    else
-    {
-      static if(is(Type == class)) foreach(    Element; Array) Destruct(Element);
-      else                         foreach(ref Element; Array) Destruct(&Element);
-    }
+    static if(is(Type == class)) foreach(    Element; Array) Destruct( Element);
+    else                         foreach(ref Element; Array) Destruct(&Element);
   }
 }
 
