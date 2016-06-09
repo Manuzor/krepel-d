@@ -45,11 +45,17 @@ version(none) // Note(Manu): Not implemented.
 void Destruct(Type)(Type Instance)
   if(is(Type == interface))
 {
-  // TODO(Manu): Implement destruction off interfaces?!
+  // TODO(Manu): Implement destruction of interfaces?!
+}
+
+void Destruct(Type)(Type*)
+  if(!Meta.IsClassOrInterface!Type && Meta.IsPlainOldData!Type)
+{
+  // Note(Manu): Do nothing for plain old data.
 }
 
 void Destruct(Type)(Type* Instance)
-  if(!Meta.IsClassOrInterface!Type)
+  if(!Meta.IsClassOrInterface!Type && !Meta.IsPlainOldData!Type)
 {
   // TODO(Manu): assert(Instance)?
   if(Instance)
@@ -61,23 +67,23 @@ void Destruct(Type)(Type* Instance)
     {
       // Call the destructor on the instance.
       Instance.__dtor();
+    }
 
-      // Destruct all the members of Instance.
-      foreach(MemberName; __traits(allMembers, Type))
+    // Destruct all the members of Instance.
+    foreach(MemberName; __traits(allMembers, Type))
+    {
+      static if(__traits(compiles, typeof(mixin(`Instance.` ~ MemberName))))
       {
-        static if(__traits(compiles, typeof(mixin(`Instance.` ~ MemberName))))
+        alias MemberType = typeof(mixin(`Instance.` ~ MemberName));
+        static if(Meta.HasDestructor!MemberType && !Meta.IsPointer!MemberType)
         {
-          alias MemberType = typeof(mixin(`Instance.` ~ MemberName));
-          static if(Meta.HasDestructor!MemberType && !Meta.IsPointer!MemberType)
+          static if(Meta.IsClassOrInterface!MemberType)
           {
-            static if(Meta.IsClassOrInterface!MemberType)
-            {
-              Destruct(mixin(`Instance.` ~ MemberName));
-            }
-            else
-            {
-              Destruct(mixin(`&Instance.` ~ MemberName));
-            }
+            Destruct(mixin(`Instance.` ~ MemberName));
+          }
+          else
+          {
+            Destruct(mixin(`&Instance.` ~ MemberName));
           }
         }
       }
@@ -389,4 +395,45 @@ unittest
     // destruct itself at the end of the scope.
   }
   assert(Foo.Data == 42);
+}
+
+// Destruction of inner objects
+version(unittest) int InnerDestuctionCount;
+version(unittest) int OuterDestuctionCount;
+unittest
+{
+  InnerDestuctionCount = 0;
+  OuterDestuctionCount = 0;
+
+  static struct Inner
+  {
+    ~this()
+    {
+      InnerDestuctionCount++;
+    }
+  }
+
+  static struct OuterNoDtor
+  {
+    Inner InnerInstance;
+  }
+
+  static struct OuterWithDtor
+  {
+    Inner InnerInstance;
+    ~this()
+    {
+      OuterDestuctionCount++;
+    }
+  }
+
+  OuterWithDtor Foo;
+  Destruct(&Foo);
+  assert(OuterDestuctionCount == 1);
+  assert(InnerDestuctionCount == 1);
+
+  OuterNoDtor Bar;
+  Destruct(&Bar);
+  assert(OuterDestuctionCount == 1);
+  assert(InnerDestuctionCount == 2);
 }
