@@ -77,6 +77,12 @@ Vector3 SafeNormalizedCopy(Vector3 Vec, float Epsilon = 1e-4f)
   return Copy;
 }
 
+/// Returns the component wise absolute values of the vector
+Vector3 GetAbs(Vector3 Vec)
+{
+  return Vector3(Abs(Vec.X), Abs(Vec.Y), Abs(Vec.Z));
+}
+
 /// Projects a given Vector onto a Normal (Normal needs to be Normalized)
 /// Returns the projected Vector, which will be a scaled version of the Vector
 /// Input Vectors will not be modified

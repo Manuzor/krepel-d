@@ -19,6 +19,7 @@ import krepel.scene;
 import krepel.forward_renderer;
 import krepel.physics;
 import krepel.engine;
+import krepel.color;
 
 version(Windows):
 import std.string : toStringz, fromStringz;
@@ -164,12 +165,13 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
       GlobalEngine.RegisterScene(Graph);
       auto CameraObject= Graph.CreateGameObject!HorizonCamera(UString("Camera", MainAllocator));
       auto CameraComponent = cast(CameraComponent)CameraObject.RootComponent;
-      CameraComponent.SetWorldTransform(Transform(Vector3(-20,0,3), Quaternion.Identity, Vector3.UnitScaleVector));
+      CameraComponent.SetWorldTransform(Transform(Vector3(-5,0,3), Quaternion.Identity, Vector3.UnitScaleVector));
       Matrix4 Mat = CameraComponent.GetViewProjectionMatrix().GetTransposed;
 
       auto Plane = Graph.CreateDefaultGameObject(UString("Plane", MainAllocator));
       auto PlanePhysicsChild = Plane.ConstructChild!PhysicsComponent(UString("PlanePhysics", MainAllocator));
-      PlanePhysicsChild.ComponentBody.Shape.SetPlane(PlaneShapeData(Vector4(0,0,1,0)));
+      PlaneShapeData ShapeData = PlaneShapeData(Vector4(0,0,1,0));
+      PlanePhysicsChild.ComponentBody.Shape.SetPlane(ShapeData);
       PlanePhysicsChild.ComponentBody.BodyMovability = Movability.Static;
       PlanePhysicsChild.RegisterComponent();
       auto RenderChild = Plane.ConstructChild!PrimitiveRenderComponent(UString("PlaneRender", MainAllocator), PlanePhysicsChild);
@@ -179,17 +181,20 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
 
       auto Sphere = Graph.CreateDefaultGameObject(UString("Sphere", MainAllocator));
       auto SpherePhysicsChild = Sphere.ConstructChild!PhysicsComponent(UString("SpherePhysics", MainAllocator));
-      SpherePhysicsChild.ComponentBody.Shape.SetSphere(SphereShapeData(1.0f));
+      auto SphereData = SphereShapeData(1.0f);
+      SpherePhysicsChild.ComponentBody.Shape.SetSphere(SphereData);
       SpherePhysicsChild.ComponentBody.Restitution = 0.9f;
+      SpherePhysicsChild.ComponentBody.Mass = 1.0f;
       SpherePhysicsChild.RegisterComponent();
       RenderChild = Sphere.ConstructChild!PrimitiveRenderComponent(UString("SphereRender", MainAllocator), SpherePhysicsChild);
       RenderChild.SetWorldTransform(Transform(Vector3(0,0,0), Quaternion.Identity, Vector3.UnitScaleVector));
       RenderChild.SetMesh(UnitSphere);
       RenderChild.RegisterComponent();
+      Sphere.RootComponent.SetWorldTransform(Transform(Vector3(0,0,1.0f), Quaternion.Identity, Vector3.UnitScaleVector));
 
       auto Sphere2 = Graph.CreateDefaultGameObject(UString("Sphere2", MainAllocator));
       auto Sphere2PhysicsChild = Sphere2.ConstructChild!PhysicsComponent(UString("Sphere2Physics", MainAllocator));
-      Sphere2PhysicsChild.ComponentBody.Shape.SetSphere(SphereShapeData(1.0f));
+      Sphere2PhysicsChild.ComponentBody.Shape.SetSphere(SphereData);
       Sphere2PhysicsChild.RegisterComponent();
       RenderChild = Sphere2.ConstructChild!PrimitiveRenderComponent(UString("Sphere2Render", MainAllocator), Sphere2PhysicsChild);
       Sphere2.RootComponent.SetWorldTransform(Transform(Vector3(0.0f,0.5f,5), Quaternion.Identity, Vector3.UnitScaleVector));
@@ -198,7 +203,6 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
 
       RenderChild.SetMesh(UnitSphere);
       RenderChild.RegisterComponent();
-      Sphere.RootComponent.SetWorldTransform(Transform(Vector3(0,0,3), Quaternion.Identity, Vector3.UnitScaleVector));
       GlobalEngine.Renderer.ActiveCamera = CameraComponent;
 
 
@@ -240,10 +244,9 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
         //
         // Apply Input
         //
-        auto Transform = SpherePhysicsChild.GetLocalTransform();
-        Transform.Translation += Vector3.UpVector * User1Input["ObjZ"].AxisValue * GlobalEngine.FrameTimeData.ElapsedTime;
-        SpherePhysicsChild.SetLocalTransform(Transform);
-
+        ColorLinear[6] Colors = [Color_Lime(), Color_Red(), Color_Blue(), Color_Pink(), Color_Orange(), Color_Yellow() ];
+        PolyShapeData BoxShape = CreatePolyShapeFromBox(MainAllocator, Vector3.UnitScaleVector * 0.5f);
+        GlobalEngine.DebugHelper.AddPolyShape(Transform(Vector3(0,0,3), Quaternion.Identity, Vector3.UnitScaleVector), BoxShape, Colors, 0.1f);
         GlobalRunning = GlobalEngine.Update();
 
 

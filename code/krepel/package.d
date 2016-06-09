@@ -7,3 +7,4 @@ public import krepel.math;
 public import krepel.container;
 public import krepel.util;
 public import krepel.event;
+public import krepel.color;

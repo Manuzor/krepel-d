@@ -94,6 +94,18 @@ Vector4 ProjectOntoPlane(Vector4 Vec, Vector4 Normal)
   return Vec - Vec.ProjectOntoNormal(Normal);
 }
 
+/// Calculates the distance between a plane and a point (plane normal needs to be normalized)
+float DistancePlaneToPoint(Vector4 Plane, Vector3 Normal)
+{
+  return (Normal | Plane.XYZ) - Plane.W;
+}
+
+Vector4 CreatePlaneFromNormalAndPoint(Vector3 Normal, Vector3 Point)
+{
+  auto NormalizedNormal = krepel.math.vector3.SafeNormalizedCopy(Normal);
+  return Vector4(NormalizedNormal, NormalizedNormal | Point);
+}
+
 /// Reflects a Vector around a Normal (Normal needs to be Normalized)
 /// Returns the reflected Vector
 /// Input Vectors will not be modified
@@ -683,5 +695,29 @@ struct Vector4
 
     static assert(!__traits(compiles, Vector4(1, 2, 3, 4).Foo), "Swizzling is only supposed to work with value members of " ~ Vector4.stringof ~ ".");
     static assert(!__traits(compiles, Vector4(1, 2, 3, 4).XXXXX), "Swizzling output dimension is limited to 4.");
+  }
+
+  unittest
+  {
+    Vector3 Normal = Vector3(0,0,1);
+    Vector3 Point = Vector3(0,0,1);
+    auto Result = CreatePlaneFromNormalAndPoint(Normal, Point);
+    assert(krepel.math.vector3.NearlyEquals(Result.XYZ,Normal));
+    assert(krepel.math.math.NearlyEquals(Result.W, 1));
+  }
+
+  unittest
+  {
+    Vector4 Plane = Vector4(0,0,1,0);
+    Vector3 Position = Vector3.UpVector;
+    assert(krepel.math.math.NearlyEquals(Plane.DistancePlaneToPoint(Position), 1.0f));
+    Plane = Vector4(0,0,1,5);
+    assert(krepel.math.math.NearlyEquals(Plane.DistancePlaneToPoint(Position), -4.0f));
+    Plane = Vector4(0,0,1,5);
+    Position = Vector3.UnitScaleVector;
+    assert(krepel.math.math.NearlyEquals(Plane.DistancePlaneToPoint(Position), -4.0f));
+    Plane = Vector4(1,0,0,5);
+    Position = Vector3.UpVector;
+    assert(krepel.math.math.NearlyEquals(Plane.DistancePlaneToPoint(Position), -5.0f));
   }
 }

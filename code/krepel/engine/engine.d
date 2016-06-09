@@ -10,6 +10,8 @@ import krepel.resources;
 import krepel.chrono;
 import krepel.engine.subsystem;
 import krepel.physics;
+import krepel.forward_renderer.debug_helper;
+import krepel.color;
 
 struct EngineCreationInformation
 {
@@ -34,6 +36,7 @@ class Engine
   TickData FrameTimeData;
   PhysicsSystem Physics;
   Array!Subsystem Subsystems;
+  DebugRenderHelper DebugHelper;
 
   this(IAllocator Allocator)
   {
@@ -93,6 +96,8 @@ class Engine
     Subsystems ~= Physics;
     Physics.Initialize(this);
 
+    DebugHelper = EngineAllocator.New!DebugRenderHelper(EngineAllocator);
+
     with(FrameTimeData)
     {
       TimeFromStart = 0;
@@ -130,6 +135,8 @@ class Engine
       Subsystem.TickSubsystem(ElapsedTime);
     }
     Renderer.Render();
+    DebugHelper.Draw(GlobalEngine.RenderDevice);
+    Renderer.Present();
     return RunEngine;
   }
 
@@ -157,6 +164,7 @@ class Engine
 
   void Destroy()
   {
+    EngineAllocator.Delete(DebugHelper);
     EngineAllocator.Delete(GameFramework);
     EngineAllocator.Delete(Physics);
     EngineAllocator.Delete(Renderer);
