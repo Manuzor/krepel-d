@@ -13,7 +13,7 @@ Vector3 TransformDirection(in Transform Transformation, Vector3 Vec)
   }
 }
 
-Vector3 TransformPosition(in ref Transform Transformation, Vector3 Vec)
+Vector3 TransformPosition(in Transform Transformation, Vector3 Vec)
 {
   with(Transformation)
   {
@@ -100,6 +100,7 @@ struct Transform
     Scale = Scale * ReciprocalScale;
     Translation = krepel.math.quaternion.TransformDirection(InverseRotation, (Translation - ParentTransform.Translation)) * ReciprocalScale;
     Rotation = InverseRotation * Rotation;
+    Rotation.SafeNormalize;
   }
 
   Transform opBinary(string Operator : "*")(in Transform Other)

@@ -91,7 +91,12 @@ class PhysicsSystem : Subsystem
               {
                 Vector3 Delta = ResolvanceVector * Body1ResolvanceFactor;
                 Log.Info("Moved by %f %f %f (%f)", Delta.X, Delta.Y, Delta.Z, Delta.Length);
-                Body1.Owner.MoveWorld(ResolvanceVector * Body1ResolvanceFactor);
+                auto OriginTransform = Body1.Owner.GetWorldTransform;
+                Vector3 OriginPos = Body1.Owner.GetWorldTransform.TransformPosition(Vector3.ZeroVector);
+                Body1.Owner.SetWorldTransform(Transform(OriginPos + Delta, OriginTransform.Rotation, OriginTransform.Scale));
+                Vector3 TargetPos = Body1.Owner.GetWorldTransform.TransformPosition(Vector3.ZeroVector);
+                Delta = TargetPos - OriginPos;
+                Log.Info("Actual Moved by %f %f %f (%f)", Delta.X, Delta.Y, Delta.Z, Delta.Length);
               }
               if (Body2.Movable)
               {
