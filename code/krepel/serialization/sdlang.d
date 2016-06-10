@@ -980,7 +980,8 @@ private SpecData QueryParseNodeSpec(ref SourceData Source, ref SDLParsingContext
   //
   // Extract the actual data.
   //
-  Result.NodeName = Source.ParseUntil!(Str => Str.front == '[' || Str.front == '@' || Str.front == '#')(Context);
+  auto NodeName = Source.ParseUntil!(Str => Str.front == '[' || Str.front == '@' || Str.front == '#')(Context);
+  Result.NodeName = NodeName;
 
   if(!Source.empty && Source.front == '[')
   {
@@ -1064,7 +1065,7 @@ private SpecData QueryParseNodeSpec(ref SourceData Source, ref SDLParsingContext
   return Result;
 }
 
-ReturnType Query(ReturnType)(SDLDocument Document, string QueryString, bool* Success = null, LogData* Log = .Log)
+ReturnType Query(ReturnType)(SDLNodeHandle Node, string QueryString, bool* Success = null, LogData* Log = .Log)
 {
   if(Success)
     *Success = true;
@@ -1074,8 +1075,6 @@ ReturnType Query(ReturnType)(SDLDocument Document, string QueryString, bool* Suc
   with(Source.StartLocation) { Line = 1; Column = 1; SourceIndex = 0; }
   with(Source.EndLocation)   { Line = 0; Column = 0; SourceIndex = Source.Value.length; }
   auto Context = SDLParsingContext("Query");
-
-  auto Node = Document.Root;
 
   // Only one of the following may be set at a given time.
   int ValueIndex = -1;
@@ -1099,8 +1098,18 @@ ReturnType Query(ReturnType)(SDLDocument Document, string QueryString, bool* Suc
       return Result;
     }
 
-    assert(Spec.NodeName);
-    Node = Node.Nodes[Spec.NodeName][Spec.NodeIndex];
+    if(!Spec.NodeName.empty)
+    {
+      Node = Node.Nodes[Spec.NodeName][Spec.NodeIndex];
+    }
+    else if(!Source.empty)
+    {
+      if(Success)
+        *Success = false;
+      .Log.Failure("%s(%d,%d): Empty node name is only allowed as the last node spec.",
+                   Context.Origin, Source.StartLocation.Line, Source.StartLocation.Column);
+      return Result;
+    }
 
     if(Source.empty)
     {
@@ -1223,6 +1232,17 @@ text)", 0);
   }
 }
 
+// AdvanceBy
+unittest
+{
+  auto Source = MakeSourceDataForTesting("foobar", 0);
+  assert(Source == "foobar");
+  assert(Source.AdvanceBy(1) == "f");
+  assert(Source == "oobar");
+  assert(Source.AdvanceBy(5) == "oobar");
+  assert(Source.empty);
+}
+
 // ParseUntil
 unittest
 {
@@ -1236,6 +1256,14 @@ unittest
     assert(Result.EndLocation.SourceIndex == 3, Result);
     assert(Source.StartLocation.SourceIndex == 3, Source);
     assert(Source.EndLocation.SourceIndex == Source.Value.length, Source);
+  }
+
+  {
+    auto Source = MakeSourceDataForTesting("foobar", 0);
+
+    auto Result = Source.ParseUntil!(Str => Str.front == 'f')(Context);
+    assert(Result.empty);
+    assert(Source == "foobar");
   }
 }
 
@@ -1678,28 +1706,30 @@ unittest
   )";
   Document.ParseDocumentFromString(Source, Context);
 
-  assert(Document.Query!string("Foo") == "Bar");
-  assert(Document.Query!string("Foo#0") == "Bar");
-  assert(Document.Query!string("Foo#1") == "Bar?");
-  assert(Document.Query!string("Foo#2") == "Bar!");
-  assert(Document.Query!string("Foo[0]") == "Bar");
-  assert(Document.Query!string("Foo[0]#0") == "Bar");
-  assert(Document.Query!string("Foo[0]#1") == "Bar?");
-  assert(Document.Query!string("Foo[0]#2") == "Bar!");
-  assert(Document.Query!string("Foo@Key") == "Value");
-  assert(Document.Query!string("Foo/Baz") == "Qux");
-  assert(Document.Query!string("Foo/Baz[1]") == "Sup");
-  assert(Document.Query!string("Foo/Baz/Baaz") == "Quux");
-  assert(Document.Query!string("Foo/Baz[1]/Baaz") == "Quux, again");
-  assert(Document.Query!int("Foo/Baz/Baaz#1") == 1337);
-  assert(Document.Query!int("Foo/Baz/Baaz@answer") == 42);
-  assert(Document.Query!string("Foo/Baz/Baaz[1]") == "Fuux");
-  assert(Document.Query!int("Foo/Baz/Baaz[1]#1") == 123);
-  assert(Document.Query!int("Foo/Baz/Baaz[1]@answer") == 43);
+  assert(Document.Root.Query!string("Foo") == "Bar");
+  assert(Document.Root.Query!string("Foo[0]") == "Bar");
+  assert(Document.Root.Query!string("Foo#0") == "Bar");
+  assert(Document.Root.Query!string("Foo[0]#0") == "Bar");
+  assert(Document.Root.Query!string("Foo#1") == "Bar?");
+  assert(Document.Root.Query!string("Foo[0]#1") == "Bar?");
+  assert(Document.Root.Query!string("Foo#2") == "Bar!");
+  assert(Document.Root.Query!string("Foo[0]#2") == "Bar!");
+  assert(Document.Root.Query!string("Foo@Key") == "Value");
+  assert(Document.Root.Query!string("Foo/Baz") == "Qux");
+  assert(Document.Root.Query!string("Foo/Baz[1]") == "Sup");
+  assert(Document.Root.Query!string("Foo/Baz/Baaz") == "Quux");
+  assert(Document.Root.Query!string("Foo/Baz[1]/Baaz") == "Quux, again");
+  assert(Document.Root.Query!int("Foo/Baz/Baaz#1") == 1337);
+  assert(Document.Root.Query!int("Foo/Baz/Baaz@answer") == 42);
+  assert(Document.Root.Query!string("Foo/Baz/Baaz[1]") == "Fuux");
+  assert(Document.Root.Query!int("Foo/Baz/Baaz[1]#1") == 123);
+  assert(Document.Root.Query!int("Foo/Baz/Baaz[1]@answer") == 43);
 
-  auto Foo = Document.Query!SDLNodeHandle("Foo");
+  auto Foo = Document.Root.Query!SDLNodeHandle("Foo");
   assert(Foo.IsValidHandle);
   assert(Foo.Values.length == 3);
   assert(Foo.Attributes.length == 1);
   assert(cast(string)Foo.Attribute("Key") == "Value");
+  assert(Foo.Query!string("#0") == "Bar");
+  assert(Foo.Query!string("Baz") == "Qux");
 }
