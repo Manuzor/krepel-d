@@ -92,7 +92,8 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
     return 1;
   }
   assert(RawMemory);
-  auto Heap = HeapMemory((cast(ubyte*)RawMemory)[0 .. MemorySize]);
+  //auto Heap = HeapMemory((cast(ubyte*)RawMemory)[0 .. MemorySize]);
+  auto Heap = SystemMemory();
   debug
   {
     MemoryVerifier Verifier = MemoryVerifier(Heap.Wrap());
@@ -188,16 +189,18 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
       SpherePhysicsChild.ComponentBody.Mass = 1.0f;
       SpherePhysicsChild.RegisterComponent();
       RenderChild = Sphere.ConstructChild!PrimitiveRenderComponent(UString("SphereRender", MainAllocator), SpherePhysicsChild);
-      RenderChild.SetWorldTransform(Transform(Vector3(0,0,0), Quaternion.Identity, Vector3.UnitScaleVector));
+      RenderChild.SetWorldTransform(Transform(Vector3(0,0,0), Quaternion.Identity, Vector3.ZeroVector));
       RenderChild.SetMesh(Cube);
       RenderChild.RegisterComponent();
-      Sphere.RootComponent.SetWorldTransform(Transform(Vector3(0,0,1.0f), Quaternion.Identity, Vector3.UnitScaleVector));
+      Sphere.RootComponent.SetWorldTransform(Transform(Vector3(0,0,1.0f), Quaternion(Vector3.UnitScaleVector, 1.0f), Vector3.UnitScaleVector));
 
       auto Sphere2 = Graph.CreateDefaultGameObject(UString("Sphere2", MainAllocator));
       auto Sphere2PhysicsChild = Sphere2.ConstructChild!PhysicsComponent(UString("Sphere2Physics", MainAllocator));
       Sphere2PhysicsChild.ComponentBody.Shape.SetPoly(BoxShape);
+      Sphere2PhysicsChild.ComponentBody.BodyMovability = Movability.Static;
+
       Sphere2PhysicsChild.RegisterComponent();
-      RenderChild = Sphere2.ConstructChild!PrimitiveRenderComponent(UString("Sphere2Render", MainAllocator), Sphere2PhysicsChild);
+      //RenderChild = Sphere2.ConstructChild!PrimitiveRenderComponent(UString("Sphere2Render", MainAllocator), Sphere2PhysicsChild);
       Sphere2.RootComponent.SetWorldTransform(Transform(Vector3(0.0f,0.5f,5), Quaternion.Identity, Vector3.UnitScaleVector));
 
 
@@ -220,12 +223,12 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
       User1Input.RegisterInputSlot(InputType.Axis, "ObjX");
       User1Input.RegisterInputSlot(InputType.Axis, "ObjY");
       User1Input.RegisterInputSlot(InputType.Axis, "ObjZ");
-      User1Input.AddSlotMapping(Keyboard.Up, "ObjZ");
-      User1Input.AddSlotMapping(Keyboard.Down, "ObjZ", -1);
-      User1Input.AddSlotMapping(Keyboard.Right, "ObjX");
-      User1Input.AddSlotMapping(Keyboard.Left, "ObjX", -1);
-      User1Input.AddSlotMapping(Keyboard.E, "ObjY");
-      User1Input.AddSlotMapping(Keyboard.Q, "ObjY", -1);
+      User1Input.AddSlotMapping(Keyboard.Q, "ObjZ");
+      User1Input.AddSlotMapping(Keyboard.E, "ObjZ", -1);
+      User1Input.AddSlotMapping(Keyboard.Right, "ObjY");
+      User1Input.AddSlotMapping(Keyboard.Left, "ObjY", -1);
+      User1Input.AddSlotMapping(Keyboard.Up, "ObjX");
+      User1Input.AddSlotMapping(Keyboard.Down, "ObjX", -1);
 
 
       auto Window = MainAllocator.New!WindowData(User1Input);
@@ -252,7 +255,7 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
         Sphere.RootComponent.MoveWorld(Vector3(User1Input["ObjX"].AxisValue,User1Input["ObjY"].AxisValue, User1Input["ObjZ"].AxisValue) * GlobalEngine.FrameTimeData.ElapsedTime);
         Angle += GlobalEngine.FrameTimeData.ElapsedTime;
         Quaternion Rotation = Quaternion(Vector3.ForwardVector, Angle);
-        Sphere2.RootComponent.SetRotation(Rotation);
+        //Sphere2.RootComponent.SetRotation(Rotation);
         Sphere.RootComponent.MoveWorld(Vector3(User1Input["ObjX"].AxisValue,User1Input["ObjY"].AxisValue, User1Input["ObjZ"].AxisValue) * GlobalEngine.FrameTimeData.ElapsedTime);
         ColorLinear[6] Colors = [Colors.Lime, Colors.Red, Colors.Blue, Colors.Pink, Colors.Orange, Colors.Yellow ];
         //GlobalEngine.DebugHelper.AddPolyShape(Transform(Vector3(0,0,3), Quaternion.Identity, Vector3.UnitScaleVector), BoxShape, Colors, 0.1f);

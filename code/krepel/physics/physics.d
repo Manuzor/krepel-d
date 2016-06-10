@@ -55,7 +55,7 @@ class PhysicsSystem : Subsystem
       {
         if (Body.BodyMovability == Movability.Dynamic)
         {
-          Body.Velocity += DeltaGravity;
+          //Body.Velocity += DeltaGravity;
           //Body.Owner.MoveWorld(Body.Velocity * Tick.ElapsedTime);
         }
       }
@@ -68,10 +68,10 @@ class PhysicsSystem : Subsystem
             auto CollisionResult = CollisionDetection.CheckCollision(Body1, Body2);
             if (CollisionResult.DoesCollide)
             {
-              Log.Info("Collision");
-              Vector3 ResolvanceVector = CollisionResult.PenetrationDepth * CollisionResult.CollisionNormal;
+              Vector3 ResolvanceVector = CollisionResult.PenetrationDepth * CollisionResult.CollisionNormal.SafeNormalizedCopy;
               float Body1ResolvanceFactor = 1.0f;
               float Body2ResolvanceFactor = 0.0f;
+              GlobalEngine.DebugHelper.AddLine(Body1.Owner.GetWorldTransform.Translation,CollisionResult.CollisionNormal * CollisionResult.PenetrationDepth, Colors.Blue);
               if (Body1.BodyMovability == Movability.Dynamic && Body2.BodyMovability.Dynamic)
               {
                 Body1ResolvanceFactor = Body1.Mass / (Body1.Mass + Body2.Mass);
@@ -82,10 +82,15 @@ class PhysicsSystem : Subsystem
                 Body1ResolvanceFactor = 0.0f;
                 Body2ResolvanceFactor = 1.0f;
               }
-              Body1.Velocity = Body1.Velocity.ReflectVector(ResolvanceVector.SafeNormalizedCopy) * Body1.Restitution;
-              Body2.Velocity = Body2.Velocity.ReflectVector(ResolvanceVector.SafeNormalizedCopy) * Body2.Restitution;
+              //Body1ResolvanceFactor *= 1.1f;
+              //Body2ResolvanceFactor *= 1.1f;
+              //Body1.Velocity = Body1.Velocity.ReflectVector(ResolvanceVector.SafeNormalizedCopy) * //Body1.Restitution;
+              //Body2.Velocity = Body2.Velocity.ReflectVector(ResolvanceVector.SafeNormalizedCopy) * //Body2.Restitution;
+              assert((Body1ResolvanceFactor + Body2ResolvanceFactor).NearlyEquals(1.0f));
               if (Body1.Movable)
               {
+                Vector3 Delta = ResolvanceVector * Body1ResolvanceFactor;
+                Log.Info("Moved by %f %f %f (%f)", Delta.X, Delta.Y, Delta.Z, Delta.Length);
                 Body1.Owner.MoveWorld(ResolvanceVector * Body1ResolvanceFactor);
               }
               if (Body2.Movable)

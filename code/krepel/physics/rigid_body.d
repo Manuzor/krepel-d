@@ -12,7 +12,6 @@ enum Movability
 
 class RigidBody
 {
-  Transform Transformation;
   PhysicsShape Shape;
   float Mass = 1.0f;
   PhysicsComponent Owner;

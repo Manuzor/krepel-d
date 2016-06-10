@@ -5,7 +5,7 @@ import krepel.math.quaternion;
 import krepel.math.matrix4;
 import krepel.math.math;
 
-Vector3 TransformDirection(in ref Transform Transformation, Vector3 Vec)
+Vector3 TransformDirection(in Transform Transformation, Vector3 Vec)
 {
   with(Transformation)
   {

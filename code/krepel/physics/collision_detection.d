@@ -18,14 +18,26 @@ struct CollisionResult
 struct FaceQueryResult
 {
   float Distance;
+  float MinDistance;
   byte FaceIndex;
+  byte MinFaceIndex;
 }
 
 struct EdgeQueryResult
 {
   float Distance;
+  float MinDistance;
+  Vector3 MinNormal;
   byte EdgeIndexBody1;
   byte EdgeIndexBody2;
+  byte MinEdgeIndexBody1;
+  byte MinEdgeIndexBody2;
+}
+
+struct EdgeProjectResult
+{
+  float Distance;
+  Vector3 Normal;
 }
 
 class CollisionDetection
@@ -132,16 +144,17 @@ class CollisionDetection
     return CollisionResult.EmptyResult;
   }
 
-  static CollisionResult CheckCollisionPolyPoly(RigidBody Poly1, RigidBody Poly2)
+  static CollisionResult CheckCollisionPolyPoly(const(RigidBody) Poly1, const(RigidBody) Poly2)
   {
-    FaceQueryResult FaceResult;
-    FaceQuery(FaceResult, Poly1, Poly2);
-    if (FaceResult.Distance > 0.0f)
+    FaceQueryResult FaceResult1;
+    FaceQuery(FaceResult1, Poly1, Poly2);
+    if (FaceResult1.Distance > 0.0f)
     {
       return CollisionResult.EmptyResult;
     }
-    FaceQuery(FaceResult, Poly2, Poly1);
-    if (FaceResult.Distance > 0.0f)
+    FaceQueryResult FaceResult2;
+    FaceQuery(FaceResult2, Poly2, Poly1);
+    if (FaceResult2.Distance > 0.0f)
     {
       return CollisionResult.EmptyResult;
     }
@@ -151,20 +164,48 @@ class CollisionDetection
     {
       return CollisionResult.EmptyResult;
     }
-
     CollisionResult Collision;
-    Collision.DoesCollide = true;
+    with(Collision)
+    {
+      DoesCollide = true;
+
+      if (FaceResult1.MinDistance > FaceResult2.MinDistance && FaceResult1.MinDistance)
+      {
+        CollisionNormal = Poly1.Owner.GetWorldTransform.ToMatrix.TransformPlane(
+          Poly1.Shape.Poly.Planes[FaceResult1.MinFaceIndex]).XYZ;
+        PenetrationDepth = FaceResult1.MinDistance;
+        CollisionNormal.SafeNormalize();
+        Log.Info("Face1");
+
+      }
+      else if(FaceResult2.MinDistance > EdgeResult.MinDistance)
+      {
+        CollisionNormal = Poly2.Owner.GetWorldTransform.ToMatrix.TransformPlane(
+          Poly2.Shape.Poly.Planes[FaceResult2.MinFaceIndex]).XYZ;
+        PenetrationDepth = -FaceResult2.MinDistance;
+        CollisionNormal.SafeNormalize();
+        Log.Info("Face2");
+      }
+      else
+      {
+        CollisionNormal = Poly2.Owner.GetWorldTransform.TransformDirection(EdgeResult.MinNormal);
+        PenetrationDepth = EdgeResult.MinDistance;
+        Log.Info("Edge");
+      }
+  }
 
     return Collision;
   }
 
-  static void FaceQuery(ref FaceQueryResult Result, RigidBody Poly1, RigidBody Poly2)
+  static void FaceQuery(ref FaceQueryResult Result, const(RigidBody) Poly1, const(RigidBody) Poly2)
   {
     // We perform all computations in local space of the second RigidBody
     Transform Transformation = Poly1.Owner.GetWorldTransform * Poly2.Owner.GetWorldTransform.InversedCopy;
 
     int MaxIndex = -1;
     float MaxSeparation = -float.infinity;
+    float MinSeperation = -float.infinity;
+    int MinIndex = -1;
     Matrix4 TransformMatrix = Transformation.ToMatrix();
     for ( int Index = 0; Index < Poly1.Shape.Poly.Faces.Count; Index++ )
     {
@@ -176,10 +217,17 @@ class CollisionDetection
         MaxIndex = Index;
         MaxSeparation = Separation;
       }
+      if(Separation < 0 && Separation > MinSeperation)
+      {
+        MinSeperation = Separation;
+        MinIndex = Index;
+      }
     }
 
     Result.Distance = MaxSeparation;
     Result.FaceIndex = cast(byte)MaxIndex;
+    Result.MinFaceIndex = cast(byte)MinIndex;
+    Result.MinDistance = MinSeperation;
   }
 
   static float ProjectRigidBodyOntoPlane( ref const(Vector4) Plane, ref const(PolyShapeData) RigidBody )
@@ -208,6 +256,9 @@ class CollisionDetection
     int MaxIndex1 = -1;
     int MaxIndex2 = -1;
     float MaxSeparation = -float.infinity;
+    int MinIndex1 = -1;
+    int MinIndex2 = -1;
+    float MinSeparation = -float.infinity;
 
     Vector3 C1 = Transformation.TransformPosition(Vector3.ZeroVector);
 
@@ -240,12 +291,19 @@ class CollisionDetection
 
         if ( IsMinkowskiFace( U1, V1, -E1, -U2, -V2, -E2 ) )
         {
-          float Separation = Project( P1, E1, P2, E2, C1 );
-          if ( Separation > MaxSeparation )
+          auto ProjectResult = Project( P1, E1, P2, E2, C1 );
+          if ( ProjectResult.Distance > MaxSeparation )
           {
             MaxIndex1 = Index1;
             MaxIndex2 = Index2;
-            MaxSeparation = Separation;
+            MaxSeparation = ProjectResult.Distance;
+          }
+          if(ProjectResult.Distance < 0 && ProjectResult.Distance > MinSeparation)
+          {
+            MinSeparation = ProjectResult.Distance;
+            MinIndex1 = Index1;
+            MinIndex2 = Index2;
+            Out.MinNormal = ProjectResult.Normal;
           }
         }
       }
@@ -254,12 +312,17 @@ class CollisionDetection
     Out.EdgeIndexBody1 = cast(byte)MaxIndex1;
     Out.EdgeIndexBody2 = cast(byte)MaxIndex2;
     Out.Distance = MaxSeparation;
+    Out.MinDistance = MinSeparation;
+    Out.MinEdgeIndexBody1 = cast(byte)MinIndex1;
+    Out.MinEdgeIndexBody2 = cast(byte)MinIndex2;
+    Out.MinNormal = RigidBody2.Owner.GetWorldTransform.TransformDirection(Out.MinNormal);
   }
 
 
   //--------------------------------------------------------------------------------------------------
-  static float Project( Vector3 P1, Vector3 E1, Vector3 P2, Vector3 E2, Vector3 C1 )
+  static EdgeProjectResult Project( Vector3 P1, Vector3 E1, Vector3 P2, Vector3 E2, Vector3 C1 )
   {
+    EdgeProjectResult Result;
     // Build search direction
     Vector3 E1_x_E2 = Cross( E1, E2 );
 
@@ -269,7 +332,8 @@ class CollisionDetection
     float L = Length( E1_x_E2 );
     if ( L < Tolerance * Sqrt( E1.LengthSquared * E2.LengthSquared ) )
     {
-      return -float.infinity;
+      Result.Distance = -float.infinity;
+      return Result;
     }
 
     // Assure consistent normal orientation (here: RigidBody1 . RigidBody2)
@@ -278,9 +342,11 @@ class CollisionDetection
     {
       N = -N;
     }
+    Result.Normal = N;
 
     // s = Dot(n, p2) - d = Dot(n, p2) - Dot(n, p1) = Dot(n, p2 - p1)
-    return Dot( N, P2 - P1 );
+    Result.Distance = Dot( N, P2 - P1 );
+    return Result;
   }
 
 

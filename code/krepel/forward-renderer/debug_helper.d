@@ -27,12 +27,16 @@ struct DebugRenderData
 class DebugRenderHelper
 {
   Array!DebugRenderData DataToRender;
+  DebugRenderData Lines;
 
   IAllocator Allocator;
   this(IAllocator Allocator)
   {
     this.Allocator = Allocator;
     DataToRender.Allocator = Allocator;
+    Lines.Transformation = Transform.Identity;
+    Lines.Mesh.Vertices.Allocator = Allocator;
+    Lines.Mesh.Mode = RenderPrimitiveTopology.LineList;
   }
 
   import krepel.physics;
@@ -238,9 +242,17 @@ class DebugRenderHelper
     DataToRender ~= DebugRenderData(Data, Transformation);
   }
 
+  void AddLine(Vector3 Origin, Vector3 Direction, ColorLinear Color)
+  {
+    AddLineAsArrow(Origin, Direction, Color, Lines.Mesh);
+  }
+
   void Draw(IRenderDevice RenderDevice)
   {
-
+    if (Lines.Mesh.Vertices.Count > 0)
+    {
+      DataToRender ~= Lines;
+    }
     WorldConstantBuffer WorldData;
     foreach(RenderData; DataToRender)
     {
@@ -265,6 +277,11 @@ class DebugRenderHelper
     }
 
     DataToRender.Clear();
+    if (Lines.Mesh.Vertices.Count > 100)
+    {
+      Lines.Mesh.Vertices.RemoveAt(0,10);
+    }
+    //Lines.Mesh.Vertices.Clear();
   }
 
 }
