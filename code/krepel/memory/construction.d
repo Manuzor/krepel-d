@@ -128,22 +128,32 @@ void ConstructArray(Type, ArgType)(Type[] Array, auto ref ArgType Arg)
 /// Construct the given array from another array.
 ///
 /// Both arrays must have the same length.
-void ConstructArrayFromAnotherArray(Type)(Type[] Array, Type[] InitializationData)
+void ConstructArrayFromAnotherArray(Type, InitType)(Type[] Array, InitType[] InitializationData)
+  if(!Meta.IsVoid!Type && !is(Type == interface))
 {
-  static if(!Meta.IsVoid!Type)
-  {
-    assert(Array.length == InitializationData.length);
-    const NumToInit = Max(Array.length, InitializationData.length);
+  import krepel : Max;
 
-    static if(Meta.IsPlainOldData!Type)
+  assert(Array.length == InitializationData.length);
+
+  static if(Meta.IsPlainOldData!Type)
+  {
+    static assert(Meta.IsPlainOldData!InitType,
+                  "Type " ~ Type.stringof ~ " is a POD type while " ~
+                  InitType.stringof ~ " is not.");
+    Array[] = InitializationData;
+  }
+  else
+  {
+    const NumToInit = Max(Array.length, InitializationData.length);
+    foreach(Index; 0 .. NumToInit)
     {
-      Array[] = InitializationData[];
-    }
-    else
-    {
-      foreach(Index; 0 .. NumToInit)
+      static if(is(Type == class))
       {
         Construct(Array[Index], InitializationData[Index]);
+      }
+      else
+      {
+        Construct(&Array[Index], InitializationData[Index]);
       }
     }
   }
@@ -331,6 +341,67 @@ unittest
   DestructArray(Array);
   assert(DestructionCount == Array.length);
   foreach(ref Element; Array) assert(Element.Value == 1337);
+}
+
+// ConstructArrayFromAnotherArray
+unittest
+{
+  {
+    int[3] Source;
+    int[3] Data = [ 1, 2, 3 ];
+
+    assert(Source[0] == 0);
+    assert(Source[1] == 0);
+    assert(Source[2] == 0);
+
+    ConstructArrayFromAnotherArray(Source[], Data[]);
+
+    assert(Source[0] == 1);
+    assert(Source[1] == 2);
+    assert(Source[2] == 3);
+  }
+
+  {
+    static struct Foo
+    {
+      int Value = 42;
+      ~this() {}
+    }
+    static assert(!Meta.IsPlainOldData!Foo);
+
+    Foo[3] Source;
+    Foo[3] Data = [ Foo(1), Foo(2), Foo(3) ];
+
+    assert(Source[0].Value == 42);
+    assert(Source[1].Value == 42);
+    assert(Source[2].Value == 42);
+
+    ConstructArrayFromAnotherArray(Source[], Data[]);
+
+    assert(Source[0].Value == 1);
+    assert(Source[1].Value == 2);
+    assert(Source[2].Value == 3);
+  }
+
+  {
+    Object FakePointer(size_t Address)
+    {
+      return cast(Object)cast(void*)Address;
+    }
+
+    Object[3] Source;
+    Object[3] Data = [ FakePointer(1), FakePointer(2), FakePointer(3) ];
+
+    assert(Source[0] is null);
+    assert(Source[1] is null);
+    assert(Source[2] is null);
+
+    ConstructArrayFromAnotherArray(Source[], Data[]);
+
+    assert(Source[0] == FakePointer(1));
+    assert(Source[1] == FakePointer(2));
+    assert(Source[2] == FakePointer(3));
+  }
 }
 
 version(unittest) int BazDataDestructionCount;
