@@ -132,7 +132,17 @@ struct Array(T)
     if(NewMemory.length == NewCapacity)
     {
       auto NewData = NewMemory[0 .. Count];
-      Data.MoveTo(NewData);
+      foreach(Index, ref Blob; Data)
+      {
+        static if (is(ElementType == class))
+        {
+          NewData[Index] = Blob;
+        }
+        else
+        {
+          Construct(&(NewData[Index]), Blob);
+        }
+      }
       ClearMemory();
       AvailableMemory = NewMemory;
       Data = NewData;
@@ -207,7 +217,11 @@ struct Array(T)
     const NumNewElements = Slice.length;
     if(NumNewElements)
     {
-      ExpandUninitialized(NumNewElements)[] = Slice[];
+      auto NewArea = ExpandUninitialized(NumNewElements)[];
+      foreach(Index, NewElement; Slice)
+      {
+        Construct(&NewArea[Index], Slice[Index]);
+      }
     }
   }
 
