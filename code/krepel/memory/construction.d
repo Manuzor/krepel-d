@@ -90,29 +90,64 @@ void Destruct(Type)(Type* Instance)
   }
 }
 
-void ConstructArray(Type, ArgTypes...)(Type[] Array, auto ref ArgTypes Args)
+void ConstructArray(Type)(Type[] Array)
 {
   // Arrays of void are always uninitialized.
   static if(!Meta.IsVoid!Type)
   {
     static if(Meta.IsPlainOldData!Type)
     {
-      static      if(Args.length == 0) BlitInitialData(Array);
-      else static if(Args.length == 1) Array[] = Args[0];
-      else
-      {
-        static assert(false,"Cannot initialize plain old data "
-                            "with more than one argument.");
-      }
+      BlitInitialData(Array);
     }
     else
     {
-      static if(is(Type == class)) foreach(    Element; Array) Construct(Element);
+      static if(is(Type == class)) foreach(    Element; Array) Construct( Element);
       else                         foreach(ref Element; Array) Construct(&Element);
     }
   }
 }
 
+void ConstructArray(Type, ArgType)(Type[] Array, auto ref ArgType Arg)
+  if(ArgTypes.length <= 1)
+{
+  // Arrays of void are always uninitialized.
+  static if(!Meta.IsVoid!Type)
+  {
+    static if(Meta.IsPlainOldData!Type)
+    {
+      Array[] = Arg;
+    }
+    else
+    {
+      static if(is(Type == class)) foreach(    Element; Array) Construct( Element, Arg);
+      else                         foreach(ref Element; Array) Construct(&Element, Arg);
+    }
+  }
+}
+
+/// Construct the given array from another array.
+///
+/// Both arrays must have the same length.
+void ConstructArrayFromAnotherArray(Type)(Type[] Array, Type[] InitializationData)
+{
+  static if(!Meta.IsVoid!Type)
+  {
+    assert(Array.length == InitializationData.length);
+    const NumToInit = Max(Array.length, InitializationData.length);
+
+    static if(Meta.IsPlainOldData!Type)
+    {
+      Array[] = InitializationData[];
+    }
+    else
+    {
+      foreach(Index; 0 .. NumToInit)
+      {
+        Construct(Array[Index], InitializationData[Index]);
+      }
+    }
+  }
+}
 
 void DestructArray(Type)(Type[] Array)
 {
