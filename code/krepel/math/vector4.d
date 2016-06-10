@@ -97,7 +97,7 @@ Vector4 ProjectOntoPlane(Vector4 Vec, Vector4 Normal)
 /// Calculates the distance between a plane and a point (plane normal needs to be normalized)
 float DistancePlaneToPoint(Vector4 Plane, Vector3 Normal)
 {
-  return (Normal | Plane.XYZ) - Plane.W;
+  return (Normal | krepel.math.vector3.SafeNormalizedCopy(Plane.XYZ)) - Plane.W;
 }
 
 Vector4 CreatePlaneFromNormalAndPoint(Vector3 Normal, Vector3 Point)

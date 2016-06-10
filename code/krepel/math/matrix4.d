@@ -257,6 +257,11 @@ Vector4 TransformDirection(Matrix4 Mat, Vector4 Vector)
   return Result;
 }
 
+Vector4 TransformPlane(Matrix4 Mat, Vector4 Vector)
+{
+  return CreatePlaneFromNormalAndPoint(TransformDirection(Mat, Vector.XYZ), TransformPosition(Mat, Vector.XYZ) * Vector.W);
+}
+
 /// Homogenous transform of a 3 dimensional Vector
 /// @return Result = Vector.XYZ1*Mat
 Vector3 TransformPosition(Matrix4 Mat, Vector3 Vector)

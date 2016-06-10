@@ -159,7 +159,7 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
       }
 
 
-      PolyShapeData BoxShape = CreatePolyShapeFromBox(MainAllocator, Vector3.UnitScaleVector * 0.5f);
+      PolyShapeData BoxShape = CreatePolyShapeFromBox(MainAllocator, Vector3.UnitScaleVector);
 
 
       SceneGraph Graph = MainAllocator.New!(SceneGraph)(MainAllocator);
@@ -171,10 +171,10 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
 
       auto Plane = Graph.CreateDefaultGameObject(UString("Plane", MainAllocator));
       auto PlanePhysicsChild = Plane.ConstructChild!PhysicsComponent(UString("PlanePhysics", MainAllocator));
-      PlaneShapeData ShapeData = PlaneShapeData(Vector4(0,0,1,0));
-      PlanePhysicsChild.ComponentBody.Shape.SetPlane(ShapeData);
-      PlanePhysicsChild.ComponentBody.BodyMovability = Movability.Static;
-      PlanePhysicsChild.RegisterComponent();
+      //PlaneShapeData ShapeData = PlaneShapeData(Vector4(0,0,1,0));
+      //PlanePhysicsChild.ComponentBody.Shape.SetPlane(ShapeData);
+      //PlanePhysicsChild.ComponentBody.BodyMovability = Movability.Static;
+      //PlanePhysicsChild.RegisterComponent();
       auto RenderChild = Plane.ConstructChild!PrimitiveRenderComponent(UString("PlaneRender", MainAllocator), PlanePhysicsChild);
       Plane.RootComponent.SetWorldTransform(Transform(Vector3.ZeroVector, Quaternion.Identity, Vector3.UnitScaleVector* 100));
       RenderChild.SetMesh(UnitPlane);
@@ -235,7 +235,7 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
       scope(exit) SetWindowLongPtrA(WindowHandle, GWLP_USERDATA, cast(LONG_PTR)null);
 
       GlobalRunning = true;
-
+      float Angle = 0.0f;
       while(GlobalRunning)
       {
 
@@ -249,6 +249,10 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
         //
         // Apply Input
         //
+        Sphere.RootComponent.MoveWorld(Vector3(User1Input["ObjX"].AxisValue,User1Input["ObjY"].AxisValue, User1Input["ObjZ"].AxisValue) * GlobalEngine.FrameTimeData.ElapsedTime);
+        Angle += GlobalEngine.FrameTimeData.ElapsedTime;
+        Quaternion Rotation = Quaternion(Vector3.ForwardVector, Angle);
+        Sphere2.RootComponent.SetRotation(Rotation);
         Sphere.RootComponent.MoveWorld(Vector3(User1Input["ObjX"].AxisValue,User1Input["ObjY"].AxisValue, User1Input["ObjZ"].AxisValue) * GlobalEngine.FrameTimeData.ElapsedTime);
         ColorLinear[6] Colors = [Colors.Lime, Colors.Red, Colors.Blue, Colors.Pink, Colors.Orange, Colors.Yellow ];
         //GlobalEngine.DebugHelper.AddPolyShape(Transform(Vector3(0,0,3), Quaternion.Identity, Vector3.UnitScaleVector), BoxShape, Colors, 0.1f);

@@ -161,14 +161,14 @@ class CollisionDetection
   static void FaceQuery(ref FaceQueryResult Result, RigidBody Poly1, RigidBody Poly2)
   {
     // We perform all computations in local space of the second RigidBody
-    Transform Transformation = Poly2.Owner.GetWorldTransform * Poly1.Owner.GetWorldTransform;
+    Transform Transformation = Poly1.Owner.GetWorldTransform * Poly2.Owner.GetWorldTransform.InversedCopy;
 
     int MaxIndex = -1;
     float MaxSeparation = -float.infinity;
     Matrix4 TransformMatrix = Transformation.ToMatrix();
     for ( int Index = 0; Index < Poly1.Shape.Poly.Faces.Count; Index++ )
     {
-      Vector4 Plane = TransformMatrix.TransformDirection(Poly1.Shape.Poly.Planes[Index]);
+      Vector4 Plane = TransformMatrix.TransformPlane(Poly1.Shape.Poly.Planes[Index]);
 
       float Separation = ProjectRigidBodyOntoPlane( Plane, Poly2.Shape.Poly );
       if ( Separation > MaxSeparation )
@@ -184,7 +184,7 @@ class CollisionDetection
 
   static float ProjectRigidBodyOntoPlane( ref const(Vector4) Plane, ref const(PolyShapeData) RigidBody )
   {
-    Vector3 Support = RigidBody.GetSupport( -Plane.XYZ );
+    Vector3 Support = RigidBody.GetSupport( -Plane.XYZ.SafeNormalizedCopy );
     return Plane.DistancePlaneToPoint(Support);
   }
 
@@ -202,16 +202,19 @@ class CollisionDetection
   static void QueryEdgeDirections( ref EdgeQueryResult Out, ref const (RigidBody) RigidBody1, ref const (RigidBody) RigidBody2 )
   {
     // We perform all computations in local space of the second RigidBody
-    Transform Transformation = RigidBody2.Owner.GetWorldTransform * RigidBody1.Owner.GetWorldTransform;
+    Transform Transformation = RigidBody1.Owner.GetWorldTransform * RigidBody2.Owner.GetWorldTransform.InversedCopy;
 
     // Find axis of minimum penetration
     int MaxIndex1 = -1;
     int MaxIndex2 = -1;
     float MaxSeparation = -float.infinity;
 
+    Vector3 C1 = Transformation.TransformPosition(Vector3.ZeroVector);
+
     for ( int Index1 = 0; Index1 < RigidBody1.Shape.Poly.Edges.Count; Index1++ )
     {
       const HalfEdge Edge1 = RigidBody1.Shape.Poly.Edges[ Index1 ];
+      assert(Edge1.TwinIndex >= 0);
       const HalfEdge Twin1 = RigidBody1.Shape.Poly.Edges[ Edge1.TwinIndex ];
 
       Vector3 P1 = Transformation.TransformPosition(RigidBody1.Shape.Poly.Vertices[ Edge1.OriginIndex ]);
@@ -224,6 +227,8 @@ class CollisionDetection
       for ( int Index2 = 0; Index2 < RigidBody2.Shape.Poly.Edges.Count; Index2++ )
       {
         const HalfEdge Edge2 = RigidBody2.Shape.Poly.Edges[ Index2 ];
+        assert(Edge2.TwinIndex >= 0);
+
         const HalfEdge Twin2 = RigidBody2.Shape.Poly.Edges[ Edge2.TwinIndex ];
 
         Vector3 P2 = RigidBody2.Shape.Poly.Vertices[ Edge2.OriginIndex ];
@@ -235,7 +240,7 @@ class CollisionDetection
 
         if ( IsMinkowskiFace( U1, V1, -E1, -U2, -V2, -E2 ) )
         {
-          float Separation = Project( P1, E1, P2, E2, Vector3.ZeroVector );
+          float Separation = Project( P1, E1, P2, E2, C1 );
           if ( Separation > MaxSeparation )
           {
             MaxIndex1 = Index1;
