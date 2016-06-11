@@ -259,7 +259,7 @@ Vector4 TransformDirection(Matrix4 Mat, Vector4 Vector)
 
 Vector4 TransformPlane(Matrix4 Mat, Vector4 Vector)
 {
-  return CreatePlaneFromNormalAndPoint(TransformDirection(Mat, Vector.XYZ), TransformPosition(Mat, Vector.XYZ) * Vector.W);
+  return CreatePlaneFromNormalAndPoint(TransformDirection(Mat, Vector.XYZ).SafeNormalizedCopy, TransformPosition(Mat, Vector.XYZ) * Vector.W);
 }
 
 /// Homogenous transform of a 3 dimensional Vector

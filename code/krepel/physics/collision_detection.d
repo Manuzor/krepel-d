@@ -169,7 +169,7 @@ class CollisionDetection
     {
       DoesCollide = true;
 
-      if (FaceResult1.MinDistance > FaceResult2.MinDistance && FaceResult1.MinDistance)
+      if (FaceResult1.MinDistance > FaceResult2.MinDistance && FaceResult1.MinDistance > EdgeResult.MinDistance)
       {
         CollisionNormal = Poly1.Owner.GetWorldTransform.ToMatrix.TransformPlane(
           Poly1.Shape.Poly.Planes[FaceResult1.MinFaceIndex]).XYZ;
@@ -217,7 +217,7 @@ class CollisionDetection
         MaxIndex = Index;
         MaxSeparation = Separation;
       }
-      if(Separation < 0 && Separation > MinSeperation)
+      if(Separation <= 0 && Separation > MinSeperation)
       {
         MinSeperation = Separation;
         MinIndex = Index;
@@ -298,7 +298,7 @@ class CollisionDetection
             MaxIndex2 = Index2;
             MaxSeparation = ProjectResult.Distance;
           }
-          if(ProjectResult.Distance < 0 && ProjectResult.Distance > MinSeparation)
+          if(ProjectResult.Distance <= 0 && ProjectResult.Distance > MinSeparation)
           {
             MinSeparation = ProjectResult.Distance;
             MinIndex1 = Index1;
@@ -315,7 +315,7 @@ class CollisionDetection
     Out.MinDistance = MinSeparation;
     Out.MinEdgeIndexBody1 = cast(byte)MinIndex1;
     Out.MinEdgeIndexBody2 = cast(byte)MinIndex2;
-    Out.MinNormal = RigidBody2.Owner.GetWorldTransform.TransformDirection(Out.MinNormal);
+    Out.MinNormal = RigidBody2.Owner.GetWorldTransform.TransformDirection(Out.MinNormal).SafeNormalizedCopy;
   }
 
 

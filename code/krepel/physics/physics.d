@@ -82,21 +82,14 @@ class PhysicsSystem : Subsystem
                 Body1ResolvanceFactor = 0.0f;
                 Body2ResolvanceFactor = 1.0f;
               }
-              //Body1ResolvanceFactor *= 1.1f;
-              //Body2ResolvanceFactor *= 1.1f;
+              Body1ResolvanceFactor *= 1.1f;
+              Body2ResolvanceFactor *= 1.1f;
               //Body1.Velocity = Body1.Velocity.ReflectVector(ResolvanceVector.SafeNormalizedCopy) * //Body1.Restitution;
               //Body2.Velocity = Body2.Velocity.ReflectVector(ResolvanceVector.SafeNormalizedCopy) * //Body2.Restitution;
-              assert((Body1ResolvanceFactor + Body2ResolvanceFactor).NearlyEquals(1.0f));
+              //assert((Body1ResolvanceFactor + Body2ResolvanceFactor).NearlyEquals(1.0f));
               if (Body1.Movable)
               {
-                Vector3 Delta = ResolvanceVector * Body1ResolvanceFactor;
-                Log.Info("Moved by %f %f %f (%f)", Delta.X, Delta.Y, Delta.Z, Delta.Length);
-                auto OriginTransform = Body1.Owner.GetWorldTransform;
-                Vector3 OriginPos = Body1.Owner.GetWorldTransform.TransformPosition(Vector3.ZeroVector);
-                Body1.Owner.SetWorldTransform(Transform(OriginPos + Delta, OriginTransform.Rotation, OriginTransform.Scale));
-                Vector3 TargetPos = Body1.Owner.GetWorldTransform.TransformPosition(Vector3.ZeroVector);
-                Delta = TargetPos - OriginPos;
-                Log.Info("Actual Moved by %f %f %f (%f)", Delta.X, Delta.Y, Delta.Z, Delta.Length);
+                Body1.Owner.MoveWorld(ResolvanceVector * Body2ResolvanceFactor);
               }
               if (Body2.Movable)
               {
