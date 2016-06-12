@@ -197,6 +197,7 @@ class CollisionDetection
           Poly1.Shape.Poly.Planes[FaceResult1.MinFaceIndex]).XYZ;
           CollisionNormal.SafeNormalize();
         PenetrationDepth = FaceResult1.MinDistance;
+        int IncidentFaceIndex = FindIncidentFace(Poly1, FaceResult1.MinFaceIndex, Poly2);
 
       }
       else if(FaceResult2.MinDistance > EdgeResult.MinDistance)
@@ -205,6 +206,8 @@ class CollisionDetection
           Poly2.Shape.Poly.Planes[FaceResult2.MinFaceIndex]).XYZ;
           CollisionNormal.SafeNormalize();
         PenetrationDepth = -FaceResult2.MinDistance;
+        int IncidentFaceIndex = FindIncidentFace(Poly2, FaceResult2.MinFaceIndex, Poly1);
+
       }
       else
       {
@@ -373,9 +376,30 @@ class CollisionDetection
     return Result;
   }
 
+  static int FindIncidentFace(RigidBody Poly1, int Poly1ReferenceFace, RigidBody Poly2)
+  {
+    // We perform all computations in local space of the second RigidBody
+    Transform Transformation = Poly1.Owner.GetWorldTransform * Poly2.Owner.GetWorldTransform.InversedCopy;
+    Vector4 ReferencePlane = Transformation.TransformPlane(Poly1.Shape.Poly.Planes[Poly1ReferenceFace]);
+    float DotResult = -float.infinity;
+    int IncidentIndex = -1;
+    foreach(Index, Plane; Poly2.Shape.Poly.Planes)
+    {
+      float Similarity = Dot(-ReferencePlane.XYZ,Plane.XYZ);
+      if ( Similarity > DotResult)
+      {
+        DotResult = Similarity;
+        IncidentIndex = cast(int)Index;
+      }
+    }
+    return IncidentIndex;
+  }
 
   static CollisionResult CheckCollisionPlanePlane(RigidBody Plane1, RigidBody Plane2)
   {
+    //Planes are meant to be static, so there is no point checking for collision
+    // (they would always collide as long as they are not perfectly parallel)
+    Log.Warning("Two planes cannot collide with each other");
     return CollisionResult.EmptyResult;
   }
 
