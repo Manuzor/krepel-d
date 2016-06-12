@@ -107,6 +107,91 @@ Vector3 ReflectVector(Vector3 Vec, Vector3 Normal)
   return Vec - (2 * (Vec | Normal) * Normal);
 }
 
+
+Vector3 ClosestPointBetweenTwoLines(Vector3 Line1Start, Vector3 Line1End, Vector3 Line2Start, Vector3 Line2End)
+{
+  // Source: http://geomalgorithms.com/a07-_distance.html
+  const float Epsilon = 1e-4f;
+  Vector3   u = Line1End - Line1Start;
+  Vector3   v = Line2End - Line2Start;
+  Vector3   w = Line1Start - Line2Start;
+  float    a = Dot(u,u);         // always >= 0
+  float    b = Dot(u,v);
+  float    c = Dot(v,v);         // always >= 0
+  float    d = Dot(u,w);
+  float    e = Dot(v,w);
+  float    D = a*c - b*b;        // always >= 0
+  float    sc, sN, sD = D;       // sc = sN / sD, default sD = D >= 0
+  float    tc, tN, tD = D;       // tc = tN / tD, default tD = D >= 0
+
+  // compute the line parameters of the two closest points
+  if (D < Epsilon)
+  { // the lines are almost parallel
+    sN = 0.0;         // force using point Start on segment S1
+    sD = 1.0;         // to prevent possible division by 0.0 later
+    tN = e;
+    tD = c;
+  }
+  else
+  {                 // get the closest points on the infinite lines
+    sN = (b*e - c*d);
+    tN = (a*e - b*d);
+    if (sN < 0.0) {        // sc < 0 => the s=0 edge is visible
+        sN = 0.0;
+        tN = e;
+        tD = c;
+    }
+    else if (sN > sD)
+    {  // sc > 1  => the s=1 edge is visible
+        sN = sD;
+        tN = e + b;
+        tD = c;
+    }
+  }
+
+  if (tN < 0.0) // tc < 0 => the t=0 edge is visible
+  {
+    tN = 0.0;
+    // recompute sc for this edge
+    if (-d < 0.0)
+    {
+      sN = 0.0;
+    }
+    else if (-d > a)
+    {
+      sN = sD;
+    }
+    else
+    {
+        sN = -d;
+        sD = a;
+    }
+  }
+  else if (tN > tD) // tc > 1  => the t=1 edge is visible
+  {
+    tN = tD;
+    // recompute sc for this edge
+    if ((-d + b) < 0.0)
+    {
+      sN = 0;
+    }
+    else if ((-d + b) > a)
+    {
+      sN = sD;
+    }
+    else
+    {
+        sN = (-d +  b);
+        sD = a;
+    }
+  }
+  // finally do the division to get sc and tc
+  sc = (Abs(sN) < Epsilon ? 0.0 : sN / sD);
+  tc = (Abs(tN) < Epsilon ? 0.0 : tN / tD);
+
+  return ((Line1Start + (sc * u)) + (Line2Start + (tc * v))) * 0.5f;
+}
+
 /// Checks if any component inside the Vector is NaN.
 /// Input Vector will not be modified
 bool ContainsNaN(Vector3 Vec)
