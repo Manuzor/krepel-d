@@ -1,6 +1,7 @@
 module krepel.math.transform;
 
 import krepel.math.vector3;
+import krepel.math.vector4;
 import krepel.math.quaternion;
 import krepel.math.matrix4;
 import krepel.math.math;
@@ -35,6 +36,11 @@ Vector3 InverseTransformPosition(in Transform Transformation, Vector3 Vec)
   {
     return krepel.math.quaternion.InverseTransformDirection(Rotation, Vec - Translation) * Scale.Reciprocal(0);
   }
+}
+
+Vector4 TransformPlane(in Transform Transformation, Vector4 Vector)
+{
+  return CreatePlaneFromNormalAndPoint(TransformDirection(Transformation, Vector.XYZ).SafeNormalizedCopy, TransformPosition(Transformation, Vector.XYZ) * Vector.W);
 }
 
 
