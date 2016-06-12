@@ -11,7 +11,6 @@ struct CollisionResult
   Vector3 CollisionNormal = Vector3.ZeroVector; //Resolvance Vector can be determined by Scaling this vector by PenetrationDepth
   float PenetrationDepth = 0.0f;
   Vector3 SurfaceNormal = Vector3.ZeroVector; // Surface Normal of the other body
-
   __gshared immutable EmptyResult = CollisionResult();
 }
 
@@ -190,10 +189,11 @@ class CollisionDetection
     with(Collision)
     {
       DoesCollide = true;
-
+      auto Poly1Transform = Poly1.Owner.GetWorldTransform();
+      auto Poly2Transform = Poly2.Owner.GetWorldTransform();
       if (FaceResult1.MinDistance > FaceResult2.MinDistance && FaceResult1.MinDistance > EdgeResult.MinDistance)
       {
-        CollisionNormal = Poly1.Owner.GetWorldTransform.ToMatrix.TransformPlane(
+        CollisionNormal = Poly1Transform.ToMatrix.TransformPlane(
           Poly1.Shape.Poly.Planes[FaceResult1.MinFaceIndex]).XYZ;
           CollisionNormal.SafeNormalize();
         PenetrationDepth = FaceResult1.MinDistance;
@@ -201,15 +201,20 @@ class CollisionDetection
       }
       else if(FaceResult2.MinDistance > EdgeResult.MinDistance)
       {
-        CollisionNormal = Poly2.Owner.GetWorldTransform.ToMatrix.TransformPlane(
+        CollisionNormal = Poly2Transform.ToMatrix.TransformPlane(
           Poly2.Shape.Poly.Planes[FaceResult2.MinFaceIndex]).XYZ;
           CollisionNormal.SafeNormalize();
         PenetrationDepth = -FaceResult2.MinDistance;
       }
       else
       {
-        CollisionNormal = Poly2.Owner.GetWorldTransform.TransformDirection(EdgeResult.MinNormal);
+        CollisionNormal = Poly2Transform.TransformDirection(EdgeResult.MinNormal);
         PenetrationDepth = EdgeResult.MinDistance;
+        Vector3 Edge1Start = Poly1Transform.TransformPosition(Poly1.Shape.Poly.GetEdgeOrigin(EdgeResult.MinEdgeIndexBody1));
+        Vector3 Edge1End = Poly1Transform.TransformPosition(Poly1.Shape.Poly.GetEdgeEnd(EdgeResult.MinEdgeIndexBody1));
+        Vector3 Edge2Start = Poly2Transform.TransformPosition(Poly1.Shape.Poly.GetEdgeOrigin(EdgeResult.MinEdgeIndexBody2));
+        Vector3 Edge2End = Poly2Transform.TransformPosition(Poly1.Shape.Poly.GetEdgeEnd(EdgeResult.MinEdgeIndexBody2));
+        CollisionPoint = ClosestPointBetweenTwoLines(Edge1Start, Edge1End, Edge2Start, Edge2End);
       }
   }
 

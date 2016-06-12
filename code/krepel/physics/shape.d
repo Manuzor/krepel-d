@@ -48,6 +48,16 @@ struct PolyShapeData
     assert(MaxIndex >= 0);
     return Vertices[MaxIndex];
   }
+
+  Vector3 GetEdgeOrigin(int EdgeIndex) const
+  {
+    return Vertices[Edges[EdgeIndex].OriginIndex];
+  }
+
+  Vector3 GetEdgeEnd(int EdgeIndex) const
+  {
+    return Vertices[Edges[Edges[EdgeIndex].NextIndex].OriginIndex];
+  }
 }
 
 struct SphereShapeData
