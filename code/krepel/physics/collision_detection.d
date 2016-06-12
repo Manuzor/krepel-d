@@ -141,7 +141,29 @@ class CollisionDetection
 
   static CollisionResult CheckCollisionPolyPlane(RigidBody Poly, RigidBody Plane)
   {
-    return CollisionResult.EmptyResult;
+    Transform WorldPolyTransform = Poly.Owner.GetWorldTransform;
+    Vector4 PlaneVector = Plane.Shape.Plane.Plane;
+    Vector3 PlaneNormal = PlaneVector.XYZ.SafeNormalizedCopy;
+    Vector3 Support1 = WorldPolyTransform.TransformPosition(Poly.Shape.Poly.GetSupport(WorldPolyTransform.InverseTransformDirection(PlaneNormal)));
+    Vector3 Support2 = WorldPolyTransform.TransformPosition(Poly.Shape.Poly.GetSupport(WorldPolyTransform.InverseTransformDirection(-PlaneNormal)));
+    float Distance1 = PlaneVector.DistancePlaneToPoint(Support1);
+    float Distance2 = PlaneVector.DistancePlaneToPoint(Support2);
+    CollisionResult Result = CollisionResult.EmptyResult;
+    if (Distance1 <= 0 && Distance2 >= 0 || Distance1 >= 0 && Distance2 <= 0)
+    {
+      Result.DoesCollide = true;
+      Result.CollisionNormal = PlaneNormal;
+      if (Abs(Distance1) < Abs(Distance2))
+      {
+        Result.PenetrationDepth = -Distance1;
+      }
+      else
+      {
+        Result.PenetrationDepth = -Distance2;
+      }
+    }
+
+    return Result;
   }
 
   static CollisionResult CheckCollisionPolyPoly(const(RigidBody) Poly1, const(RigidBody) Poly2)
@@ -173,24 +195,21 @@ class CollisionDetection
       {
         CollisionNormal = Poly1.Owner.GetWorldTransform.ToMatrix.TransformPlane(
           Poly1.Shape.Poly.Planes[FaceResult1.MinFaceIndex]).XYZ;
+          CollisionNormal.SafeNormalize();
         PenetrationDepth = FaceResult1.MinDistance;
-        CollisionNormal.SafeNormalize();
-        Log.Info("Face1");
 
       }
       else if(FaceResult2.MinDistance > EdgeResult.MinDistance)
       {
         CollisionNormal = Poly2.Owner.GetWorldTransform.ToMatrix.TransformPlane(
           Poly2.Shape.Poly.Planes[FaceResult2.MinFaceIndex]).XYZ;
+          CollisionNormal.SafeNormalize();
         PenetrationDepth = -FaceResult2.MinDistance;
-        CollisionNormal.SafeNormalize();
-        Log.Info("Face2");
       }
       else
       {
         CollisionNormal = Poly2.Owner.GetWorldTransform.TransformDirection(EdgeResult.MinNormal);
         PenetrationDepth = EdgeResult.MinDistance;
-        Log.Info("Edge");
       }
   }
 

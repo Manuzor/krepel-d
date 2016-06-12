@@ -21,7 +21,7 @@ Vector3 TransformPosition(in Transform Transformation, Vector3 Vec)
   }
 }
 
-Vector3 InverseTransformDirection(in ref Transform Transformation, Vector3 Vec)
+Vector3 InverseTransformDirection(in Transform Transformation, Vector3 Vec)
 {
   with(Transformation)
   {
@@ -29,7 +29,7 @@ Vector3 InverseTransformDirection(in ref Transform Transformation, Vector3 Vec)
   }
 }
 
-Vector3 InverseTransformPosition(in ref Transform Transformation, Vector3 Vec)
+Vector3 InverseTransformPosition(in Transform Transformation, Vector3 Vec)
 {
   with(Transformation)
   {

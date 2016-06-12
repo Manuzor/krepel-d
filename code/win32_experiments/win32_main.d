@@ -172,10 +172,10 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
 
       auto Plane = Graph.CreateDefaultGameObject(UString("Plane", MainAllocator));
       auto PlanePhysicsChild = Plane.ConstructChild!PhysicsComponent(UString("PlanePhysics", MainAllocator));
-      //PlaneShapeData ShapeData = PlaneShapeData(Vector4(0,0,1,0));
-      //PlanePhysicsChild.ComponentBody.Shape.SetPlane(ShapeData);
-      //PlanePhysicsChild.ComponentBody.BodyMovability = Movability.Static;
-      //PlanePhysicsChild.RegisterComponent();
+      PlaneShapeData ShapeData = PlaneShapeData(Vector4(0,0,1,0));
+      PlanePhysicsChild.ComponentBody.Shape.SetPlane(ShapeData);
+      PlanePhysicsChild.ComponentBody.BodyMovability = Movability.Static;
+      PlanePhysicsChild.RegisterComponent();
       auto RenderChild = Plane.ConstructChild!PrimitiveRenderComponent(UString("PlaneRender", MainAllocator), PlanePhysicsChild);
       PlanePhysicsChild.SetWorldTransform(Transform(Vector3.ZeroVector, Quaternion.Identity, Vector3.UnitScaleVector* 100));
       RenderChild.SetMesh(UnitPlane);
