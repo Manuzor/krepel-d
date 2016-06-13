@@ -1,0 +1,76 @@
+TestMaterial
+{
+  D3D11
+  {
+    Shader Vertex
+    {
+      File "../data/materials/testMaterialVertex.hlsl"
+      EntryPoint "VS_MAIN"
+      Profile "VS_5_0"
+    }
+
+    Shader Pixel
+    {
+      File "../data/materials/testMaterialPixel.hlsl"
+      EntryPoint "PS_MAIN"
+      Profile "PS_5_0"
+    }
+
+    Shader Compute
+    {
+      File "../data/materials/testMaterialCompute.hlsl"
+      EntryPoint "CS_MAIN"
+      Profile "CS_5_0"
+    }
+
+    Shader Geometry
+    {
+      File "../data/materials/testMaterialGeometry.hlsl"
+      EntryPoint "GEOM_MAIN"
+      Profile "GS_5_0"
+    }
+
+    Shader Tesselation
+    {
+      File "../data/materials/testMaterialTess.hlsl"
+      EntryPoint "TS_MAIN"
+      Profile "TS_5_0"
+    }
+
+    ConstantBuffer Vertex
+    {
+      Value type=Matrix "$WorldViewProjectionMatrix"
+      Value type=Matrix "$WorldMatrix"
+      Value type=Float4 "$LightDir"
+      Value type=Float4 "$AmbientColor"
+      Value type=Float1 1.0
+    }
+  }
+
+  Vulkan
+  {
+    Shader Vertex
+    {
+      File "../data/materials/testMaterialVertex.sprv"
+      EntryPoint "VS_MAIN"
+      Profile "VS"
+    }
+
+    Shader Pixel
+    {
+      File "../data/materials/testMaterialPixel.sprv"
+      EntryPoint "PS_MAIN"
+      Profile "FRAG"
+    }
+
+    ConstantBuffer Vertex
+    {
+      Value type=Matrix "$WorldViewProjectionMatrix"
+      Value type=Matrix "$WorldMatrix"
+      Value type=Float4 "$LightDir"
+      Value type=Float4 "$AmbientColor"
+      Value type=Float1 1.0
+    }
+  }
+
+}
