@@ -8,31 +8,34 @@ Specified in the [Extended Backus–Naur Form](https://en.wikipedia.org/wiki/Ext
 
 ```
 AnyChar = ? Any UTF-8 character ?
+WhiteChar = ? Any whitespace character from AnyChar such space, tab, line breaks, ... ?
 
-DigitWithoutZero = "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9"
-Digit = "0" | DigitWithoutZero
-PositiveNumber = DigitWithoutZero, {Digit}
+DigitWithoutZero = "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" ;
+Digit = "0" | DigitWithoutZero ;
+PositiveNumber = DigitWithoutZero, { Digit } ;
 
 SpecialChar = "!" | '' | "#" | "$" | "%" | "&" | "'" |
               "(" | ")" | "*" | "+" | "," | "-" | "." |
               "/" | ":" | ";" | "<" | "=" | ">" | "?" |
               "@" | "[" | "\" | "]" | "^" | "_" | "`" |
-              "{" | "|" | "}" | "~"
+              "{" | "|" | "}" | "~" ;
 
-IdentChar = ? AnyChar without SpecialChar and Digit ?
+IdentChar = ? AnyChar without WhiteChar, SpecialChar and Digit ? ;
 
 Identifier = ( IdentChar | "_" ), { IdentChar | "_" | Digit };
 
-NodeSpec = Identifier, [ "[", PositiveNumber, "]" ]
-AttributeSpec = "@", Identifier
-ValueSpec = "#", PositiveNumber
+NodeSpec = Identifier, [ "[", PositiveNumber, "]" ] ;
+AttributeSpec = "@", Identifier ;
+ValueSpec = "#", PositiveNumber ;
 
-Query = NodeSpec, [{ "/", NodeSpec }], ([ AttributeSpec ] | [ ValueSpec ]);
+Query = NodeSpec, [ { "/", NodeSpec } ], ( [ AttributeSpec ] | [ ValueSpec ] ) ;
 ```
+
+Note that query strings may not contain whitespace.
 
 ## Examples
 
 | Query String | Equivalent Query | Result |
 | ------------ | ---------------- | ------ |
-| `Foo/Bar` | `Foo[0]/Bar[0]#0` | Look for the first node called "Foo", find its first "Bar" child and fetch the first value of it. |
-| `Foo@Bar` | `Foo[0]@Bar` | Find the first node called "Foo" and look for its attribute called "Bar" and return its value. |
+| `Foo/Bar` | `Foo[0]/Bar[0]#0` | Look for the first **node** called `Foo`, find its first `Bar` **child node** and fetch the first **value** of it. |
+| `Foo@Bar` | `Foo[0]@Bar` | Find the first **node** called `Foo` and look for its **attribute** called `Bar` and return its value. |

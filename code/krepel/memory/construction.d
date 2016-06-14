@@ -69,25 +69,25 @@ void Destruct(Type)(Type* Instance)
       Instance.__dtor();
     }
 
-    // Destruct all the members of Instance.
-    foreach(MemberName; __traits(allMembers, Type))
-    {
-      static if(__traits(compiles, typeof(mixin(`Instance.` ~ MemberName))))
+      // Destruct all the members of Instance.
+      foreach(MemberName; __traits(allMembers, Type))
       {
-        alias MemberType = typeof(mixin(`Instance.` ~ MemberName));
-        static if(Meta.HasDestructor!MemberType && !Meta.IsPointer!MemberType)
+        static if(__traits(compiles, typeof(mixin(`Instance.` ~ MemberName))))
         {
-          static if(Meta.IsClassOrInterface!MemberType)
+          alias MemberType = typeof(mixin(`Instance.` ~ MemberName));
+          static if(Meta.HasDestructor!MemberType && !Meta.IsPointer!MemberType)
           {
-            Destruct(mixin(`Instance.` ~ MemberName));
-          }
-          else
-          {
-            Destruct(mixin(`&Instance.` ~ MemberName));
+            static if(Meta.IsClassOrInterface!MemberType)
+            {
+              Destruct(mixin(`Instance.` ~ MemberName));
+            }
+            else
+            {
+              Destruct(mixin(`&Instance.` ~ MemberName));
+            }
           }
         }
       }
-    }
 
     // TODO(Manu): Decide whether it's actually necessary to blit over the
     // initial data. The thing should be *destructed* afterall, not
@@ -96,25 +96,71 @@ void Destruct(Type)(Type* Instance)
   }
 }
 
-void ConstructArray(Type, ArgTypes...)(Type[] Array, auto ref ArgTypes Args)
+void ConstructArray(Type)(Type[] Array)
 {
   // Arrays of void are always uninitialized.
   static if(!Meta.IsVoid!Type)
   {
     static if(Meta.IsPlainOldData!Type)
     {
-      static      if(Args.length == 0) BlitInitialData(Array);
-      else static if(Args.length == 1) Array[] = Args[0];
+      BlitInitialData(Array);
+    }
       else
       {
-        static assert(false,"Cannot initialize plain old data "
-                            "with more than one argument.");
+      static if(is(Type == class)) foreach(    Element; Array) Construct( Element);
+      else                         foreach(ref Element; Array) Construct(&Element);
       }
+    }
+}
+
+void ConstructArray(Type, ArgType)(Type[] Array, auto ref ArgType Arg)
+  if(ArgTypes.length <= 1)
+{
+  // Arrays of void are always uninitialized.
+  static if(!Meta.IsVoid!Type)
+  {
+    static if(Meta.IsPlainOldData!Type)
+    {
+      Array[] = Arg;
     }
     else
     {
-      static if(is(Type == class)) foreach(    Element; Array) Construct(Element);
-      else                         foreach(ref Element; Array) Construct(&Element);
+      static if(is(Type == class)) foreach(    Element; Array) Construct( Element, Arg);
+      else                         foreach(ref Element; Array) Construct(&Element, Arg);
+    }
+  }
+}
+
+/// Construct the given array from another array.
+///
+/// Both arrays must have the same length.
+void ConstructArrayFromAnotherArray(Type, InitType)(Type[] Array, InitType[] InitializationData)
+  if(!Meta.IsVoid!Type && !is(Type == interface))
+{
+  import krepel : Max;
+
+  assert(Array.length == InitializationData.length);
+
+  static if(Meta.IsPlainOldData!Type)
+  {
+    static assert(Meta.IsPlainOldData!InitType,
+                  "Type " ~ Type.stringof ~ " is a POD type while " ~
+                  InitType.stringof ~ " is not.");
+    Array[] = InitializationData;
+  }
+  else
+  {
+    const NumToInit = Max(Array.length, InitializationData.length);
+    foreach(Index; 0 .. NumToInit)
+    {
+      static if(is(Type == class))
+      {
+        Construct(Array[Index], InitializationData[Index]);
+      }
+      else
+      {
+        Construct(&Array[Index], InitializationData[Index]);
+      }
     }
   }
 }
@@ -125,8 +171,8 @@ void DestructArray(Type)(Type[] Array)
   static if(!Meta.IsVoid!Type && !Meta.IsPlainOldData!Type)
   {
     static if(is(Type == class)) foreach(    Element; Array) Destruct( Element);
-    else                         foreach(ref Element; Array) Destruct(&Element);
-  }
+      else                         foreach(ref Element; Array) Destruct(&Element);
+    }
 }
 
 private void BlitInitialData(Type)(Type[] BlitTargets)
@@ -294,6 +340,67 @@ unittest
   DestructArray(Array);
   assert(DestructionCount == Array.length);
   foreach(ref Element; Array) assert(Element.Value == 1337);
+}
+
+// ConstructArrayFromAnotherArray
+unittest
+{
+  {
+    int[3] Source;
+    int[3] Data = [ 1, 2, 3 ];
+
+    assert(Source[0] == 0);
+    assert(Source[1] == 0);
+    assert(Source[2] == 0);
+
+    ConstructArrayFromAnotherArray(Source[], Data[]);
+
+    assert(Source[0] == 1);
+    assert(Source[1] == 2);
+    assert(Source[2] == 3);
+  }
+
+  {
+    static struct Foo
+    {
+      int Value = 42;
+      ~this() {}
+    }
+    static assert(!Meta.IsPlainOldData!Foo);
+
+    Foo[3] Source;
+    Foo[3] Data = [ Foo(1), Foo(2), Foo(3) ];
+
+    assert(Source[0].Value == 42);
+    assert(Source[1].Value == 42);
+    assert(Source[2].Value == 42);
+
+    ConstructArrayFromAnotherArray(Source[], Data[]);
+
+    assert(Source[0].Value == 1);
+    assert(Source[1].Value == 2);
+    assert(Source[2].Value == 3);
+  }
+
+  {
+    Object FakePointer(size_t Address)
+    {
+      return cast(Object)cast(void*)Address;
+    }
+
+    Object[3] Source;
+    Object[3] Data = [ FakePointer(1), FakePointer(2), FakePointer(3) ];
+
+    assert(Source[0] is null);
+    assert(Source[1] is null);
+    assert(Source[2] is null);
+
+    ConstructArrayFromAnotherArray(Source[], Data[]);
+
+    assert(Source[0] == FakePointer(1));
+    assert(Source[1] == FakePointer(2));
+    assert(Source[2] == FakePointer(3));
+  }
 }
 
 version(unittest) int BazDataDestructionCount;
