@@ -9,6 +9,7 @@
   "krepel_tests",
   "win32_experiments",
   "win32_experiments_tests",
+  "vulkan_experiments",
 }
 
 #include "dev\common.bff"
