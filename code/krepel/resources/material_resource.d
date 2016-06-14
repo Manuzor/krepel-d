@@ -31,6 +31,7 @@ struct ConstantBufferDescription
     Vector3 Float3;
     Vector4 Float4;
   }
+  bool IsConstantValue;
   UString RawValue;
   ConstantBufferValueType Type;
 }
@@ -39,6 +40,7 @@ struct ShaderDefinition
 {
   UString ShaderFile;
   UString EntryPoint;
+  UString Profile;
   ShaderType Type;
   ConstantBufferDescription ConstantDescription;
 }

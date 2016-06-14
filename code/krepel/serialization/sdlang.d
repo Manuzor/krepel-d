@@ -495,7 +495,7 @@ struct SDLParsingContext
 {
   /// An identifier for the string source, e.g. a file name. Used in log
   /// messages.
-  string Origin;
+  const(char)[] Origin;
 
   LogData* Log;
 }
