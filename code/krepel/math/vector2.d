@@ -46,6 +46,28 @@ Vector2 NormalizedCopy(Vector2 Vec)
   return Copy;
 }
 
+bool IsLeftOf(Vector2 Point, Vector2 LineStart, Vector2 LineEnd)
+{
+  return ((LineEnd.X - LineStart.X)*(Point.Y - LineStart.Y) - (LineEnd.Y - LineStart.Y)*(Point.X - LineStart.X)) > 0;
+}
+
+Vector2 LineIntersectionPoint(Vector2 Line1Start, Vector2 Line1End, Vector2 Line2Start, Vector2 Line2End)
+{
+  Vector2 CmP = Line2Start - Line1Start;
+  Vector2 r = Line1End - Line1Start;
+  Vector2 s = Line2End - Line2Start;
+
+  float CmPxr = CmP.X * r.Y - CmP.Y * r.X;
+  float CmPxs = CmP.X * s.Y - CmP.Y * s.X;
+  float rxs = r.X * s.Y - r.Y * s.X;
+
+  float rxsr = 1f / rxs;
+  float t = CmPxs * rxsr;
+  float u = CmPxr * rxsr;
+  assert(krepel.math.vector2.NearlyEquals(Line1Start + r * t,Line2Start + s * u));
+  return Line1Start + r * t;
+}
+
 /// Projects a given Vector onto a Normal (Normal needs to be Normalized)
 /// Returns the Projected Vector, which will be a scaled version of the Vector
 /// Input Vectors will not be modified
@@ -144,6 +166,12 @@ struct Vector2
     return
       X * Rhs.X +
       Y * Rhs.Y;
+  }
+
+  void opOpAssign(string Operator:"+")(Vector2 Rhs)
+  {
+    X += Rhs.X;
+    Y += Rhs.Y;
   }
 
   Vector2 opOpAssign(string Operator)(float Rhs)

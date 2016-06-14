@@ -277,11 +277,11 @@ class DebugRenderHelper
     }
 
     DataToRender.Clear();
-    if (Lines.Mesh.Vertices.Count > 100)
-    {
-      Lines.Mesh.Vertices.RemoveAt(0,10);
-    }
-    //Lines.Mesh.Vertices.Clear();
+    //if (Lines.Mesh.Vertices.Count > 100)
+    //{
+    //  Lines.Mesh.Vertices.RemoveAt(0,10);
+    //}
+    Lines.Mesh.Vertices.Clear();
   }
 
 }

@@ -37,6 +37,29 @@ Quaternion ComponentWiseSubtraction(Quaternion Quat1, Quaternion Quat2)
   );
 }
 
+Quaternion FindBetweenNormals(Vector3 Normal1, Vector3 Normal2)
+{
+  float W = 1.0f + Dot(Normal1, Normal2);
+  Quaternion Result;
+
+  if (W >= 1e-4f)
+  {
+    auto Axis = Normal1 ^ Normal2;
+    Result = Quaternion(Axis.X, Axis.Y, Axis.Z, W);
+  }
+  else
+  {
+    // Normal1 and Normal2 point in opposite directions
+    W = 0.0f;
+    Result = Abs(Normal1.X) > Abs(Normal1.Y)
+        ? Quaternion(-Normal1.Z, 0.0f, Normal1.X, W)
+        : Quaternion(0.0f, -Normal1.Z, Normal1.Y, W);
+  }
+
+  Result.SafeNormalize();
+  return Result;
+}
+
 float LengthSquared(Quaternion Quat)
 {
   return Quat.X * Quat.X + Quat.Y * Quat.Y + Quat.Z * Quat.Z + Quat.W * Quat.W;

@@ -162,6 +162,7 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
 
       PolyShapeData BoxShape = CreatePolyShapeFromBox(MainAllocator, Vector3.UnitScaleVector);
 
+      PrimitiveRenderComponent RenderChild;
 
       SceneGraph Graph = MainAllocator.New!(SceneGraph)(MainAllocator);
       GlobalEngine.RegisterScene(Graph);
@@ -169,15 +170,14 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
       auto CameraComponent = cast(CameraComponent)CameraObject.RootComponent;
       CameraComponent.SetWorldTransform(Transform(Vector3(-5,0,3), Quaternion.Identity, Vector3.UnitScaleVector));
       Matrix4 Mat = CameraComponent.GetViewProjectionMatrix().GetTransposed;
-
       auto Plane = Graph.CreateDefaultGameObject(UString("Plane", MainAllocator));
       auto PlanePhysicsChild = Plane.ConstructChild!PhysicsComponent(UString("PlanePhysics", MainAllocator));
       PlaneShapeData ShapeData = PlaneShapeData(Vector4(0,0,1,0));
       PlanePhysicsChild.ComponentBody.Shape.SetPlane(ShapeData);
       PlanePhysicsChild.ComponentBody.BodyMovability = Movability.Static;
       PlanePhysicsChild.RegisterComponent();
-      auto RenderChild = Plane.ConstructChild!PrimitiveRenderComponent(UString("PlaneRender", MainAllocator), PlanePhysicsChild);
-      PlanePhysicsChild.SetWorldTransform(Transform(Vector3.ZeroVector, Quaternion.Identity, Vector3.UnitScaleVector* 100));
+      RenderChild = Plane.ConstructChild!PrimitiveRenderComponent(UString("PlaneRender", MainAllocator), PlanePhysicsChild);
+      PlanePhysicsChild.SetWorldTransform(Transform(Vector3(0,0,-1), Quaternion.Identity, Vector3.UnitScaleVector* 100));
       RenderChild.SetMesh(UnitPlane);
       RenderChild.RegisterComponent();
 
@@ -193,7 +193,7 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
       RenderChild.SetMesh(Cube);
       RenderChild.RegisterComponent();
       SpherePhysicsChild.SetWorldTransform(Transform(Vector3(0,0,1.0f), Quaternion(Vector3.UnitScaleVector, 1.0f), Vector3.UnitScaleVector));
-      //SpherePhysicsChild.SetWorldTransform(Transform(Vector3(0,0,1.0f), Quaternion.Identity, Vector3.UnitScaleVector));
+      SpherePhysicsChild.SetWorldTransform(Transform(Vector3(0,0,1.0f), Quaternion.Identity, Vector3.UnitScaleVector));
 
       auto Sphere2 = Graph.CreateDefaultGameObject(UString("Sphere2", MainAllocator));
       auto Sphere2PhysicsChild = Sphere2.ConstructChild!PhysicsComponent(UString("Sphere2Physics", MainAllocator));
@@ -256,7 +256,7 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
         SpherePhysicsChild.MoveWorld(Vector3(User1Input["ObjX"].AxisValue,User1Input["ObjY"].AxisValue, User1Input["ObjZ"].AxisValue) * GlobalEngine.FrameTimeData.ElapsedTime);
         Angle += GlobalEngine.FrameTimeData.ElapsedTime;
         Quaternion Rotation = Quaternion(Vector3.ForwardVector, Angle);
-        Sphere2.RootComponent.SetRotation(Rotation);
+        //Sphere2.RootComponent.SetRotation(Rotation);
         //Sphere.RootComponent.MoveWorld(Vector3(User1Input["ObjX"].AxisValue,User1Input["ObjY"].AxisValue, User1Input["ObjZ"].AxisValue) * GlobalEngine.FrameTimeData.ElapsedTime);
         ColorLinear[6] Colors = [Colors.Lime, Colors.Red, Colors.Blue, Colors.Pink, Colors.Orange, Colors.Yellow ];
         //GlobalEngine.DebugHelper.AddPolyShape(Transform(Vector3(0,0,3), Quaternion.Identity, Vector3.UnitScaleVector), BoxShape, Colors, 0.1f);

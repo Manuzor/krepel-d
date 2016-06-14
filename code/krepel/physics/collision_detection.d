@@ -198,7 +198,10 @@ class CollisionDetection
           CollisionNormal.SafeNormalize();
         PenetrationDepth = FaceResult1.MinDistance;
         int IncidentFaceIndex = FindIncidentFace(Poly1, FaceResult1.MinFaceIndex, Poly2);
-
+        CollisionPoint = FindCollisionPointFromIncidentFace(
+          Poly1, FaceResult1.MinFaceIndex,
+          Poly2, IncidentFaceIndex
+          );
       }
       else if(FaceResult2.MinDistance > EdgeResult.MinDistance)
       {
@@ -207,7 +210,10 @@ class CollisionDetection
           CollisionNormal.SafeNormalize();
         PenetrationDepth = -FaceResult2.MinDistance;
         int IncidentFaceIndex = FindIncidentFace(Poly2, FaceResult2.MinFaceIndex, Poly1);
-
+        CollisionPoint = FindCollisionPointFromIncidentFace(
+          Poly2, FaceResult2.MinFaceIndex,
+          Poly1, IncidentFaceIndex
+          );
       }
       else
       {
@@ -376,7 +382,7 @@ class CollisionDetection
     return Result;
   }
 
-  static int FindIncidentFace(RigidBody Poly1, int Poly1ReferenceFace, RigidBody Poly2)
+  static int FindIncidentFace(const(RigidBody) Poly1, int Poly1ReferenceFace, const(RigidBody) Poly2)
   {
     // We perform all computations in local space of the second RigidBody
     Transform Transformation = Poly1.Owner.GetWorldTransform * Poly2.Owner.GetWorldTransform.InversedCopy;
@@ -393,6 +399,139 @@ class CollisionDetection
       }
     }
     return IncidentIndex;
+  }
+
+  struct Line
+  {
+    Vector2 Start;
+    Vector2 End;
+  }
+
+  static Line MakeLine(Vector3 StartPos, Vector3 EndPos, Vector3 PlaneNormal, Vector3 PlaneX, Vector3 PlaneY)
+  {
+    StartPos = StartPos.ProjectOntoPlane(PlaneNormal);
+    EndPos = EndPos.ProjectOntoPlane(PlaneNormal);
+    return Line(
+      Vector2(
+        StartPos | PlaneX,
+        StartPos | PlaneY),
+      Vector2(
+        EndPos | PlaneX,
+        EndPos | PlaneY),
+      );
+
+  }
+
+  static bool IsInsideClipRegion(Vector2 Point, Line ClippingLine)
+  {
+    return Point.IsLeftOf(ClippingLine.Start, ClippingLine.End);
+  }
+
+  static Vector3 FindCollisionPointFromIncidentFace( const(RigidBody) Poly1, int Poly1ReferenceFace,
+    const(RigidBody) Poly2, int Poly2IncidentFace)
+  {
+    // We perform all computations in local space of the second RigidBody
+    Transform Transformation = Poly1.Owner.GetWorldTransform * Poly2.Owner.GetWorldTransform.InversedCopy;
+    Vector4 ReferencePlane = Transformation.TransformPlane(Poly1.Shape.Poly.Planes[Poly1ReferenceFace]);
+
+    Vector3 Result = Vector3.ZeroVector;
+    Vector3 PlaneUnitY = Transformation.TransformDirection(
+      Poly1.Shape.Poly.GetEdgeEnd(Poly1.Shape.Poly.Faces[Poly1ReferenceFace]) -
+      Poly1.Shape.Poly.GetEdgeOrigin(Poly1.Shape.Poly.Faces[Poly1ReferenceFace]));
+    Vector3 PlaneUnitX = ReferencePlane.XYZ^PlaneUnitY;
+    PlaneUnitX.SafeNormalize();
+    PlaneUnitY.SafeNormalize();
+    import krepel.engine;
+    Array!Line EdgeLines = Array!Line(GlobalEngine.EngineAllocator);
+    int StartEdgeIndex = Poly1.Shape.Poly.Faces[Poly1ReferenceFace];
+    int CurrentEdgeIndex = StartEdgeIndex;
+    do
+    {
+      Vector3 StartPos = Transformation.TransformPosition(Poly1.Shape.Poly.GetEdgeOrigin(CurrentEdgeIndex));
+      Vector3 EndPos = Transformation.TransformPosition(Poly1.Shape.Poly.GetEdgeEnd(CurrentEdgeIndex));
+      EdgeLines ~= MakeLine(StartPos, EndPos, ReferencePlane.XYZ, PlaneUnitX, PlaneUnitY);
+
+      Vector3 LineStart = PlaneUnitX * EdgeLines.Back.Start.X + PlaneUnitY * EdgeLines.Back.Start.Y;
+      //LineStart += Transformation.TransformPosition(Poly1.Shape.Poly.GetEdgeOrigin(Poly1.Shape.Poly.Faces[Poly1ReferenceFace]));
+      //LineStart = Poly2.Owner.GetWorldTransform.TransformPosition(LineStart);
+      Vector3 LineEnd = PlaneUnitX * EdgeLines.Back.End.X + PlaneUnitY * EdgeLines.Back.End.Y;
+      //LineEnd += Transformation.TransformPosition(Poly1.Shape.Poly.GetEdgeOrigin(Poly1.Shape.Poly.Faces[Poly1ReferenceFace]));
+      //LineEnd = Poly2.Owner.GetWorldTransform.TransformPosition(LineEnd);
+      CurrentEdgeIndex = Poly1.Shape.Poly.Edges[CurrentEdgeIndex].NextIndex;
+      GlobalEngine.DebugHelper.AddLine(LineStart,LineEnd - LineStart, Colors.Orange);
+      //GlobalEngine.DebugHelper.AddLine(Poly2.Owner.GetWorldTransform.TransformPosition(StartPos),Poly2.Owner.GetWorldTransform.TransformDirection(EndPos - StartPos), Colors.Purple);
+    } while(CurrentEdgeIndex != StartEdgeIndex);
+
+    Array!Vector2 WorkPoly = Array!Vector2(GlobalEngine.EngineAllocator);
+
+    StartEdgeIndex = Poly2.Shape.Poly.Faces[Poly2IncidentFace];
+    CurrentEdgeIndex = StartEdgeIndex;
+    do
+    {
+
+      auto StartPos = Poly2.Shape.Poly.GetEdgeOrigin(CurrentEdgeIndex);
+      auto EndPos = Poly2.Shape.Poly.GetEdgeEnd(CurrentEdgeIndex);
+      auto CurLine = MakeLine(StartPos, EndPos, ReferencePlane.XYZ, PlaneUnitX, PlaneUnitY);
+      WorkPoly ~= CurLine.Start;
+      CurrentEdgeIndex = Poly2.Shape.Poly.Edges[CurrentEdgeIndex].NextIndex;
+    } while(CurrentEdgeIndex != StartEdgeIndex);
+
+    foreach(ClippingEdge; EdgeLines)
+    {
+      Array!Vector2 CurPoly = WorkPoly;
+      WorkPoly.Clear();
+      Vector2 StartPosition = CurPoly.Back;
+      foreach(Position; CurPoly)
+      {
+        auto CurLine = Line(StartPosition, Position);
+        Vector3 LineStart = PlaneUnitX * CurLine.Start.X + PlaneUnitY * CurLine.Start.Y;
+        //LineStart = Poly2.Owner.GetWorldTransform.TransformPosition(LineStart);
+        Vector3 LineEnd = PlaneUnitX * CurLine.End.X + PlaneUnitY * CurLine.End.Y;
+        //LineEnd = Poly2.Owner.GetWorldTransform.TransformPosition(LineEnd);
+        //GlobalEngine.DebugHelper.AddLine(LineStart,LineEnd - LineStart, Colors.Blue);
+        auto StartClippingId = IsInsideClipRegion(CurLine.End, ClippingEdge);
+        //GlobalEngine.DebugHelper.AddBox(Transform(LineEnd), Vector3.UnitScaleVector * 0.01f, EndClippingId == -1 ? Colors.Green : Colors.Red);
+        if (StartClippingId)
+        {
+          //GlobalEngine.DebugHelper.AddBox(Transform(LineStart), Vector3.UnitScaleVector * 0.01f, StartClippingId ? Colors.Green : Colors.Red);
+          auto ClippingId = IsInsideClipRegion(CurLine.Start, ClippingEdge);
+          if (!ClippingId)
+          {
+            auto Intersection = LineIntersectionPoint(CurLine.Start, CurLine.End, ClippingEdge.Start, ClippingEdge.End);
+            WorkPoly ~= Intersection;
+
+
+          }
+          WorkPoly ~= CurLine.End;
+
+        }
+        else
+        {
+          auto ClippingId = IsInsideClipRegion(CurLine.Start, ClippingEdge);
+          if (ClippingId)
+          {
+            auto Intersection =LineIntersectionPoint(CurLine.Start, CurLine.End, ClippingEdge.Start, ClippingEdge.End);
+            WorkPoly ~= Intersection;
+          }
+        }
+        StartPosition = Position;
+      }
+    }
+
+    foreach(Index, Position; WorkPoly)
+    {
+      Vector3 Position3D = PlaneUnitX * Position.X + PlaneUnitY * Position.Y;
+      Vector3 StartPosition3D =PlaneUnitX * WorkPoly[(cast(int)Index)-1].X + PlaneUnitY * WorkPoly[(cast(int)Index)-1].Y;
+      GlobalEngine.DebugHelper.AddBox(Transform(PlaneUnitX * Position.X + PlaneUnitY * Position.Y), Vector3.UnitScaleVector * 0.05f,Colors.Blue);
+      GlobalEngine.DebugHelper.AddLine(Position3D, StartPosition3D - Position3D,Colors.Red);
+      Result += Position3D;
+    }
+    Result/=WorkPoly.Count;
+
+    GlobalEngine.DebugHelper.AddBox(Transform(Result), Vector3.UnitScaleVector * 0.05f,Colors.Lime);
+    Result += Transformation.TransformPosition(Poly1.Shape.Poly.GetEdgeOrigin(Poly1.Shape.Poly.Faces[Poly1ReferenceFace])).ProjectOntoNormal(ReferencePlane.XYZ);
+    Result = Poly2.Owner.GetWorldTransform.TransformPosition(Result);
+    return Result;
   }
 
   static CollisionResult CheckCollisionPlanePlane(RigidBody Plane1, RigidBody Plane2)

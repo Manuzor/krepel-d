@@ -72,6 +72,8 @@ class PhysicsSystem : Subsystem
               float Body1ResolvanceFactor = 1.0f;
               float Body2ResolvanceFactor = 0.0f;
               GlobalEngine.DebugHelper.AddLine(CollisionResult.CollisionPoint,CollisionResult.CollisionNormal * CollisionResult.PenetrationDepth, Colors.Blue);
+              GlobalEngine.DebugHelper.AddBox(Transform(CollisionResult.CollisionPoint),Vector3.UnitScaleVector * 0.05f, Colors.Blue);
+              Log.Info("CollisionPoint: %f %f %f", CollisionResult.CollisionPoint.X,CollisionResult.CollisionPoint.Y,CollisionResult.CollisionPoint.Z);
               if (Body1.BodyMovability == Movability.Dynamic && Body2.BodyMovability.Dynamic)
               {
                 Body1ResolvanceFactor = Body1.Mass / (Body1.Mass + Body2.Mass);
