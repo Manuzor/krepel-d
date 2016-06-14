@@ -1,75 +1,62 @@
-TestMaterial
-{
-  D3D11
-  {
-    Shader Vertex
-    {
+TestMaterial {
+  D3D11 {
+    Vertex {
       File "../data/materials/testMaterialVertex.hlsl"
       EntryPoint "VS_MAIN"
       Profile "VS_5_0"
+      ConstantBuffer {
+        Value "$WorldViewProjectionMatrix" type="Matrix"
+        Value "$WorldMatrix" type="Matrix"
+        Value "$LightDir" type="Float4"
+        Value "$AmbientColor" type="Float4"
+        Value 1.0 type="Float1"
+      }
     }
 
-    Shader Pixel
-    {
+    Pixel {
       File "../data/materials/testMaterialPixel.hlsl"
       EntryPoint "PS_MAIN"
       Profile "PS_5_0"
     }
 
-    Shader Compute
-    {
+    Compute {
       File "../data/materials/testMaterialCompute.hlsl"
       EntryPoint "CS_MAIN"
       Profile "CS_5_0"
     }
 
-    Shader Geometry
-    {
+    Geometry {
       File "../data/materials/testMaterialGeometry.hlsl"
       EntryPoint "GEOM_MAIN"
       Profile "GS_5_0"
     }
 
-    Shader Tesselation
-    {
+    Tesselation {
       File "../data/materials/testMaterialTess.hlsl"
       EntryPoint "TS_MAIN"
       Profile "TS_5_0"
     }
-
-    ConstantBuffer Vertex
-    {
-      Value type=Matrix "$WorldViewProjectionMatrix"
-      Value type=Matrix "$WorldMatrix"
-      Value type=Float4 "$LightDir"
-      Value type=Float4 "$AmbientColor"
-      Value type=Float1 1.0
-    }
   }
 
-  Vulkan
-  {
-    Shader Vertex
-    {
+  Vulkan {
+    Vertex {
       File "../data/materials/testMaterialVertex.sprv"
       EntryPoint "VS_MAIN"
       Profile "VS"
+
+      ConstantBuffer {
+        Value "$WorldViewProjectionMatrix" type="Matrix"
+        Value "$WorldMatrix" type="Matrix"
+        Value "$LightDir" type="Float4"
+        Value "$AmbientColor" type="Float4"
+        Value 1.0 type="Float1"
+      }
     }
 
-    Shader Pixel
-    {
+    Pixel {
       File "../data/materials/testMaterialPixel.sprv"
       EntryPoint "PS_MAIN"
       Profile "FRAG"
-    }
-
-    ConstantBuffer Vertex
-    {
-      Value type=Matrix "$WorldViewProjectionMatrix"
-      Value type=Matrix "$WorldMatrix"
-      Value type=Float4 "$LightDir"
-      Value type=Float4 "$AmbientColor"
-      Value type=Float1 1.0
     }
   }
 

@@ -8,6 +8,22 @@ import krepel.conversion;
 
 class MaterialResourceLoader : IResourceLoader
 {
+  void LoadSubMaterialAPI(SubMaterial Material, SDLNodeHandle Node, UString APIName, IAllocator Allocator)
+  {
+
+  }
+
+  void LoadSubMaterial(MaterialResource Resource, SDLNodeHandle Node, UString Name, IAllocator Allocator)
+  {
+    SubMaterial NewSubMaterial = Allocator.New!SubMaterial(Allocator);
+    NewSubMaterial.Name = Name;
+    foreach(APINode; SDLNodeIterator(Node.FirstChild))
+    {
+      LoadSubMaterialAPI(NewSubMaterial, APINode, UString(APINode.Name, Allocator), Allocator);
+    }
+    Resource.Materials ~= NewSubMaterial;
+  }
+
   override Resource Load(IAllocator Allocator, WString FileName, IFile Data)
   {
     auto Context = SDLParsingContext(FileName.ToUTF8(), .Log);
@@ -19,11 +35,31 @@ class MaterialResourceLoader : IResourceLoader
     auto BytesRead = Data.Read(SourceString);
     assert(BytesRead == SourceString.length);
     assert(Document.ParseDocumentFromString(cast(string)SourceString, Context), SourceString);
-    return null;
+    MaterialResource NewMaterial = Allocator.New!MaterialResource(Allocator, this, FileName);
+    auto Node = Document.Root.FirstChild;
+    while(Node.IsValidHandle)
+    {
+      LoadSubMaterial(NewMaterial, Node, UString(Node.Name, Allocator), Allocator);
+      Node = Node.Next;
+    }
+    return NewMaterial;
   }
 
   override void Destroy(IAllocator Allocator, Resource Resource)
   {
 
   }
+}
+
+unittest
+{
+  auto TestAllocator = CreateTestAllocator();
+
+  auto Manager = TestAllocator.New!ResourceManager(TestAllocator);
+  auto MaterialLoader = TestAllocator.New!MaterialResourceLoader();
+  Manager.RegisterLoader(MaterialLoader, WString(".mat", TestAllocator));
+
+  auto Resource = Manager.Load!MaterialResource(WString("../unittest/Materials/testmaterial.mat", TestAllocator));
+  assert(Resource !is null);
+  assert(Resource.Materials.Count == 1);
 }

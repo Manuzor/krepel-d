@@ -38,6 +38,9 @@ class Engine
   Array!Subsystem Subsystems;
   DebugRenderHelper DebugHelper;
 
+  WavefrontResourceLoader WaveFrontLoader;
+  MaterialResourceLoader MaterialLoader;
+
   this(IAllocator Allocator)
   {
     EngineAllocator = Allocator;
@@ -69,8 +72,11 @@ class Engine
     Renderer.Initialize(RenderDevice);
 
     Resources = EngineAllocator.New!ResourceManager(EngineAllocator);
-    auto WaveFrontLoader = EngineAllocator.New!WavefrontResourceLoader();
+
+    WaveFrontLoader = EngineAllocator.New!WavefrontResourceLoader();
     Resources.RegisterLoader(WaveFrontLoader, WString(".obj", EngineAllocator));
+    MaterialLoader = EngineAllocator.New!MaterialResourceLoader();
+    Resources.RegisterLoader(MaterialLoader, WString(".mat", EngineAllocator));
 
     foreach(Index; 0..4)
     {
@@ -164,6 +170,7 @@ class Engine
 
   void Destroy()
   {
+    EngineAllocator.Delete(WaveFrontLoader);
     EngineAllocator.Delete(DebugHelper);
     EngineAllocator.Delete(GameFramework);
     EngineAllocator.Delete(Physics);

@@ -48,7 +48,9 @@ struct ShaderDefinition
 
 class SubMaterial
 {
-  Array!ShaderDefinition ShaderDefinitions;
+  UString Name;
+  // API -> ShaderDefinitions
+  Dictionary!(UString, Array!ShaderDefinition) ShaderDefinitions;
   this(IAllocator Allocator)
   {
     ShaderDefinitions.Allocator = Allocator;
@@ -63,5 +65,14 @@ class MaterialResource : Resource
   {
     super(Loader, FileName);
     Materials = Array!SubMaterial(Allocator);
+  }
+
+  ~this()
+  {
+    foreach(SubMat; Materials)
+    {
+      Materials.Allocator.Delete(SubMat);
+    }
+    Materials.Clear();
   }
 }
