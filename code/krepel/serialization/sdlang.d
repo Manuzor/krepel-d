@@ -698,6 +698,12 @@ bool ParseNode(SDLDocument Document,
     }
   }
 
+  if(OutNode)
+    *OutNode = Node;
+
+  // NOTE(Manu): Do NOT use OutNode beyond this point as it might become
+  // invalid when new nodes are created by ParseInnerNodes.
+
   //Source.SkipWhiteSpaceAndComments(Context, Yes.ConsumeNewLine);
   Source.SkipWhiteSpaceAndComments(Context, No.ConsumeNewLine);
 
@@ -720,9 +726,6 @@ bool ParseNode(SDLDocument Document,
       // TODO(Manu): What to do if there are no inner nodes? Ignore it?
     }
   }
-
-  if(OutNode)
-    *OutNode = Node;
 
   OriginalSource = Source;
   return true;
@@ -1732,4 +1735,118 @@ unittest
   assert(cast(string)Foo.Attribute("Key") == "Value");
   assert(Foo.Query!string("#0") == "Bar");
   assert(Foo.Query!string("Baz") == "Qux");
+}
+
+unittest
+{
+  auto TestAllocator = CreateTestAllocator!StackMemory();
+
+  auto FileName = "../unittest/Materials/testmaterial.mat"w;
+  auto File = OpenFile(TestAllocator, FileName);
+  scope(exit) CloseFile(TestAllocator, File);
+
+  // TODO(Manu): Once we have WString => UString conversion, use the filename
+  // as context.
+  auto Context = SDLParsingContext("Full", .Log);
+  auto Document = TestAllocator.New!SDLDocument(TestAllocator);
+
+  scope(exit) TestAllocator.Delete(Document);
+  auto SourceString = TestAllocator.NewArray!char(File.Size);
+  auto BytesRead = File.Read(SourceString);
+  assert(BytesRead == SourceString.length);
+  assert(Document.ParseDocumentFromString(cast(string)SourceString, Context), SourceString);
+
+  auto TestMaterialNode = Document.Root.Query!SDLNodeHandle("TestMaterial");
+  assert(TestMaterialNode);
+
+  auto D3D11Node = TestMaterialNode.Query!SDLNodeHandle("D3D11");
+  assert(D3D11Node);
+
+  {
+    auto VertexNode = D3D11Node.Query!SDLNodeHandle("Vertex");
+    assert(VertexNode);
+
+    assert(VertexNode.Query!string("File") == "../data/materials/testMaterialVertex.hlsl");
+    assert(VertexNode.Query!string("EntryPoint") == "VS_MAIN");
+    assert(VertexNode.Query!string("Profile") == "VS_5_0");
+
+    {
+      auto ConstantBufferNode = VertexNode.Query!SDLNodeHandle("ConstantBuffer");
+      assert(ConstantBufferNode);
+
+      assert(ConstantBufferNode.Query!string("Value[0]") == "$WorldViewProjectionMatrix");
+      assert(ConstantBufferNode.Query!string("Value[0]@type") == "Matrix");
+      assert(ConstantBufferNode.Query!string("Value[1]") == "$WorldMatrix");
+      assert(ConstantBufferNode.Query!string("Value[1]@type") == "Matrix");
+      assert(ConstantBufferNode.Query!string("Value[2]") == "$LightDir");
+      assert(ConstantBufferNode.Query!string("Value[2]@type") == "Float4");
+      assert(ConstantBufferNode.Query!string("Value[3]") == "$AmbientColor");
+      assert(ConstantBufferNode.Query!string("Value[3]@type") == "Float4");
+      assert(ConstantBufferNode.Query!float("Value[4]") == 1.0f);
+      assert(ConstantBufferNode.Query!string("Value[4]@type") == "Float1");
+    }
+
+    auto PixelNode = D3D11Node.Query!SDLNodeHandle("Pixel");
+    assert(PixelNode);
+
+    assert(PixelNode.Query!string("File") == "../data/materials/testMaterialPixel.hlsl");
+    assert(PixelNode.Query!string("EntryPoint") == "PS_MAIN");
+    assert(PixelNode.Query!string("Profile") == "PS_5_0");
+
+    auto ComputeNode = D3D11Node.Query!SDLNodeHandle("Compute");
+    assert(ComputeNode);
+
+    assert(ComputeNode.Query!string("File") == "../data/materials/testMaterialCompute.hlsl");
+    assert(ComputeNode.Query!string("EntryPoint") == "CS_MAIN");
+    assert(ComputeNode.Query!string("Profile") == "CS_5_0");
+
+    auto GeometryNode = D3D11Node.Query!SDLNodeHandle("Geometry");
+    assert(GeometryNode);
+
+    assert(GeometryNode.Query!string("File") == "../data/materials/testMaterialGeometry.hlsl");
+    assert(GeometryNode.Query!string("EntryPoint") == "GEOM_MAIN");
+    assert(GeometryNode.Query!string("Profile") == "GS_5_0");
+
+    auto TesselationNode = D3D11Node.Query!SDLNodeHandle("Tesselation");
+    assert(TesselationNode);
+
+    assert(TesselationNode.Query!string("File") == "../data/materials/testMaterialTess.hlsl");
+    assert(TesselationNode.Query!string("EntryPoint") == "TS_MAIN");
+    assert(TesselationNode.Query!string("Profile") == "TS_5_0");
+  }
+
+  auto VulkanNode = TestMaterialNode.Query!SDLNodeHandle("Vulkan");
+  assert(VulkanNode);
+
+  {
+    auto VertexNode = VulkanNode.Query!SDLNodeHandle("Vertex");
+    assert(VertexNode);
+
+    assert(VertexNode.Query!string("File") == "../data/materials/testMaterialVertex.sprv");
+    assert(VertexNode.Query!string("EntryPoint") == "VS_MAIN");
+    assert(VertexNode.Query!string("Profile") == "VS");
+
+    {
+      auto ConstantBufferNode = VertexNode.Query!SDLNodeHandle("ConstantBuffer");
+      assert(ConstantBufferNode);
+
+      assert(ConstantBufferNode.Query!string("Value[0]") == "$WorldViewProjectionMatrix");
+      assert(ConstantBufferNode.Query!string("Value[0]@type") == "Matrix");
+      assert(ConstantBufferNode.Query!string("Value[1]") == "$WorldMatrix");
+      assert(ConstantBufferNode.Query!string("Value[1]@type") == "Matrix");
+      assert(ConstantBufferNode.Query!string("Value[2]") == "$LightDir");
+      assert(ConstantBufferNode.Query!string("Value[2]@type") == "Float4");
+      assert(ConstantBufferNode.Query!string("Value[3]") == "$AmbientColor");
+      assert(ConstantBufferNode.Query!string("Value[3]@type") == "Float4");
+      assert(ConstantBufferNode.Query!int   ("Value[4]") == 1.0);
+      assert(ConstantBufferNode.Query!string("Value[4]@type") == "Float1");
+    }
+
+    auto PixelNode = VulkanNode.Query!SDLNodeHandle("Pixel");
+    assert(PixelNode);
+
+    assert(PixelNode.Query!string("File") == "../data/materials/testMaterialPixel.sprv");
+    assert(PixelNode.Query!string("EntryPoint") == "PS_MAIN");
+    assert(PixelNode.Query!string("Profile") == "FRAG");
+  }
 }
