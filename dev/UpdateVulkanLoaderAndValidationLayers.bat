@@ -18,7 +18,7 @@ setlocal
 
   echo Copying %Config% versions from %From% to %BuildDir%
 
-  pushd "%BuildDir"
+  pushd "%BuildDir%"
     copy "%From%\build\loader\%Config%\vulkan-1.dll"
     copy "%From%\build\loader\%Config%\vulkan-1.pdb"
     copy "%From%\build\layers\%Config%\VkLayer_core_validation.dll"
