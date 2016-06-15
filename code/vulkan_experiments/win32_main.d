@@ -1195,40 +1195,7 @@ bool Initialize(VulkanData Vulkan, HINSTANCE ProcessHandle, HWND WindowHandle)
       Log.BeginScope("Creating Device.");
       scope(exit) Log.EndScope("Device created.");
 
-      //
-      // Device Layers
-      //
-      auto LayerNames = Array!(CString)(.Allocator);
-      {
-        // Required extensions:
-        bool SurfaceLayerFound;
-        bool PlatformSurfaceLayerFound;
-
-        uint LayerCount;
-        vkEnumerateDeviceLayerProperties(Gpu.Handle, &LayerCount, null).Verify;
-
-        auto LayerProperties = Array!VkLayerProperties(.Allocator);
-        LayerProperties.Expand(LayerCount);
-        vkEnumerateDeviceLayerProperties(Gpu.Handle, &LayerCount, LayerProperties.Data.ptr).Verify;
-
-        Log.BeginScope("Explicitly enabled device layers:");
-        scope(exit) Log.EndScope("==========");
-        foreach(ref Property; LayerProperties)
-        {
-          auto LayerName = Property.layerName.ptr.fromStringz;
-          if(LayerName == VK_LAYER_LUNARG_STANDARD_VALIDATION_NAME)
-          {
-            LayerNames ~= VK_LAYER_LUNARG_STANDARD_VALIDATION_NAME.ptr;
-          }
-          else
-          {
-            Log.Info("[ ] %s", LayerName);
-            continue;
-          }
-
-          Log.Info("[x] %s", LayerName);
-        }
-      }
+      // Note(Manu): Starting with Vulkan 1.0.13.0, device LAYERS are deprecated.
 
       //
       // Device Extensions
@@ -1300,9 +1267,6 @@ bool Initialize(VulkanData Vulkan, HINSTANCE ProcessHandle, HWND WindowHandle)
       {
         queueCreateInfoCount = 1;
         pQueueCreateInfos = &QueueCreateInfo;
-
-        enabledLayerCount = cast(uint)LayerNames.Count;
-        ppEnabledLayerNames = LayerNames.Data.ptr;
 
         enabledExtensionCount = cast(uint)ExtensionNames.Count;
         ppEnabledExtensionNames = ExtensionNames.Data.ptr;
