@@ -19,6 +19,7 @@ class RigidBody
   IAllocator Allocator;
   Vector3 Velocity = Vector3.ZeroVector;
   float Restitution = 1.0f;
+  float Damping = 0.99f;
   Vector3 AngularVelocity;
   Vector3 PendingAcceleration;
   Vector3 Torque;

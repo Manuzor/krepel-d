@@ -175,6 +175,7 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
       PlaneShapeData ShapeData = PlaneShapeData(Vector4(0,0,1,0));
       PlanePhysicsChild.ComponentBody.Shape.SetPlane(ShapeData);
       PlanePhysicsChild.ComponentBody.BodyMovability = Movability.Static;
+      PlanePhysicsChild.ComponentBody.Mass = float.infinity;
       PlanePhysicsChild.RegisterComponent();
       RenderChild = Plane.ConstructChild!PrimitiveRenderComponent(UString("PlaneRender", MainAllocator), PlanePhysicsChild);
       PlanePhysicsChild.SetWorldTransform(Transform(Vector3(0,0,-1), Quaternion.Identity, Vector3.UnitScaleVector* 0));

@@ -75,13 +75,15 @@ class PhysicsSystem : Subsystem
           Transform BodyWorldTransform = Body.Owner.GetWorldTransform;
           auto WorldRotationMatrix = BodyWorldTransform.Rotation.ToRotationMatrix();
           Matrix3 InverseWorldInertiaTensor = WorldRotationMatrix * Body.InertiaTensor.SafeInvert * WorldRotationMatrix.GetTransposed;
-          //Body.Velocity += DeltaGravity;
+          Body.Velocity += DeltaGravity;
           Body.Velocity += Body.PendingAcceleration * Tick.ElapsedTime;
           Body.AngularVelocity += BodyWorldTransform.TransformDirection(Body.Torque) * Tick.ElapsedTime;
           Body.Owner.MoveWorld(Body.Velocity * Tick.ElapsedTime);
           Body.Owner.SetRotation(ApplyAngularVelocity(WorldRotationMatrix, MakeQuaternionFromAngularVelocity(Body.AngularVelocity * Tick.ElapsedTime)).SafeNormalizedCopy);
           Body.Torque = Vector3.ZeroVector;
           Body.PendingAcceleration = Vector3.ZeroVector;
+          Body.Velocity *= Body.Damping;
+          Body.AngularVelocity *= Body.Damping;
         }
       }
       foreach(Index1, Body1; RigidBodies)
@@ -114,7 +116,7 @@ class PhysicsSystem : Subsystem
               //Body1.Velocity = Body1.Velocity.ReflectVector(ResolvanceVector.SafeNormalizedCopy) * //Body1.Restitution;
               //Body2.Velocity = Body2.Velocity.ReflectVector(ResolvanceVector.SafeNormalizedCopy) * //Body2.Restitution;
               Vector3 CollisionNormal = CollisionResult.CollisionNormal * Sign(CollisionResult.PenetrationDepth);
-              float CollisionResponseFactor = 1.0f;
+              float CollisionResponseFactor = 0.9f;
               float CollisionEpsilon = -(1+CollisionResponseFactor);
               Vector3 Center1ToCollisionPoint = CollisionResult.CollisionPoint - Body1.Owner.GetWorldTransform.Translation;
               Vector3 Center2ToCollisionPoint = CollisionResult.CollisionPoint - Body2.Owner.GetWorldTransform.Translation;
