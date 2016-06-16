@@ -740,10 +740,3 @@ unittest
 
   assert(Result == Vector3.ZeroVector);
 }
-
-unittest
-{
-  auto RotationMatrix = Quaternion.Identity.ToRotationMatrix;
-  auto NewQuat = RotationMatrix.ToQuaternion;
-  assert(krepel.math.quaternion.NearlyEquals(NewQuat, Quaternion.Identity));
-}

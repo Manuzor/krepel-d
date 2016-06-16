@@ -3,7 +3,7 @@ module krepel.math.quaternion;
 import krepel.math.vector3;
 import krepel.math.vector4;
 import krepel.math.math;
-import krepel.math.matrix4;
+import krepel.math.matrix3;
 
 @safe:
 
@@ -70,7 +70,7 @@ float Length(Quaternion Quat)
   return Sqrt(LengthSquared(Quat));
 }
 
-Matrix4 ToRotationMatrix(Quaternion Quat)
+Matrix3 ToRotationMatrix(Quaternion Quat)
 {
   const float X2 = Quat.X + Quat.X;
   const float Y2 = Quat.Y + Quat.Y;
@@ -88,11 +88,10 @@ Matrix4 ToRotationMatrix(Quaternion Quat)
   const float WY = Quat.W * Y2;
   const float WZ = Quat.W * Z2;
 
-  return Matrix4([
-    [1.0f - (YY + ZZ), XY + WZ, XZ - WY, 0.0f],
-    [XY - WZ, 1.0f - (XX + ZZ), YZ + WX, 0.0f],
-    [XZ + WY, YZ - WX, 1.0f - (XX + YY), 0.0f],
-    [0.0f, 0.0f, 0.0f, 1.0f]
+  return Matrix3([
+    [1.0f - (YY + ZZ), XY + WZ, XZ - WY],
+    [XY - WZ, 1.0f - (XX + ZZ), YZ + WX],
+    [XZ + WY, YZ - WX, 1.0f - (XX + YY)]
   ]);
 }
 
@@ -326,7 +325,7 @@ unittest
 unittest
 {
   Quaternion RotateCCW = Quaternion(Vector3.UpVector, -PI/2);
-  Vector3 Result = krepel.math.matrix4.TransformDirection(RotateCCW.ToRotationMatrix(),Vector3(1,0,0));
+  Vector3 Result = krepel.math.matrix3.TransformDirection(RotateCCW.ToRotationMatrix(),Vector3(1,0,0));
 
   assert(krepel.math.vector3.NearlyEquals(Result,Vector3(0,-1,0)));
 }
@@ -337,7 +336,7 @@ unittest
   Quaternion RotateCCW = Quaternion(Vector3.UpVector, -PI/2);
 
   RotateCCW *= RotateCCW;
-  Vector3 Result = krepel.math.matrix4.TransformDirection(RotateCCW.ToRotationMatrix(),Vector3(1,0,0));
+  Vector3 Result = krepel.math.matrix3.TransformDirection(RotateCCW.ToRotationMatrix(),Vector3(1,0,0));
   Vector3 Result2 = RotateCCW.TransformDirection(Vector3(1,0,0));
   Vector3 Result3 = RotateCCW * Vector3(1,0,0);
 
