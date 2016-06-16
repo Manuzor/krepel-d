@@ -183,7 +183,7 @@ bool IsInvertible(Matrix3 Mat)
   return !NearlyEquals(Mat.GetDeterminant(),0);
 }
 
-/// Homogenous transform of a 4 dimensional Vector
+/// Homogenous transform of a 3 dimensional Vector
 /// @return Result = Vector*Mat
 Vector3 TransformDirection(Matrix3 Mat, Vector3 Vector)
 {
@@ -196,7 +196,7 @@ Vector3 TransformDirection(Matrix3 Mat, Vector3 Vector)
   return Result;
 }
 
-/// Homogenous inverse transform of a 4 dimensional Vector
+/// Homogenous inverse transform of a 3 dimensional Vector
 /// @return Result = Vector*Mat^-1
 Vector3 InverseTransformDirection(Matrix3 Mat, Vector3 Vector)
 {
@@ -291,8 +291,7 @@ Matrix3 CreateMatrixFromScaleRotate(Quaternion Rotation, Vector3 Scale = Vector3
   return Result;
 }
 
-/// 4x4 Matrix accessed first by row, then by column
-/// Translation part is stored in the lower row (M[3][0] -> M[3][2])
+/// 3x3 Matrix accessed first by row, then by column
 struct Matrix3
 {
   @safe:
