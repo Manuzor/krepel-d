@@ -44,5 +44,5 @@ float4 PSMain( VSOut Input ) : SV_Target
   float3 Diffuse = clamp(Input.VertColor * max(dot(Input.Normal, Input.LightDir),0) * 0.3f, 0.0f, 1.0f);
   float3 Specular = clamp(Input.VertColor.xyz * pow(max(dot(ReflectionVector, Input.Normal),0),0.7f), 0.0f, 1.0f);
   //return float4(Input.VertColor, 1.0f);
-  return float4(pow(Diffuse + Specular, 1/2.2f), 1.0f);
+  return float4(pow(Diffuse + Specular + Input.AmbientColor.xyz, 1/2.2f), 1.0f);
 }

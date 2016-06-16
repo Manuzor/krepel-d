@@ -62,6 +62,9 @@ class SceneComponent : GameComponent
   void SetRotation(Quaternion Quat)
   {
     Transformation.Rotation = Quat;
+    auto OldTransform = GetWorldTransform();
+    OldTransform.Rotation = Quat;
+    SetWorldTransform(OldTransform);
   }
 
 

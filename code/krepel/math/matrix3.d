@@ -1,6 +1,7 @@
 module krepel.math.matrix3;
 
 import krepel.math.vector3;
+import krepel.math.matrix4;
 import krepel.math.quaternion;
 import krepel.math.math;
 
@@ -231,11 +232,42 @@ Matrix3 MatrixMultiply(const ref Matrix3 Mat1, const ref Matrix3 Mat2)
   return Result;
 }
 
-enum EAxisType
+Matrix3 MatrixAdd(const ref Matrix3 Mat1, const ref Matrix3 Mat2)
 {
-  X,
-  Y,
-  Z
+  Matrix3 Result = void;
+
+  Result.M[0][0] += Mat1.M[0][0];
+  Result.M[0][1] += Mat1.M[0][1];
+  Result.M[0][2] += Mat1.M[0][2];
+
+  Result.M[1][0] += Mat1.M[1][0];
+  Result.M[1][1] += Mat1.M[1][1];
+  Result.M[1][2] += Mat1.M[1][2];
+
+  Result.M[2][0] += Mat1.M[2][0];
+  Result.M[2][1] += Mat1.M[2][1];
+  Result.M[2][2] += Mat1.M[2][2];
+
+  return Result;
+}
+
+Matrix3 MatrixScale(const ref Matrix3 Mat1, float Scale)
+{
+  Matrix3 Result = void;
+
+  Result.M[0][0] *= Scale;
+  Result.M[0][1] *= Scale;
+  Result.M[0][2] *= Scale;
+
+  Result.M[1][0] *= Scale;
+  Result.M[1][1] *= Scale;
+  Result.M[1][2] *= Scale;
+
+  Result.M[2][0] *= Scale;
+  Result.M[2][1] *= Scale;
+  Result.M[2][2] *= Scale;
+
+  return Result;
 }
 
 Vector3 GetScaledAxis(Matrix3 Mat, EAxisType Type)
@@ -312,9 +344,20 @@ struct Matrix3
   }
 
   Matrix3 opBinary(string Operator)(Matrix3 Mat) const
-    if(Operator == "*")
   {
-    return MatrixMultiply(this, Mat);
+    static if(Operator == "*")
+    {
+      return MatrixMultiply(this, Mat);
+    }
+    else static if(Operator == "+")
+    {
+      return MatrixAdd(this, Mat);
+    }
+  }
+
+  Matrix3 opBinary(string Operator:"*")(float Scale) const
+  {
+      return MatrixScale(this, Scale);
   }
 
   auto ref opIndex(int Index) inout
