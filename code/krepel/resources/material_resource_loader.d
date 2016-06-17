@@ -10,7 +10,41 @@ class MaterialResourceLoader : IResourceLoader
 {
   void LoadSubMaterialAPI(SubMaterial Material, SDLNodeHandle Node, UString APIName, IAllocator Allocator)
   {
-
+    auto Definitions = Array!ShaderDefinition(Allocator);
+    foreach(DefinitionNode; SDLNodeIterator(Node.FirstChild))
+    {
+      ShaderDefinition Definition;
+      if(DefinitionNode.Name == "Vertex")
+      {
+        Definition.Type = ShaderType.VertexShader;
+      }
+      else if(DefinitionNode.Name == "Pixel")
+      {
+        Definition.Type = ShaderType.PixelShader;
+      }
+      else if(DefinitionNode.Name == "Compute")
+      {
+        Definition.Type = ShaderType.ComputeShader;
+      }
+      else if(DefinitionNode.Name == "Tesselation")
+      {
+        Definition.Type = ShaderType.TesselationShader;
+      }
+      else if(DefinitionNode.Name == "Geometry")
+      {
+        Definition.Type = ShaderType.GeometryShader;
+      }
+      auto File = DefinitionNode.Nodes["File"][0];
+      if (File.IsValidHandle)
+      {
+        Definition.ShaderFile = UString(File.Values[0].String, Allocator);
+      }
+      else
+      {
+        Log.Warning("Shader Type '%s' is missing ShaderFile in Shader %s", APIName, DefinitionNode.Name);
+      }
+      Definitions ~= Definition;
+    }
   }
 
   void LoadSubMaterial(MaterialResource Resource, SDLNodeHandle Node, UString Name, IAllocator Allocator)
