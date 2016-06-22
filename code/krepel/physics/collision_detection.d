@@ -155,12 +155,12 @@ class CollisionDetection
       if (Abs(Distance1) < Abs(Distance2))
       {
         Result.CollisionPoint = Support1;
-        Result.PenetrationDepth = -Distance1;
+        Result.PenetrationDepth = Abs(Distance1);
       }
       else
       {
         Result.CollisionPoint = Support2;
-        Result.PenetrationDepth = -Distance2;
+        Result.PenetrationDepth = Abs(Distance2);
       }
     }
 

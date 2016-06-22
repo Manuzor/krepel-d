@@ -5,6 +5,7 @@ import krepel.resources;
 import krepel.memory;
 import krepel.string;
 import krepel.scene.game_object;
+import krepel.color;
 
 class PrimitiveRenderComponent : SceneComponent
 {
@@ -12,6 +13,7 @@ class PrimitiveRenderComponent : SceneComponent
   this(IAllocator Allocator, UString Name, GameObject Owner)
   {
     super(Allocator, Name, Owner);
+    BodyColor = Colors.White;
   }
 
   void SetMesh(MeshResource Mesh)
@@ -23,6 +25,8 @@ class PrimitiveRenderComponent : SceneComponent
   {
     return Mesh;
   }
+
+  ColorLinear BodyColor;
 
 private:
   MeshResource Mesh;

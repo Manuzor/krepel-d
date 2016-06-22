@@ -276,12 +276,12 @@ class DebugRenderHelper
       RenderDevice.Draw(cast(uint)RenderData.Mesh.Vertices.Count);
     }
 
-    DataToRender.Clear();
+    //DataToRender.Clear();
     //if (Lines.Mesh.Vertices.Count > 100)
     //{
     //  Lines.Mesh.Vertices.RemoveAt(0,10);
     //}
-    Lines.Mesh.Vertices.Clear();
+    //Lines.Mesh.Vertices.Clear();
   }
 
 }

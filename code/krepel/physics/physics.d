@@ -12,7 +12,10 @@ class PhysicsSystem : Subsystem
   IAllocator Allocator;
   Engine ParentEngine;
   Vector3 Gravity = Vector3(0,0,-9.81f);
-
+  bool StepMode = false;
+  bool DebugDrawPolyShapes = false;
+  bool DoCollisionResponse = true;
+  bool DoPenetrationResolve = true;
   this(IAllocator Allocator)
   {
     this.Allocator = Allocator;
@@ -38,13 +41,33 @@ class PhysicsSystem : Subsystem
     this.ParentEngine = ParentEngine;
     ParentEngine.InputContexts[0].RegisterInputSlot(InputType.Button, "Resolve");
     ParentEngine.InputContexts[0].AddSlotMapping(Keyboard.Space, "Resolve");
+    import krepel.system; // Platform interaction
+    auto ConfigFile = OpenFile(ParentEngine.EngineAllocator, WString("../data/config/physics.sdl", ParentEngine.EngineAllocator));
+    scope(exit) CloseFile(ParentEngine.EngineAllocator, ConfigFile);
+    import krepel.serialization.sdlang;
+    auto Context = SDLParsingContext("Physics Config", .Log);
+    auto Document = ParentEngine.EngineAllocator.New!SDLDocument(ParentEngine.EngineAllocator);
+
+    scope(exit) ParentEngine.EngineAllocator.Delete(Document);
+    auto SourceString = ParentEngine.EngineAllocator.NewArray!char(ConfigFile.Size);
+    scope(exit) ParentEngine.EngineAllocator.Delete(SourceString);
+    auto BytesRead = ConfigFile.Read(SourceString);
+    Document.ParseDocumentFromString(cast(string)SourceString, Context);
+
+    auto RootNode = Document.Root;
+    auto GravityNode = RootNode.Nodes["Gravity"][0];
+    Gravity = Vector3(cast(float)GravityNode.Values[0],cast(float)GravityNode.Values[1],cast(float)GravityNode.Values[2]);
+    Log.Info("Gravity is %f %f %f", Gravity.X, Gravity.Y, Gravity.Z);
+    StepMode = cast(bool)RootNode.Nodes["StepMode"][0].Values[0];
+    DebugDrawPolyShapes = cast(bool)RootNode.Nodes["DebugDrawPolyShapes"][0].Values[0];
+    DoCollisionResponse = cast(bool)RootNode.Nodes["DoCollisionResponse"][0].Values[0];
+    DoPenetrationResolve = cast(bool)RootNode.Nodes["DoPenetrationResolve"][0].Values[0];
   }
 
   override void Destroy()
   {
 
   }
-  bool WasUp = false;
 
   Quaternion MakeQuaternionFromAngularVelocity(Vector3 AngularVelocity)
   {
@@ -64,9 +87,16 @@ class PhysicsSystem : Subsystem
 
   override void Tick(TickData Tick)
   {
-    if ((ParentEngine.InputContexts[0]["Resolve"].ButtonIsDown && WasUp) || true)
+    bool DoStep = true;
+
+    debug
     {
-      WasUp = false;
+      DoStep = (ParentEngine.InputContexts[0]["Resolve"].ButtonIsDown);
+    }
+    if (DoStep || !StepMode)
+    {
+      ParentEngine.DebugHelper.DataToRender.Clear();
+      ParentEngine.DebugHelper.Lines.Mesh.Vertices.Clear();
       Vector3 DeltaGravity = Gravity * Tick.ElapsedTime;
       foreach(Body; RigidBodies)
       {
@@ -100,7 +130,6 @@ class PhysicsSystem : Subsystem
               float Body2ResolvanceFactor = 0.0f;
               GlobalEngine.DebugHelper.AddLine(CollisionResult.CollisionPoint,CollisionResult.CollisionNormal * CollisionResult.PenetrationDepth, Colors.Blue);
               GlobalEngine.DebugHelper.AddBox(Transform(CollisionResult.CollisionPoint),Vector3.UnitScaleVector * 0.05f, Colors.Blue);
-              Log.Info("CollisionPoint: %f %f %f", CollisionResult.CollisionPoint.X,CollisionResult.CollisionPoint.Y,CollisionResult.CollisionPoint.Z);
               if (Body1.BodyMovability == Movability.Dynamic && Body2.BodyMovability.Dynamic)
               {
                 Body1ResolvanceFactor = Body1.Mass / (Body1.Mass + Body2.Mass);
@@ -116,61 +145,94 @@ class PhysicsSystem : Subsystem
               //Body1.Velocity = Body1.Velocity.ReflectVector(ResolvanceVector.SafeNormalizedCopy) * //Body1.Restitution;
               //Body2.Velocity = Body2.Velocity.ReflectVector(ResolvanceVector.SafeNormalizedCopy) * //Body2.Restitution;
               Vector3 CollisionNormal = CollisionResult.CollisionNormal * Sign(CollisionResult.PenetrationDepth);
-              float CollisionResponseFactor = 0.9f;
+              float CollisionResponseFactor = 0.0f;
               float CollisionEpsilon = -(1+CollisionResponseFactor);
-              Vector3 Center1ToCollisionPoint = CollisionResult.CollisionPoint - Body1.Owner.GetWorldTransform.Translation;
-              Vector3 Center2ToCollisionPoint = CollisionResult.CollisionPoint - Body2.Owner.GetWorldTransform.Translation;
-              Vector3 Body1Tangent = Center1ToCollisionPoint ^ CollisionNormal;
-              Vector3 Body2Tangent = Center2ToCollisionPoint ^ CollisionNormal;
+              Vector3 Center1ToCollisionPoint = Vector3.ZeroVector;
+              if(Body1.Movable)
+              {
+                Center1ToCollisionPoint = CollisionResult.CollisionPoint - Body1.Owner.GetWorldTransform.Translation;
+              }
+              Vector3 Center2ToCollisionPoint = Vector3.ZeroVector;
+              if(Body2.Movable)
+              {
+                Center2ToCollisionPoint = CollisionResult.CollisionPoint - Body2.Owner.GetWorldTransform.Translation;
+              }
+              Vector3 Body1Tangent = Vector3.ZeroVector;
+              if (Body1.Movable)
+              {
+                Body1Tangent = Center1ToCollisionPoint ^ CollisionNormal;
+
+              }
+              Vector3 Body2Tangent = Vector3.ZeroVector;
+              if (Body2.Movable)
+              {
+                  Body2Tangent = Center2ToCollisionPoint ^ CollisionNormal;
+              }
 
               float DeltaVelocityToCollisionNormal = Dot((Body1.Velocity - Body2.Velocity),CollisionNormal);
-              float AngularVelocity1ToTanget = Dot(Body1.AngularVelocity, Body1Tangent);
-              float AngularVelocity2ToTanget = Dot(Body2.AngularVelocity, Body2Tangent);
+              float AngularVelocity1ToTanget = 0.0f;
+              if(Body1.Movable)
+              {
+                Dot(Body1.AngularVelocity, Body1Tangent);
+              }
+              float AngularVelocity2ToTanget = 0.0f;
+              if (Body2.Movable)
+              {
+                AngularVelocity2ToTanget = Dot(Body2.AngularVelocity, Body2Tangent);
+              }
 
               float Nominator = CollisionEpsilon * DeltaVelocityToCollisionNormal + AngularVelocity1ToTanget - AngularVelocity2ToTanget;
               Matrix3 InverseInertiaTensor1 = Body1.InertiaTensor.SafeInvert();
               Matrix3 InverseInertiaTensor2 = Body2.InertiaTensor.SafeInvert();
               Vector3 TangentToIntertia1 = InverseInertiaTensor1.TransformDirection(Body1Tangent) ^ Center1ToCollisionPoint;
               Vector3 TangentToIntertia2 = InverseInertiaTensor2.TransformDirection(Body2Tangent) ^ Center2ToCollisionPoint;
-              float Denominator = 1/Body1.Mass + 1/Body2.Mass + Dot((TangentToIntertia1 + TangentToIntertia2), CollisionNormal);
-
-              float CollisionResultImpulseFactor = Nominator / Denominator;
-
-              Body1.Velocity += (CollisionResultImpulseFactor / Body1.Mass) * CollisionNormal;
-              Body2.Velocity -= (CollisionResultImpulseFactor / Body2.Mass) * CollisionNormal;
-              Body1.AngularVelocity += InverseInertiaTensor1.TransformDirection((CollisionResultImpulseFactor * CollisionNormal) ^ Center1ToCollisionPoint);
-              Body2.AngularVelocity += InverseInertiaTensor2.TransformDirection((-CollisionResultImpulseFactor * CollisionNormal) ^ Center2ToCollisionPoint);
-
-              //Body1.ApplyForceWorld(CollisionResult.CollisionNormal * Sign(CollisionResult.PenetrationDepth) * Body1ResolvanceFactor, CollisionResult.CollisionPoint);
-              //Body2.ApplyForceWorld(-CollisionResult.CollisionNormal * Sign(CollisionResult.PenetrationDepth) * Body2ResolvanceFactor, CollisionResult.CollisionPoint);
-              //assert((Body1ResolvanceFactor + Body2ResolvanceFactor).NearlyEquals(1.0f));
+              float Denominator = 0;
               if (Body1.Movable)
               {
-                Body1.Owner.MoveWorld(ResolvanceVector * Body2ResolvanceFactor);
+                Denominator += 1/Body1.Mass;
               }
               if (Body2.Movable)
               {
-                Body2.Owner.MoveWorld(-ResolvanceVector * Body2ResolvanceFactor);
+                Denominator += 1/Body2.Mass;
+              }
+              Denominator += Dot((TangentToIntertia1 + TangentToIntertia2), CollisionNormal);
+
+              float CollisionResultImpulseFactor = Nominator / Denominator;
+              if (DoCollisionResponse)
+              {
+                Body1.Velocity += (CollisionResultImpulseFactor / Body1.Mass) * CollisionNormal;
+                Body2.Velocity -= (CollisionResultImpulseFactor / Body2.Mass) * CollisionNormal;
+                Body1.AngularVelocity += InverseInertiaTensor1.TransformDirection((CollisionResultImpulseFactor * CollisionNormal) ^ Center1ToCollisionPoint);
+                Body2.AngularVelocity += InverseInertiaTensor2.TransformDirection((-CollisionResultImpulseFactor * CollisionNormal) ^ Center2ToCollisionPoint);
+              }
+              //Body1.ApplyForceWorld(CollisionResult.CollisionNormal * Sign(CollisionResult.PenetrationDepth) * Body1ResolvanceFactor, CollisionResult.CollisionPoint);
+              //Body2.ApplyForceWorld(-CollisionResult.CollisionNormal * Sign(CollisionResult.PenetrationDepth) * Body2ResolvanceFactor, CollisionResult.CollisionPoint);
+              //assert((Body1ResolvanceFactor + Body2ResolvanceFactor).NearlyEquals(1.0f));
+              if (DoPenetrationResolve)
+              {
+                if (Body1.Movable)
+                {
+                  Body1.Owner.MoveWorld(ResolvanceVector * Body2ResolvanceFactor);
+                }
+                if (Body2.Movable)
+                {
+                  Body2.Owner.MoveWorld(-ResolvanceVector * Body2ResolvanceFactor);
+                }
               }
             }
-            ColorLinear[1] DebugColor = [CollisionResult.DoesCollide ? Colors.Red : Colors.Lime];
+            if(DebugDrawPolyShapes)
+            {
+              ColorLinear[1] DebugColor = [CollisionResult.DoesCollide ? Colors.Red : Colors.Lime];
+              if (Body1.Shape.Type == ShapeType.Poly && Body2.Shape.Type == ShapeType.Poly && CollisionResult.DoesCollide)
+              {
 
-            //if (Body1.Shape.Type == ShapeType.Poly)
-            //{
-            //  GlobalEngine.DebugHelper.AddPolyShape(Body1.Owner.GetWorldTransform, Body1.Shape.Poly, DebugColor);
-            //}
-            //if (Body2.Shape.Type == ShapeType.Poly)
-            //{
-            //  GlobalEngine.DebugHelper.AddPolyShape(Body2.Owner.GetWorldTransform, Body2.Shape.Poly, DebugColor );
-            //}
-
+                GlobalEngine.DebugHelper.AddPolyShape(Body1.Owner.GetWorldTransform, Body1.Shape.Poly, DebugColor);
+                GlobalEngine.DebugHelper.AddPolyShape(Body2.Owner.GetWorldTransform, Body2.Shape.Poly, DebugColor );
+              }
+            }
           }
         }
       }
-    }
-    else if(!ParentEngine.InputContexts[0]["Resolve"].ButtonIsDown)
-    {
-      WasUp = true;
     }
   }
 }

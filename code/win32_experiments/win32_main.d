@@ -178,8 +178,9 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
       PlanePhysicsChild.ComponentBody.Mass = float.infinity;
       PlanePhysicsChild.RegisterComponent();
       RenderChild = Plane.ConstructChild!PrimitiveRenderComponent(UString("PlaneRender", MainAllocator), PlanePhysicsChild);
-      PlanePhysicsChild.SetWorldTransform(Transform(Vector3(0,0,-1), Quaternion.Identity, Vector3.UnitScaleVector* 0));
+      PlanePhysicsChild.SetWorldTransform(Transform(Vector3(0,0,-1), Quaternion.Identity, Vector3.UnitScaleVector* 100));
       RenderChild.SetMesh(UnitPlane);
+      //RenderChild.BodyColor = Colors.Green;
       RenderChild.RegisterComponent();
 
       auto Sphere = Graph.CreateDefaultGameObject(UString("Sphere", MainAllocator));
@@ -206,12 +207,40 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
       Sphere2PhysicsChild.RegisterComponent();
       RenderChild = Sphere2.ConstructChild!PrimitiveRenderComponent(UString("Sphere2Render", MainAllocator), Sphere2PhysicsChild);
       Sphere2PhysicsChild.SetWorldTransform(Transform(Vector3(0.0f,0.0f,5), Quaternion.Identity, Vector3.UnitScaleVector));
-
-
-
       RenderChild.SetMesh(Cube);
       RenderChild.RegisterComponent();
+
+
       GlobalEngine.Renderer.ActiveCamera = CameraComponent;
+      const float Distance = 3.5f;
+      const Vector3 Offset = Vector3(3,3,2);
+
+      ColorLinear[10] BodyColors = [Colors.White, Colors.Red, Colors.Green, Colors.Blue, Colors.Orange, Colors.Yellow, Colors.Lime, Colors.Pink, Colors.Azure, Colors.Magenta];
+
+      for(int X=0; X < 2; X++)
+      {
+        for(int Y=0; Y< 2; Y++)
+        {
+          for(int Z =0; Z<2;Z++)
+          {
+            auto CubeObj = Graph.CreateDefaultGameObject(UString("Cube", MainAllocator));
+            auto CubePhysicsChild = CubeObj.ConstructChild!PhysicsComponent(UString("CubePhysics", MainAllocator));
+            CubePhysicsChild.ComponentBody.Shape.SetPoly(BoxShape);
+            CubePhysicsChild.ComponentBody.Mass = 1.0f;
+            CubePhysicsChild.ComponentBody.SetBoxInertiaTensor(Vector3.UnitScaleVector);
+            CubePhysicsChild.RegisterComponent();
+            RenderChild = CubeObj.ConstructChild!PrimitiveRenderComponent(UString("CubeRender", MainAllocator), CubePhysicsChild);
+            RenderChild.SetWorldTransform(Transform(Vector3(0,0,0), Quaternion.Identity, Vector3.UnitScaleVector));
+            RenderChild.SetMesh(Cube);
+            RenderChild.BodyColor = BodyColors[(Z*2*2+Y*2+X)%BodyColors.length];
+            RenderChild.RegisterComponent();
+
+            CubePhysicsChild.SetWorldTransform(Transform(Offset+ Vector3(X*Distance,Y*Distance,Z*Distance)));
+          }
+        }
+      }
+
+
 
 
 

@@ -221,6 +221,7 @@ class ForwardRenderer
         Resources.VertexShader = DefaultVertexShader;
         Resources.PixelShader = DefaultPixelShader;
         WorldConstantBuffer Buffer;
+        Buffer.Color = RenderComponent.BodyColor;
         Buffer.ModelMatrix = RenderComponent.GetWorldTransform().ToMatrix();
         Buffer.ModelViewProjectionMatrix =
           RenderComponent.GetWorldTransform().ToMatrix() * GetViewProjectionMatrix();
@@ -243,6 +244,7 @@ class ForwardRenderer
       WorldData.ModelViewProjectionMatrix = WorldData.ModelMatrix * GetViewProjectionMatrix;
       WorldData.ModelMatrix = WorldData.ModelMatrix.GetTransposed;
       WorldData.ModelViewProjectionMatrix = WorldData.ModelViewProjectionMatrix.GetTransposed;
+      WorldData.Color = Command.Component.BodyColor;
       RenderDevice.UpdateConstantBuffer(Command.ConstantBuffer[0], WorldData.AsVoidRange);
       SetActiveConstantBuffer(Command.ConstantBuffer[0], 0);
       SetActiveMesh(Command.Mesh);
