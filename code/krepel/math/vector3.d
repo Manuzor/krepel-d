@@ -107,6 +107,11 @@ Vector3 ReflectVector(Vector3 Vec, Vector3 Normal)
   return Vec - (2 * (Vec | Normal) * Normal);
 }
 
+float RayDistanceToPlane(Vector3 Position, Vector3 Ray, Vector4 Plane)
+{
+  return -((Position | Plane.XYZ.SafeNormalizedCopy)- Plane.W)/(Ray|Plane.XYZ.SafeNormalizedCopy);
+}
+
 
 Vector3 ClosestPointBetweenTwoLines(Vector3 Line1Start, Vector3 Line1End, Vector3 Line2Start, Vector3 Line2End)
 {

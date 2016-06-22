@@ -233,12 +233,12 @@ class PhysicsSystem : Subsystem
               if (Body1.Movable)
               {
                 Denominator += 1/Body1.Mass;
-                Denominator += Dot(InverseInertiaTensor1.TransformDirection(Center1ToCollisionPoint ^ Tangent) ^ Center1ToCollisionPoint, Tangent);
+                Denominator += Dot(Center1ToCollisionPoint ^ InverseInertiaTensor1.TransformDirection(Tangent ^ Center1ToCollisionPoint), Tangent);
               }
               if (Body2.Movable)
               {
                 Denominator += 1/Body2.Mass;
-                Denominator += Dot(InverseInertiaTensor2.TransformDirection(Center2ToCollisionPoint ^ Tangent) ^ Center2ToCollisionPoint, Tangent);
+                Denominator += Dot(Center2ToCollisionPoint ^ InverseInertiaTensor2.TransformDirection(Tangent ^ Center2ToCollisionPoint), Tangent);
               }
               FrictionImpulseFactor = Dot(DeltaVelocity, Tangent) / Denominator;
               float DynamicFriction = (Body1.DynamicFriction + Body2.DynamicFriction) / 2;

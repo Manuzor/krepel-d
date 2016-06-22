@@ -155,11 +155,35 @@ class CollisionDetection
       if (Abs(Distance1) < Abs(Distance2))
       {
         Result.CollisionPoint = Support1;
+        int Num = 0;
+        Result.CollisionPoint = Vector3.ZeroVector;
+        foreach(Vertex; Poly.Shape.Poly.Vertices)
+        {
+          auto TransformedVertex = WorldPolyTransform.TransformPosition(Vertex);
+          if (NearlyEquals(Distance1, PlaneVector.DistancePlaneToPoint(TransformedVertex), Abs(Distance1) + Abs(Distance2)/5.0f))
+          {
+            Result.CollisionPoint += TransformedVertex;
+            Num++;
+          }
+        }
+        Result.CollisionPoint /= Num;
         Result.PenetrationDepth = Abs(Distance1);
       }
       else
       {
         Result.CollisionPoint = Support2;
+        int Num = 0;
+        Result.CollisionPoint = Vector3.ZeroVector;
+        foreach(Vertex; Poly.Shape.Poly.Vertices)
+        {
+          auto TransformedVertex = WorldPolyTransform.TransformPosition(Vertex);
+          if (NearlyEquals(Distance2, PlaneVector.DistancePlaneToPoint(TransformedVertex), Abs(Distance2) + Abs(Distance2)/5.0f))
+          {
+            Result.CollisionPoint += TransformedVertex;
+            Num++;
+          }
+        }
+        Result.CollisionPoint /= Num;
         Result.PenetrationDepth = Abs(Distance2);
       }
     }
@@ -436,6 +460,30 @@ class CollisionDetection
     Transform Transformation = Poly1.Owner.GetWorldTransform * Poly2.Owner.GetWorldTransform.InversedCopy;
     Vector4 ReferencePlane = Transformation.TransformPlane(Poly1.Shape.Poly.Planes[Poly1ReferenceFace]);
 
+    int StartEdgeIndex = Poly2.Shape.Poly.Faces[Poly2IncidentFace];
+    int CurrentEdgeIndex = StartEdgeIndex;
+    Vector3 Point = Vector3.ZeroVector;
+    int Num = 0;
+    do
+    {
+
+      auto StartPos = Poly2.Shape.Poly.GetEdgeOrigin(CurrentEdgeIndex);
+      auto EndPos = Poly2.Shape.Poly.GetEdgeEnd(CurrentEdgeIndex);
+      float Distance = RayDistanceToPlane(StartPos, (EndPos-StartPos).SafeNormalizedCopy, ReferencePlane);
+      Log.Info("%f", Distance);
+      if (Distance >= 1e-4f && Distance<=(EndPos-StartPos).Length + 1e-4f)
+      {
+
+        Point += StartPos + (EndPos-StartPos).SafeNormalizedCopy * Distance;
+        Num++;
+      }
+      CurrentEdgeIndex = Poly2.Shape.Poly.Edges[CurrentEdgeIndex].NextIndex;
+    } while(CurrentEdgeIndex != StartEdgeIndex);
+    if (Num > 0)
+    {
+      return Poly2.Owner.GetWorldTransform.TransformPosition(Point / Num);
+    }
+
     Vector3 Result = Vector3.ZeroVector;
     Vector3 PlaneUnitY = Transformation.TransformDirection(
       Poly1.Shape.Poly.GetEdgeEnd(Poly1.Shape.Poly.Faces[Poly1ReferenceFace]) -
@@ -445,8 +493,9 @@ class CollisionDetection
     PlaneUnitY.SafeNormalize();
     import krepel.engine;
     Array!Line EdgeLines = Array!Line(GlobalEngine.EngineAllocator);
-    int StartEdgeIndex = Poly1.Shape.Poly.Faces[Poly1ReferenceFace];
-    int CurrentEdgeIndex = StartEdgeIndex;
+    StartEdgeIndex = Poly1.Shape.Poly.Faces[Poly1ReferenceFace];
+    CurrentEdgeIndex = StartEdgeIndex;
+
     do
     {
       Vector3 StartPos = Transformation.TransformPosition(Poly1.Shape.Poly.GetEdgeOrigin(CurrentEdgeIndex));
@@ -473,6 +522,7 @@ class CollisionDetection
 
       auto StartPos = Poly2.Shape.Poly.GetEdgeOrigin(CurrentEdgeIndex);
       auto EndPos = Poly2.Shape.Poly.GetEdgeEnd(CurrentEdgeIndex);
+
       auto CurLine = MakeLine(StartPos, EndPos, ReferencePlane.XYZ, PlaneUnitX, PlaneUnitY);
       WorkPoly ~= CurLine.Start;
       CurrentEdgeIndex = Poly2.Shape.Poly.Edges[CurrentEdgeIndex].NextIndex;
@@ -534,6 +584,7 @@ class CollisionDetection
     Result += Transformation.TransformPosition(Poly1.Shape.Poly.GetEdgeOrigin(Poly1.Shape.Poly.Faces[Poly1ReferenceFace])).ProjectOntoNormal(ReferencePlane.XYZ);
     Result = Poly2.Owner.GetWorldTransform.TransformPosition(Result);
     return Result;
+
   }
 
   static CollisionResult CheckCollisionPlanePlane(RigidBody Plane1, RigidBody Plane2)
