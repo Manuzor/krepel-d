@@ -23,6 +23,8 @@ class RigidBody
   Vector3 AngularVelocity;
   Vector3 PendingAcceleration;
   Vector3 Torque;
+  float StaticFriction = 0.61f; //Aluminium on Steel
+  float DynamicFriction = 0.47f; //Aluminium on Steel
   Matrix3 InertiaTensor = Matrix3.Identity;
 
   @property bool Movable() const

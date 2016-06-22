@@ -285,7 +285,7 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
         //
         // Apply Input
         //
-        SpherePhysicsChild.ComponentBody.ApplyForceCenter(Vector3(User1Input["ObjX"].AxisValue,User1Input["ObjY"].AxisValue, User1Input["ObjZ"].AxisValue));
+        SpherePhysicsChild.ComponentBody.ApplyForceCenter(Vector3(User1Input["ObjX"].AxisValue,User1Input["ObjY"].AxisValue, User1Input["ObjZ"].AxisValue) * 10.0f);
         //auto Position = SpherePhysicsChild.GetWorldTransform.Translation + SpherePhysicsChild.GetWorldTransform.TransformDirection(Vector3(0,0,1));
         auto Force =Vector3(User1Input["ObjX"].AxisValue,User1Input["ObjY"].AxisValue, User1Input["ObjZ"].AxisValue);
         //SpherePhysicsChild.ComponentBody.ApplyForceWorld( Vector3(User1Input["ObjX"].AxisValue,User1Input["ObjY"].AxisValue, User1Input["ObjZ"].AxisValue), Position);

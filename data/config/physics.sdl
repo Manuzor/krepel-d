@@ -1,5 +1,6 @@
-Gravity 0 0 -1
+Gravity 0 0 -9.81
 StepMode false
 DebugDrawPolyShapes true
 DoCollisionResponse true
 DoPenetrationResolve true
+DoApplyFriction true

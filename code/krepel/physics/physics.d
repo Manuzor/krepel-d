@@ -16,6 +16,7 @@ class PhysicsSystem : Subsystem
   bool DebugDrawPolyShapes = false;
   bool DoCollisionResponse = true;
   bool DoPenetrationResolve = true;
+  bool DoApplyFriction = true;
   this(IAllocator Allocator)
   {
     this.Allocator = Allocator;
@@ -62,6 +63,8 @@ class PhysicsSystem : Subsystem
     DebugDrawPolyShapes = cast(bool)RootNode.Nodes["DebugDrawPolyShapes"][0].Values[0];
     DoCollisionResponse = cast(bool)RootNode.Nodes["DoCollisionResponse"][0].Values[0];
     DoPenetrationResolve = cast(bool)RootNode.Nodes["DoPenetrationResolve"][0].Values[0];
+    DoApplyFriction = cast(bool)RootNode.Nodes["DoApplyFriction"][0].Values[0];
+
   }
 
   override void Destroy()
@@ -169,7 +172,10 @@ class PhysicsSystem : Subsystem
                   Body2Tangent = Center2ToCollisionPoint ^ CollisionNormal;
               }
 
-              float DeltaVelocityToCollisionNormal = Dot((Body1.Velocity - Body2.Velocity),CollisionNormal);
+              Vector3 DeltaVelocity =(Body1.Velocity - Body2.Velocity);
+              float DeltaVelocityToCollisionNormal = Dot(DeltaVelocity,CollisionNormal);
+
+
               float AngularVelocity1ToTanget = 0.0f;
               if(Body1.Movable)
               {
@@ -217,6 +223,41 @@ class PhysicsSystem : Subsystem
                 if (Body2.Movable)
                 {
                   Body2.Owner.MoveWorld(-ResolvanceVector * Body2ResolvanceFactor);
+                }
+              }
+
+              Vector3 Tangent = DeltaVelocity - (CollisionNormal * DeltaVelocityToCollisionNormal);
+              Tangent.SafeNormalize();
+              float FrictionImpulseFactor = 0.0f;
+              Denominator = 0.0f;
+              if (Body1.Movable)
+              {
+                Denominator += 1/Body1.Mass;
+                Denominator += Dot(InverseInertiaTensor1.TransformDirection(Center1ToCollisionPoint ^ Tangent) ^ Center1ToCollisionPoint, Tangent);
+              }
+              if (Body2.Movable)
+              {
+                Denominator += 1/Body2.Mass;
+                Denominator += Dot(InverseInertiaTensor2.TransformDirection(Center2ToCollisionPoint ^ Tangent) ^ Center2ToCollisionPoint, Tangent);
+              }
+              FrictionImpulseFactor = Dot(DeltaVelocity, Tangent) / Denominator;
+              float DynamicFriction = (Body1.DynamicFriction + Body2.DynamicFriction) / 2;
+              if (DoApplyFriction)
+              {
+                GlobalEngine.DebugHelper.AddLine(CollisionResult.CollisionPoint,Tangent, Colors.Red);
+                if (FrictionImpulseFactor <= (DynamicFriction*CollisionResultImpulseFactor))
+                {
+                  Body1.Velocity -= (Abs(FrictionImpulseFactor) / Body1.Mass) * Tangent;
+                  Body2.Velocity += (Abs(FrictionImpulseFactor) / Body2.Mass) * Tangent;
+                  Body1.AngularVelocity += InverseInertiaTensor1.TransformDirection((-Abs(FrictionImpulseFactor) * Tangent) ^ Center1ToCollisionPoint);
+                  Body2.AngularVelocity += InverseInertiaTensor2.TransformDirection((Abs(FrictionImpulseFactor) * Tangent) ^ Center2ToCollisionPoint);
+                }
+                else
+                {
+                  Body1.Velocity -= (DynamicFriction* FrictionImpulseFactor / Body1.Mass) * Tangent;
+                  Body2.Velocity += (DynamicFriction* FrictionImpulseFactor / Body2.Mass) * Tangent;
+                  Body1.AngularVelocity += InverseInertiaTensor1.TransformDirection((DynamicFriction* -FrictionImpulseFactor * Tangent) ^ Center1ToCollisionPoint);
+                  Body2.AngularVelocity += InverseInertiaTensor2.TransformDirection((DynamicFriction* FrictionImpulseFactor * Tangent) ^ Center2ToCollisionPoint);
                 }
               }
             }
