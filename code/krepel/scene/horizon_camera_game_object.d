@@ -74,6 +74,9 @@ class HorizonCamera : GameObject
     Yaw += DeltaYaw;
     Pitch += DeltaPitch;
 
+    Pitch = Min(Pitch, PI/2);
+    Pitch = Max(Pitch, -PI/2);
+
     Quaternion Yaw = Quaternion(Vector3.UpVector, Yaw);
     Quaternion Pitch = Quaternion(Vector3.RightVector, Pitch);
     auto LocalTransform = CamComponent.GetLocalTransform();
