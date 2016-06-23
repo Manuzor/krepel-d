@@ -116,7 +116,7 @@ class PhysicsSystem : Subsystem
           Body.Torque = Vector3.ZeroVector;
           Body.PendingAcceleration = Vector3.ZeroVector;
           Body.Velocity *= Body.Damping;
-          Body.AngularVelocity *= Body.Damping;
+          Body.AngularVelocity *= Body.AngularDamping;
         }
       }
       foreach(Index1, Body1; RigidBodies)

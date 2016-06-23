@@ -160,7 +160,7 @@ class CollisionDetection
         foreach(Vertex; Poly.Shape.Poly.Vertices)
         {
           auto TransformedVertex = WorldPolyTransform.TransformPosition(Vertex);
-          if (NearlyEquals(Distance1, PlaneVector.DistancePlaneToPoint(TransformedVertex), Abs(Distance1) + Abs(Distance2)/5.0f))
+          if (NearlyEquals(Distance1, PlaneVector.DistancePlaneToPoint(TransformedVertex),Max( 0.1f, Abs(Distance1) + Abs(Distance2))))
           {
             Result.CollisionPoint += TransformedVertex;
             Num++;
@@ -177,7 +177,7 @@ class CollisionDetection
         foreach(Vertex; Poly.Shape.Poly.Vertices)
         {
           auto TransformedVertex = WorldPolyTransform.TransformPosition(Vertex);
-          if (NearlyEquals(Distance2, PlaneVector.DistancePlaneToPoint(TransformedVertex), Abs(Distance2) + Abs(Distance2)/5.0f))
+          if (NearlyEquals(Distance2, PlaneVector.DistancePlaneToPoint(TransformedVertex), Max(Abs(Distance2) + Abs(Distance2), 0.1f)))
           {
             Result.CollisionPoint += TransformedVertex;
             Num++;
@@ -470,7 +470,6 @@ class CollisionDetection
       auto StartPos = Poly2.Shape.Poly.GetEdgeOrigin(CurrentEdgeIndex);
       auto EndPos = Poly2.Shape.Poly.GetEdgeEnd(CurrentEdgeIndex);
       float Distance = RayDistanceToPlane(StartPos, (EndPos-StartPos).SafeNormalizedCopy, ReferencePlane);
-      Log.Info("%f", Distance);
       if (Distance >= 1e-4f && Distance<=(EndPos-StartPos).Length + 1e-4f)
       {
 
