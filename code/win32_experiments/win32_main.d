@@ -160,7 +160,7 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
       }
 
 
-      PolyShapeData BoxShape = CreatePolyShapeFromBox(MainAllocator, Vector3.UnitScaleVector);
+      PolyShapeData BoxShape = CreatePolyShapeFromBox(MainAllocator, Vector3(1,1.0f,1.0f));
 
       PrimitiveRenderComponent RenderChild;
 
@@ -230,7 +230,7 @@ int MyWinMain(HINSTANCE Instance, HINSTANCE PreviousInstance,
             CubePhysicsChild.ComponentBody.SetBoxInertiaTensor(Vector3.UnitScaleVector);
             CubePhysicsChild.RegisterComponent();
             RenderChild = CubeObj.ConstructChild!PrimitiveRenderComponent(UString("CubeRender", MainAllocator), CubePhysicsChild);
-            RenderChild.SetWorldTransform(Transform(Vector3(0,0,0), Quaternion.Identity, Vector3.UnitScaleVector));
+            RenderChild.SetLocalTransform(Transform(Vector3(0,0,0), Quaternion.Identity, Vector3.UnitScaleVector));
             RenderChild.SetMesh(Cube);
             RenderChild.BodyColor = BodyColors[(Z*2*2+Y*2+X)%BodyColors.length];
             RenderChild.RegisterComponent();

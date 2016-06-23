@@ -208,7 +208,7 @@ PolyShapeData CreatePolyShapeFromPolygons(IAllocator Allocator, Polygon[] Polys)
       assert(Index != Edge.TwinIndex);
       Vector3 Vertex1 = Vertices[Edge.OriginIndex];
       Vector3 Vertex2 = Vertices[Edges[Edge.TwinIndex].OriginIndex];
-      assert((Vertex1 - Vertex2).Length.NearlyEquals(2.0f));
+      //assert((Vertex1 - Vertex2).Length.NearlyEquals(2.0f));
 
     }
   }
